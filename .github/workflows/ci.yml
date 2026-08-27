@@ -49,6 +49,13 @@ jobs:
       - name: Build the application
         run: go build -o portcloak ./cmd/portcloak
 
+      # The release build is a different compilation, not the same one with a
+      # flag: `production` selects different files in both Wails and this
+      # repository. Building it here is what stops that path rotting unnoticed
+      # between releases and only failing on the day someone cuts a tag.
+      - name: Build the application (production)
+        run: go build -tags production -trimpath -ldflags "-s -w" -o portcloak-production ./cmd/portcloak
+
   vet:
     name: Vet & lint
     runs-on: ubuntu-latest

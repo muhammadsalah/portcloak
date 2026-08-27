@@ -4,8 +4,17 @@
 /bin/
 /build/bin/
 /dist/
-portcloak
+# GoLand writes run-configuration output here. It reached the repository once,
+# as a 90MB binary, which is most of what a clone now costs to download.
+/out/
+# Anchored. A bare `portcloak` matches any path component at any depth, which
+# silently swallowed cmd/portcloak/ — the application's entry point was ignored
+# and never committed, so a fresh clone could not build the binary at all.
+/portcloak
 *.exe
+# Windows resource objects are generated from build/windows/winres.json during
+# packaging and linked automatically by the Go toolchain if left lying around.
+*.syso
 
 # Go
 *.test

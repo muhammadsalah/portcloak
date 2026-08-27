@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Template. build/package.sh substitutes {{VERSION}} and {{BUILD}} and writes
+  the result into PortCloak.app/Contents/Info.plist.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleName</key>
+	<string>PortCloak</string>
+	<key>CFBundleDisplayName</key>
+	<string>PortCloak</string>
+	<key>CFBundleIdentifier</key>
+	<string>io.portcloak.app</string>
+	<key>CFBundleExecutable</key>
+	<string>portcloak</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+
+	<!--
+	  CFBundleShortVersionString is what Finder shows and what a user quotes.
+	  CFBundleVersion is the build identifier; it has to increase for every
+	  upload to Apple's notary service, which is why it carries the commit.
+	-->
+	<key>CFBundleShortVersionString</key>
+	<string>{{VERSION}}</string>
+	<key>CFBundleVersion</key>
+	<string>{{BUILD}}</string>
+
+	<!-- Resources/PortCloak.icns; the extension is deliberately omitted. -->
+	<key>CFBundleIconFile</key>
+	<string>PortCloak</string>
+
+	<!--
+	  WKWebView with the APIs Wails v3 uses needs 10.15; 11.0 is the oldest
+	  release still receiving security updates that Apple's toolchain will
+	  target without warnings.
+	-->
+	<key>LSMinimumSystemVersion</key>
+	<string>11.0</string>
+
+	<!--
+	  Without this the window is rendered at 1x and scaled up, which on a
+	  Retina display makes every glyph in the app soft.
+	-->
+	<key>NSHighResolutionCapable</key>
+	<true/>
+
+	<!-- PortCloak has a window; it is not a background agent. -->
+	<key>LSUIElement</key>
+	<false/>
+
+	<key>NSHumanReadableCopyright</key>
+	<string>PortCloak</string>
+
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleSupportedPlatforms</key>
+	<array>
+		<string>MacOSX</string>
+	</array>
+</dict>
+</plist>
