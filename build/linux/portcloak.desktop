@@ -1,0 +1,19 @@
+# Copyright 2026 Muhammad Salah
+# SPDX-License-Identifier: Apache-2.0
+[Desktop Entry]
+Type=Application
+Name=PortCloak
+GenericName=Keycloak Realm Migration
+Comment=Move Keycloak realms between environments with full fidelity
+# Resolved against the hicolor theme, so the PNGs installed under
+# share/icons/hicolor/<size>/apps/portcloak.png are what the shell picks up.
+Icon=portcloak
+Exec=portcloak %U
+Terminal=false
+Categories=Development;System;
+Keywords=keycloak;realm;migration;backup;restore;sso;
+# Must match LinuxOptions.ProgramName in internal/app/run.go, or the window
+# manager groups the window separately from this launcher and the taskbar shows
+# a generic icon beside the real one.
+StartupWMClass=portcloak
+StartupNotify=true

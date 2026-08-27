@@ -1,3 +1,10 @@
+<!--
+  Copyright 2026 Muhammad Salah
+  SPDX-License-Identifier: Apache-2.0
+-->
+
+<img src="assets/logo/mark.svg" width="72" alt="">
+
 # PortCloak
 
 A desktop tool for moving Keycloak realms between environments with full fidelity — users and
@@ -8,10 +15,11 @@ settings.
 Named after the product it serves. Go + [Wails v3](https://wails.io), single binary, no server
 component, no account.
 
-> **Status: design complete, implementation not started.** This repository currently holds the
-> specification, the use-case model, the rollout plan and the screen designs. There is no
-> working binary yet. See [`spec/rollout/`](./spec/rollout/README.md) for the nine phases that
-> build it.
+> **Status: 0.0.1 implemented.** The whole loop closes — capture a realm, put it somewhere,
+> read it back, and restore it — across all four target kinds and all four storage backends.
+> The [rollout plan](./spec/rollout/README.md) describes how it was built; the
+> [release notes](./spec/rollout/11-release-0.0.1.md#what-001-does-not-do) are honest about
+> what 0.0.1 does not do.
 
 ## The problem it solves
 
@@ -35,13 +43,15 @@ Two constraints shape most of the design:
 
 | If you want | Read |
 |---|---|
-| The problem, goals and full requirement set | [`spec/01-vision-and-requirements.md`](./spec/01-vision-and-requirements.md) |
-| The module map and core interfaces | [`spec/02-architecture.md`](./spec/02-architecture.md) |
 | Exactly what a snapshot carries, secret by secret | [`spec/07-realm-carryover-manifest.md`](./spec/07-realm-carryover-manifest.md) |
-| What the tool actually does, as behaviour | [`spec/usecases/`](./spec/usecases/README.md) — 60 use cases |
-| How it gets built, tested and verified | [`spec/rollout/`](./spec/rollout/README.md) — 9 phases |
-| What it looks like | [`spec/lunacy/`](./spec/lunacy/README.md) — 20 screens |
+| How secrets are handled, and the threat model | [`spec/08-security.md`](./spec/08-security.md) |
 | Why the scope boundaries are where they are | [`spec/12-decisions.md`](./spec/12-decisions.md) |
+| The mark, and the rules around it | [`assets/logo/`](./assets/logo/README.md) |
+
+The design record the tool was built from — requirements, architecture, 60 use cases, the
+nine-phase rollout and its traceability matrix — is in [`spec/`](./spec/README.md). It says how
+PortCloak was constructed, not how to use it. Faults that reached working code, each with the
+test that keeps it from returning, are in [`spec/notes/`](./spec/notes/README.md).
 
 ## What it deliberately does not do
 
@@ -62,6 +72,37 @@ to, because Keycloak accepts exactly those values on import, and that is what ma
 work at all. PortCloak labels such a bundle unmistakably and never expires it. Where the file ends
 up afterwards is yours to decide.
 
+## Building it
+
+The frontend is embedded in the binary, so it is built first:
+
+```bash
+npm --prefix frontend ci
+npm --prefix frontend run build
+go build -ldflags "-X main.version=0.0.1" -o portcloak ./cmd/portcloak
+```
+
+The engine is testable without any of that — no network, no Docker, no Keycloak,
+no Node toolchain:
+
+```bash
+go test ./internal/... -race
+```
+
+If a test in `internal/engine` needs a real target, a fake is missing rather than
+the test being justified. Tests that genuinely need a service container are
+behind `-tags=integration`, so a missing MinIO reads as "not run" and never as a
+silent pass.
+
 ## Licence
 
-Not yet chosen.
+Apache License 2.0. See [`LICENSE`](./LICENSE) for the terms and
+[`NOTICE`](./NOTICE) for the attribution.
+
+    Copyright 2026 Muhammad Salah <muhammadsalahmasoud@icloud.com>
+
+`LICENSE` is the Apache Software Foundation's text unaltered, placeholder
+appendix and all, so it can be diffed against the canonical copy and shown to
+be unmodified. The copyright line lives in `NOTICE`, which is where the licence
+itself puts it. Both ship inside every release artifact, because section 4(d)
+requires anyone redistributing this to carry them along.

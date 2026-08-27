@@ -1,3 +1,8 @@
+<!--
+  Copyright 2026 Muhammad Salah
+  SPDX-License-Identifier: Apache-2.0
+-->
+
 # P0 — Shell & Foundations
 
 **Goal.** PortCloak becomes a program you can launch. It opens a window, creates and owns

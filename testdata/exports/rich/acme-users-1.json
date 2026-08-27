@@ -1,0 +1,11 @@
+{"realm":"acme","users":[
+ {"id":"u4","username":"service-account-backoffice-api","enabled":true,"serviceAccountClientId":"backoffice-api",
+  "credentials":[],"clientRoles":{"backoffice-api":["read","write"]}},
+ {"id":"u5","username":"a.haddad","email":"a.haddad@acme.example","firstName":"Amir","lastName":"Haddad","enabled":true,
+  "federationLink":"ldap-corp",
+  "credentials":[
+    {"id":"cr9","type":"password","algorithm":"pbkdf2-sha256","hashIterations":27500,"hashedSaltedValue":"aGFzaA==","salt":"c2FsdA=="},
+    {"id":"cr10","type":"otp","credentialData":"{\"subType\":\"totp\"}","secretData":"{}"}
+  ],
+  "realmRoles":["user"],"groups":["/Everyone/Engineering"]}
+]}

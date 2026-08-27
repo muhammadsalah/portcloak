@@ -1,3 +1,8 @@
+<!--
+  Copyright 2026 Muhammad Salah
+  SPDX-License-Identifier: Apache-2.0
+-->
+
 # P4 — Resilience
 
 **Goal.** A bad connection stops costing an operator their whole job. Every remote operation is

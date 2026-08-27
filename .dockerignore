@@ -1,0 +1,19 @@
+# Copyright 2026 Muhammad Salah
+# SPDX-License-Identifier: Apache-2.0
+
+# The Linux build image needs the source and the BUILT frontend, nothing else.
+# frontend/dist is deliberately not excluded: it is gitignored but it is what
+# //go:embed all:dist reads, so leaving it out would produce a Linux binary
+# serving an empty asset tree.
+.git
+.github
+.idea
+.claude
+out
+dist
+frontend/node_modules
+frontend/.vite
+spec
+testdata
+assets
+*.md

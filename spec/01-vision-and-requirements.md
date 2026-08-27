@@ -1,3 +1,8 @@
+<!--
+  Copyright 2026 Muhammad Salah
+  SPDX-License-Identifier: Apache-2.0
+-->
+
 # 01 — Vision & Requirements
 
 ## 1.1 Vision
@@ -234,7 +239,9 @@ mid-transfer.
   storage definitions, preferences, job checkpoints — lives in **plain readable files** under
   `~/.portcloak/`, not in a database. It can be read, diffed, version-controlled, hand-edited
   and backed up with ordinary tools. **SQLite is used only for throwaway snapshot indexes**
-  (NFR-9/NFR-10), each in its own file, never for tool state.
+  (NFR-9/NFR-10), each in its own file, never for tool state. `~/.portcloak/` is the default
+  rather than a constant: the folder can be moved from Settings, or pinned with `PORTCLOAK_HOME`
+  ([09 §9.1c](./09-workflows-and-ui.md)).
 
 ## 1.7 Key design tension: what `kc.sh export` does and does not give us
 

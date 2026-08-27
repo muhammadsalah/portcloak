@@ -1,3 +1,8 @@
+<!--
+  Copyright 2026 Muhammad Salah
+  SPDX-License-Identifier: Apache-2.0
+-->
+
 # 01 — Environments
 
 > An **Environment** is a configured Keycloak execution context — where a Keycloak server

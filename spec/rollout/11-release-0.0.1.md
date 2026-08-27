@@ -1,3 +1,8 @@
+<!--
+  Copyright 2026 Muhammad Salah
+  SPDX-License-Identifier: Apache-2.0
+-->
+
 # Release — 0.0.1
 
 **What 0.0.1 is.** The first version where the whole loop closes: capture a realm from any of the
@@ -62,9 +67,9 @@ All eight phases complete, plus the cross-cutting checks below. Nothing here is 
 ### Documentation
 
 - [ ] `README.md` at the repository root: what it is, what it does not do, how to install.
-- [ ] The spec matches the shipped behaviour — any drift resolved in favour of correcting whichever
+- [x] The spec matches the shipped behaviour — any drift resolved in favour of correcting whichever
       is wrong, not by quietly leaving both.
-- [ ] `CHANGELOG.md` opened at 0.0.1.
+- [x] `CHANGELOG.md` opened at 0.0.1.
 - [ ] A one-page "first migration" walkthrough.
 
 ---

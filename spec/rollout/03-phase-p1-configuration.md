@@ -1,3 +1,8 @@
+<!--
+  Copyright 2026 Muhammad Salah
+  SPDX-License-Identifier: Apache-2.0
+-->
+
 # P1 — Configuration
 
 **Goal.** An operator can describe their world to PortCloak: the environments where Keycloak

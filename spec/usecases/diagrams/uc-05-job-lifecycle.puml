@@ -1,4 +1,6 @@
 @startuml uc-05-job-lifecycle
+' Copyright 2026 Muhammad Salah
+' SPDX-License-Identifier: Apache-2.0
 skinparam backgroundColor #FFFFFF
 title Job lifecycle across use cases (UC-O1 … UC-O6)
 

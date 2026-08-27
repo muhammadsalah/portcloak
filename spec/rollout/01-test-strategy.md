@@ -1,3 +1,8 @@
+<!--
+  Copyright 2026 Muhammad Salah
+  SPDX-License-Identifier: Apache-2.0
+-->
+
 # 01 — Test Strategy
 
 PortCloak moves credentials between production identity systems. A bug here does not produce a

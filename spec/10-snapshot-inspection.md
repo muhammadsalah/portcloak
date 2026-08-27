@@ -1,3 +1,8 @@
+<!--
+  Copyright 2026 Muhammad Salah
+  SPDX-License-Identifier: Apache-2.0
+-->
+
 # 10 — Snapshot Inspection
 
 A snapshot that can only be restored is a black box. PortCloak treats a snapshot as a

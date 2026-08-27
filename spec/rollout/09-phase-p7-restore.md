@@ -1,3 +1,8 @@
+<!--
+  Copyright 2026 Muhammad Salah
+  SPDX-License-Identifier: Apache-2.0
+-->
+
 # P7 — Restore
 
 **Goal.** The loop closes. A snapshot becomes a live realm on a target of the operator's

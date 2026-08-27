@@ -1,3 +1,8 @@
+<!--
+  Copyright 2026 Muhammad Salah
+  SPDX-License-Identifier: Apache-2.0
+-->
+
 # 07 — Use Case Traceability
 
 Every use case maps to the requirements it satisfies and the design document that specifies the

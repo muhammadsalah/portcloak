@@ -1,3 +1,8 @@
+<!--
+  Copyright 2026 Muhammad Salah
+  SPDX-License-Identifier: Apache-2.0
+-->
+
 # 04 — Inspection
 
 > A snapshot is a **queryable artifact**, not a black box. Inspection is **tiered**: listing needs

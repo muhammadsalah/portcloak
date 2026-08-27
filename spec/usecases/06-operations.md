@@ -1,3 +1,8 @@
+<!--
+  Copyright 2026 Muhammad Salah
+  SPDX-License-Identifier: Apache-2.0
+-->
+
 # 06 — Operations
 
 > Jobs, resilience, configuration and audit — the cross-cutting behaviour that makes the other
@@ -149,12 +154,25 @@ presented as complete.**
 
 **Alternate flows**
 - **A1 — Version control.** Because the file holds no secrets, it can be committed safely.
+- **A2 — Move the folder.** Settings relocates the whole `~/.portcloak/` tree — config, audit
+  log, job checkpoints, logs, working files — onto an encrypted volume, off a synced home
+  directory, or anywhere else. The keychain and every stored snapshot stay where they are. The
+  running application follows the folder; it does not ask to be restarted
+  ([09 §9.1c](../09-workflows-and-ui.md)).
 
 **Exceptions**
 - **E1 — Malformed YAML.** PortCloak reports the line and refuses to start with a half-parsed
   config, rather than silently dropping entries.
 - **E2 — Unknown fields.** Preserved and reported, so a file written by a newer version is not
   destroyed by an older one.
+- **E3 — The folder cannot be moved there.** A destination that is relative, is the current
+  folder, sits inside it, contains it, is a file, is not empty, or has no parent to be created in
+  is refused *before anything moves* — a half-completed move splits the operator's environments,
+  keys and checkpoints across two folders with the app bound to neither.
+- **E4 — Something is holding the folder.** An open snapshot or a job in flight refuses the move
+  and names the screen to go to. Both hold paths under the old root for their whole lives.
+- **E5 — `PORTCLOAK_HOME` is set.** It is set outside the application and wins. The screen reports
+  the folder as pinned and disables the move rather than offering something it cannot deliver.
 
 **Postconditions.** Configuration is transparent, portable and hand-editable (NFR-11).
 **Covers.** FR-N6, NFR-11.

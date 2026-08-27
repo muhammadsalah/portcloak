@@ -1,4 +1,6 @@
 @startuml 11-bundle-layout
+' Copyright 2026 Muhammad Salah
+' SPDX-License-Identifier: Apache-2.0
 skinparam backgroundColor #FFFFFF
 skinparam componentStyle rectangle
 title PortCloak — Snapshot Bundle Layout (.pck contents, one realm per snapshot)

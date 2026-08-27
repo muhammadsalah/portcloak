@@ -1,0 +1,12 @@
+<!--
+  Copyright 2026 Muhammad Salah
+  SPDX-License-Identifier: Apache-2.0
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="PortCloak">
+  <title>PortCloak</title>
+  <path d="M36 56 A24 24 0 0 1 80.8 44" fill="none" stroke="#1FA896" stroke-width="10"/>
+  <path d="M86.3 53.5 L73 48.5 L88.6 39.5 Z" fill="#1FA896"/>
+  <rect x="24" y="56" width="72" height="54" rx="12" fill="#1FA896"/>
+  <circle cx="60" cy="76" r="8" fill="#FFFFFF"/>
+  <rect x="56" y="80" width="8" height="18" rx="4" fill="#FFFFFF"/>
+</svg>

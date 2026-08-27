@@ -1,0 +1,2 @@
+This file is the placeholder frontend/embed.go depends on; see that file.
+Vite rewrites it after every build (see keepEmbedPlaceholder in vite.config.ts).

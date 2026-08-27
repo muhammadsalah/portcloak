@@ -1,3 +1,8 @@
+<!--
+  Copyright 2026 Muhammad Salah
+  SPDX-License-Identifier: Apache-2.0
+-->
+
 # 02 — Architecture
 
 
@@ -202,7 +207,7 @@ storage:
 | Keychain | `zalando/go-keyring` (macOS Keychain, Windows Cred, libsecret) | Keeps PortCloak's own creds out of plaintext config. |
 | Logs | `slog` with redaction handler | Structured + secret-safe. |
 | Inspection index | **SQLite** (`modernc.org/sqlite`, pure-Go) | Rich querying + FTS for user search; pure-Go build avoids cgo. **Ephemeral indexes only — never tool state** ([§2.6](#26-configuration--on-disk-layout)). |
-| Configuration | **YAML file** under `~/.portcloak/` | Readable, diffable, hand-editable, version-controllable. No database for tool state (NFR-11). |
+| Configuration | **YAML file** under `~/.portcloak/` | Readable, diffable, hand-editable, version-controllable. No database for tool state (NFR-11). The folder is relocatable ([09 §9.1c](./09-workflows-and-ui.md)). |
 | Container clone | Docker Engine API / `client-go` Jobs | Ephemeral clone execution ([03 §3.3](./03-capture-targets.md)). |
 
 ## 2.9 Why this architecture satisfies the brief

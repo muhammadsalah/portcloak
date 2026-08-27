@@ -1,3 +1,8 @@
+<!--
+  Copyright 2026 Muhammad Salah
+  SPDX-License-Identifier: Apache-2.0
+-->
+
 # 04 — Storage Backends (Storage backends)
 
 ![Storage backends and transfer contracts — BlobStore, ResumableTransfer, retry/circuit](./diagrams/png/07-storage-class.png)

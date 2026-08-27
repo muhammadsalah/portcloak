@@ -1,3 +1,8 @@
+<!--
+  Copyright 2026 Muhammad Salah
+  SPDX-License-Identifier: Apache-2.0
+-->
+
 # PortCloak — Design Specification
 
 > **PortCloak** is a cross-platform desktop tool (Go + [Wails v3](https://wails.io)) that
@@ -7,9 +12,22 @@
 >
 > The name is a play on **Keycloak**: PortCloak *ports the cloak*.
 
-This folder is a **design-only** artifact. No implementation is included yet — the goal is a
-well-constructed, reviewable spec (with PlantUML) that shows the planned modules and proves
-each requirement is met before any code is written.
+This folder is the **design record PortCloak was built from** — the requirements, the decisions
+and the phase plan that drove construction. It is not documentation for using the tool; that is
+the [root README](../README.md), and most of what is here will not help someone who only wants
+to move a realm.
+
+It stays in the repository because it is still load-bearing. Every requirement traces to a
+module, every rollout row cites a test, and `build/ci/check-traceability.sh` fails the build when
+a citation names a test that no longer exists — so the evidence columns cannot quietly decay into
+things that were once true. Where a document and the shipped behaviour disagree, one of them is
+wrong and gets corrected; neither is left standing.
+
+Three documents here are worth reading on their own terms rather than as build material:
+[07 — the carry-over manifest](./07-realm-carryover-manifest.md), which states secret by secret
+what a snapshot does and does not carry; [08 — security](./08-security.md), which is the threat
+model for a file that can hold private signing keys; and
+[12 — decisions](./12-decisions.md), which is why the scope boundaries are where they are.
 
 ## What "high fidelity" means here
 
@@ -54,6 +72,7 @@ for throwaway snapshot indexes.
 | — | [`usecases/`](./usecases/README.md) | **Use cases** — the complete behavioural model (60 use cases across 6 packages) with its own traceability matrix |
 | — | [`rollout/`](./rollout/README.md) | **Rollout plan** — the nine phases that build this, with coding tasks, tests, verification evidence and the 0.0.1 release gate |
 | — | [`lunacy/`](./lunacy/README.md) | **Screen designs** — the Lunacy document index, design tokens, and which screen covers which use case |
+| — | [`notes/`](./notes/README.md) | **Development notes** — the gotchas that reached working code, with the guard test that keeps each one from returning |
 
 ## Diagrams
 

@@ -1,4 +1,6 @@
 @startuml r-02-phase-anatomy
+' Copyright 2026 Muhammad Salah
+' SPDX-License-Identifier: Apache-2.0
 title How one phase is executed
 
 skinparam backgroundColor #FFFFFF
