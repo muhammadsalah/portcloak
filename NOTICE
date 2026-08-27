@@ -1,0 +1,28 @@
+PortCloak
+Copyright 2026 Muhammad Salah
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+---
+
+This file exists because the Apache License puts the attribution here and not
+in LICENSE. LICENSE is the licence text itself, byte-identical to the one the
+Apache Software Foundation publishes, including the "[yyyy] [name of copyright
+owner]" placeholder in its appendix — that placeholder is meant to stay, so
+that the licence in this repository can be compared against the canonical one
+and shown to be unaltered.
+
+Section 4(d) of the License requires anyone redistributing this work to carry
+the contents of this file with it. That is why build/package.sh copies LICENSE
+and NOTICE into every artifact it produces rather than leaving them at the top
+of the repository.

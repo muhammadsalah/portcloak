@@ -454,6 +454,11 @@ type AboutView struct {
 	Date     string `json:"date"`
 	Go       string `json:"go"`
 	Platform string `json:"platform"`
+	// Licence is what PortCloak is distributed under. A desktop application is
+	// handed to people who never see the repository, so the terms have to be
+	// reachable from inside it.
+	Licence   string `json:"licence"`
+	Copyright string `json:"copyright"`
 	// Support is every field above on one line, formatted to be pasted into a
 	// bug report without the reporter having to transcribe five values.
 	Support string `json:"support"`
@@ -465,12 +470,14 @@ type AboutView struct {
 func (s *SettingsController) About() AboutView {
 	b := s.eng.Build
 	return AboutView{
-		Version:  b.Version,
-		Commit:   b.Commit,
-		Date:     b.DisplayDate(),
-		Go:       b.Go,
-		Platform: b.Platform,
-		Support:  b.String(),
-		LogFile:  s.eng.Home().LogFile(),
+		Version:   b.Version,
+		Commit:    b.Commit,
+		Date:      b.DisplayDate(),
+		Go:        b.Go,
+		Platform:  b.Platform,
+		Licence:   "Apache License 2.0",
+		Copyright: "Copyright 2026 Muhammad Salah",
+		Support:   b.String(),
+		LogFile:   s.eng.Home().LogFile(),
 	}
 }

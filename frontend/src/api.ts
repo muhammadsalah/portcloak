@@ -862,6 +862,8 @@ export interface AboutView {
   date: string;
   go: string;
   platform: string;
+  licence: string;
+  copyright: string;
   support: string;
   logFile: string;
 }

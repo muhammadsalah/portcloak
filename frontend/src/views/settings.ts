@@ -460,6 +460,8 @@ function aboutPanel(a: AboutView): HTMLElement {
     ["Built", a.date, false],
     ["Platform", a.platform, true],
     ["Go", a.go, true],
+    ["Licence", a.licence, false],
+    ["Copyright", a.copyright, false],
     ["Log file", a.logFile, true],
   ];
   for (const [k, v, mono] of rows) {

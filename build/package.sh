@@ -134,6 +134,10 @@ build_darwin() {
 	sed -e "s|{{VERSION}}|$version|g" -e "s|{{BUILD}}|$commit|g" \
 		build/darwin/Info.plist >"$app/Contents/Info.plist"
 	cp build/darwin/PortCloak.icns "$app/Contents/Resources/PortCloak.icns"
+	# Section 4(d) of the Apache License requires a redistribution to carry
+	# NOTICE with it, and a .app is a redistribution. Resources/ is where a
+	# macOS bundle keeps them.
+	cp LICENSE NOTICE "$app/Contents/Resources/"
 	printf 'APPL????' >"$app/Contents/PkgInfo"
 
 	# Ad-hoc, NOT a Developer ID signature: it will not pass Gatekeeper on
@@ -182,8 +186,13 @@ build_windows() {
 			go build -tags production -trimpath \
 			-ldflags "$ldflags_common -H windowsgui" \
 			-o "$dist/PortCloak.exe" ./cmd/portcloak
-		(cd "$dist" && zip -q "PortCloak-$version-windows-$arch.zip" PortCloak.exe && rm -f PortCloak.exe)
+		# A bare .exe has nowhere to carry a NOTICE, so the zip is the unit of
+		# redistribution and the licence rides beside the binary in it.
+		cp LICENSE NOTICE "$dist/"
+		(cd "$dist" && zip -q "PortCloak-$version-windows-$arch.zip" PortCloak.exe LICENSE NOTICE &&
+			rm -f PortCloak.exe)
 	done
+	rm -f "$dist/LICENSE" "$dist/NOTICE"
 	rm -f cmd/portcloak/*.syso
 }
 
@@ -201,6 +210,7 @@ stage_linux() { # arch binary
 		mkdir -p "$stage/share/icons/hicolor/${px}x${px}/apps"
 		cp "build/linux/appicon-${px}.png" "$stage/share/icons/hicolor/${px}x${px}/apps/portcloak.png"
 	done
+	cp LICENSE NOTICE "$stage/"
 	cp README.md CHANGELOG.md "$stage/" 2>/dev/null || true
 	(cd "$dist" && tar czf "portcloak-$version-linux-$arch.tar.gz" "$(basename "$stage")" &&
 		rm -rf "$(basename "$stage")")

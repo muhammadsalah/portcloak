@@ -91,4 +91,13 @@ silent pass.
 
 ## Licence
 
-Not yet chosen.
+Apache License 2.0. See [`LICENSE`](./LICENSE) for the terms and
+[`NOTICE`](./NOTICE) for the attribution.
+
+    Copyright 2026 Muhammad Salah
+
+`LICENSE` is the Apache Software Foundation's text unaltered, placeholder
+appendix and all, so it can be diffed against the canonical copy and shown to
+be unmodified. The copyright line lives in `NOTICE`, which is where the licence
+itself puts it. Both ship inside every release artifact, because section 4(d)
+requires anyone redistributing this to carry them along.
