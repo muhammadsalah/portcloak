@@ -1,5 +1,5 @@
 PortCloak
-Copyright 2026 Muhammad Salah
+Copyright 2026 Muhammad Salah <muhammadsalahmasoud@icloud.com>
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -26,3 +26,7 @@ Section 4(d) of the License requires anyone redistributing this work to carry
 the contents of this file with it. That is why build/package.sh copies LICENSE
 and NOTICE into every artifact it produces rather than leaving them at the top
 of the repository.
+
+The address above is the contact for the copyright holder — licensing questions,
+and the place to reach someone about this software. It is here rather than in
+LICENSE for the same reason the copyright line is: LICENSE stays verbatim.

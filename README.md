@@ -94,7 +94,7 @@ silent pass.
 Apache License 2.0. See [`LICENSE`](./LICENSE) for the terms and
 [`NOTICE`](./NOTICE) for the attribution.
 
-    Copyright 2026 Muhammad Salah
+    Copyright 2026 Muhammad Salah <muhammadsalahmasoud@icloud.com>
 
 `LICENSE` is the Apache Software Foundation's text unaltered, placeholder
 appendix and all, so it can be diffed against the canonical copy and shown to

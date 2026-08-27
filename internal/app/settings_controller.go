@@ -476,7 +476,7 @@ func (s *SettingsController) About() AboutView {
 		Go:        b.Go,
 		Platform:  b.Platform,
 		Licence:   "Apache License 2.0",
-		Copyright: "Copyright 2026 Muhammad Salah",
+		Copyright: "Copyright 2026 Muhammad Salah <muhammadsalahmasoud@icloud.com>",
 		Support:   b.String(),
 		LogFile:   s.eng.Home().LogFile(),
 	}
