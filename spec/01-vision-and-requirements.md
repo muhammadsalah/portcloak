@@ -1,3 +1,8 @@
+<!--
+  Copyright 2026 Muhammad Salah
+  SPDX-License-Identifier: Apache-2.0
+-->
+
 # 01 — Vision & Requirements
 
 ## 1.1 Vision

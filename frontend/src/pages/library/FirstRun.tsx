@@ -1,3 +1,6 @@
+// Copyright 2026 Muhammad Salah
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * What the library shows before there is anything to list.
  *

@@ -1,3 +1,6 @@
+// Copyright 2026 Muhammad Salah
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Step three: what has already been proved, and what this realm expects to find
  * at the destination.

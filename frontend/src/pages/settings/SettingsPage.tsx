@@ -1,3 +1,6 @@
+// Copyright 2026 Muhammad Salah
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Settings is what PortCloak does to itself: where it keeps its files, what a
  * crashed session left running in someone else's cluster, and what is sitting

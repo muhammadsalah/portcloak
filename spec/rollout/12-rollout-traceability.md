@@ -1,3 +1,8 @@
+<!--
+  Copyright 2026 Muhammad Salah
+  SPDX-License-Identifier: Apache-2.0
+-->
+
 # 12 — Rollout Traceability
 
 Every use case and every requirement mapped to the phase that delivers it and the test that

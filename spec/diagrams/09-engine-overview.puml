@@ -1,4 +1,6 @@
 @startuml 09-engine-overview
+' Copyright 2026 Muhammad Salah
+' SPDX-License-Identifier: Apache-2.0
 skinparam backgroundColor #FFFFFF
 skinparam componentStyle rectangle
 title PortCloak — Single-Binary Overview (no server component)

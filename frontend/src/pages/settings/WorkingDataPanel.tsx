@@ -1,3 +1,6 @@
+// Copyright 2026 Muhammad Salah
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * What PortCloak is holding on this disk, and the one button that clears it.
  *

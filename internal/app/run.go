@@ -1,3 +1,6 @@
+// Copyright 2026 Muhammad Salah
+// SPDX-License-Identifier: Apache-2.0
+
 // Package app is the Wails binding layer: it turns engine capabilities into
 // methods the frontend can call, and engine events into messages the frontend
 // can subscribe to.

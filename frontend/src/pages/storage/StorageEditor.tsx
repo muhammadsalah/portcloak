@@ -1,3 +1,6 @@
+// Copyright 2026 Muhammad Salah
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * The storage form: the kind along the top, the fields that kind needs, the two
  * switches that change what may be written here, and the reachability probe.

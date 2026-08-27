@@ -1,3 +1,6 @@
+// Copyright 2026 Muhammad Salah
+// SPDX-License-Identifier: Apache-2.0
+
 // Package s3store stores snapshots in an S3-compatible bucket under a prefix.
 //
 // MinIO and AWS travel the same code path — an overridable endpoint and

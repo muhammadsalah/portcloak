@@ -1,3 +1,8 @@
+<!--
+  Copyright 2026 Muhammad Salah
+  SPDX-License-Identifier: Apache-2.0
+-->
+
 # Notes — development gotchas
 
 The rest of `spec/` says what PortCloak is meant to do. This folder says what has actually

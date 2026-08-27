@@ -1,3 +1,6 @@
+// Copyright 2026 Muhammad Salah
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * The Activity screen is where resilience becomes legible. A dropped connection
  * has to look like a wait with a reason, not a hang.

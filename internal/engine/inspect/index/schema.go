@@ -1,3 +1,6 @@
+// Copyright 2026 Muhammad Salah
+// SPDX-License-Identifier: Apache-2.0
+
 // Package index is the session-scoped projection store behind snapshot
 // browsing.
 //

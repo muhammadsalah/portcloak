@@ -1,3 +1,6 @@
+// Copyright 2026 Muhammad Salah
+// SPDX-License-Identifier: Apache-2.0
+
 // Package disk stores snapshots in a folder on this machine.
 //
 // The layout is browsable by design: an operator who lost the application

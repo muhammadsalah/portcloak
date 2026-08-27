@@ -1,3 +1,8 @@
+<!--
+  Copyright 2026 Muhammad Salah
+  SPDX-License-Identifier: Apache-2.0
+-->
+
 # 03 — Capture Targets
 
 ![Capture sequence](./diagrams/png/05-capture-sequence.png)

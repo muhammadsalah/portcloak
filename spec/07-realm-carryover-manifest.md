@@ -1,3 +1,8 @@
+<!--
+  Copyright 2026 Muhammad Salah
+  SPDX-License-Identifier: Apache-2.0
+-->
+
 # 07 — Realm Carry-Over Manifest
 
 This is the heart of PortCloak's promise. The **manifest** is the contract that says, for a

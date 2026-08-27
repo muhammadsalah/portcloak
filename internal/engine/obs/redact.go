@@ -1,3 +1,6 @@
+// Copyright 2026 Muhammad Salah
+// SPDX-License-Identifier: Apache-2.0
+
 // Package obs provides structured logging, redaction, progress events and the
 // audit log. It is the lowest layer in the engine: it imports nothing else from
 // engine/, so every other package can log without creating an import cycle.

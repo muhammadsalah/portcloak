@@ -1,3 +1,6 @@
+// Copyright 2026 Muhammad Salah
+// SPDX-License-Identifier: Apache-2.0
+
 /** Step five: the point of no return, and what it will not undo. */
 import {
   BulletList,

@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright 2026 Muhammad Salah
+# SPDX-License-Identifier: Apache-2.0
+
 #
 # Builds distributable PortCloak artifacts for every platform this host can
 # produce, on both x86-64 and arm64.

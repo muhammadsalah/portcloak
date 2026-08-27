@@ -1,3 +1,6 @@
+// Copyright 2026 Muhammad Salah
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * What a running job looks like: the phase pipeline, the bar, and the tail of
  * whatever the export is saying.

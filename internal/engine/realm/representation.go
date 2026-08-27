@@ -1,3 +1,6 @@
+// Copyright 2026 Muhammad Salah
+// SPDX-License-Identifier: Apache-2.0
+
 // Package realm models the parts of Keycloak's realm representation PortCloak
 // needs to reason about, and parses them without ever loading a whole export
 // into memory.

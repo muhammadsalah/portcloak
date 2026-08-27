@@ -1,3 +1,8 @@
+<!--
+  Copyright 2026 Muhammad Salah
+  SPDX-License-Identifier: Apache-2.0
+-->
+
 # 11 — Requirements Traceability Matrix
 
 Every requirement from [01](./01-vision-and-requirements.md) maps to the module(s) that

@@ -1,3 +1,6 @@
+// Copyright 2026 Muhammad Salah
+// SPDX-License-Identifier: Apache-2.0
+
 /** Step two: where it goes, and the key that opens it on the way. */
 import { useState } from "react";
 

@@ -1,3 +1,6 @@
+// Copyright 2026 Muhammad Salah
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Design tokens taken from the Keycloak admin console, so PortCloak looks like
  * it belongs beside it. The full reference is the `00 · Design tokens` board in

@@ -1,3 +1,6 @@
+// Copyright 2026 Muhammad Salah
+// SPDX-License-Identifier: Apache-2.0
+
 // Package sshx is the shared SSH transport behind both the SSH target and the
 // SFTP storage backend.
 //

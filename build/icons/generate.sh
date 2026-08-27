@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright 2026 Muhammad Salah
+# SPDX-License-Identifier: Apache-2.0
+
 #
 # Regenerates every raster icon from the two SVG sources in this directory.
 #

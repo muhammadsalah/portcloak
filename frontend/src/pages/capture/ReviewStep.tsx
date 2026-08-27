@@ -1,3 +1,6 @@
+// Copyright 2026 Muhammad Salah
+// SPDX-License-Identifier: Apache-2.0
+
 /** Step five: every decision the other four made, in one list, before it runs. */
 import type { KeyRecipient, WizardDefaults } from "../../api";
 import {

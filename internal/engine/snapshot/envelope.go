@@ -1,3 +1,6 @@
+// Copyright 2026 Muhammad Salah
+// SPDX-License-Identifier: Apache-2.0
+
 // Package snapshot seals a realm export into the portable, self-describing,
 // integrity-protected unit PortCloak produces and consumes.
 //

@@ -1,3 +1,8 @@
+<!--
+  Copyright 2026 Muhammad Salah
+  SPDX-License-Identifier: Apache-2.0
+-->
+
 # Release — 0.0.1
 
 **What 0.0.1 is.** The first version where the whole loop closes: capture a realm from any of the

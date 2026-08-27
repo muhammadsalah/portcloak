@@ -1,3 +1,8 @@
+<!--
+  Copyright 2026 Muhammad Salah
+  SPDX-License-Identifier: Apache-2.0
+-->
+
 # PortCloak — Design Specification
 
 > **PortCloak** is a cross-platform desktop tool (Go + [Wails v3](https://wails.io)) that

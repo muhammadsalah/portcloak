@@ -1,3 +1,6 @@
+// Copyright 2026 Muhammad Salah
+// SPDX-License-Identifier: Apache-2.0
+
 // Package ssh captures from a Keycloak on a remote host.
 //
 // There is no clone to make here: the host is the execution context. Port

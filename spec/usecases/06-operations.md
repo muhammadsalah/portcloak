@@ -1,3 +1,8 @@
+<!--
+  Copyright 2026 Muhammad Salah
+  SPDX-License-Identifier: Apache-2.0
+-->
+
 # 06 — Operations
 
 > Jobs, resilience, configuration and audit — the cross-cutting behaviour that makes the other

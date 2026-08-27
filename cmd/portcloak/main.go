@@ -1,3 +1,6 @@
+// Copyright 2026 Muhammad Salah
+// SPDX-License-Identifier: Apache-2.0
+
 // Command portcloak is the PortCloak desktop application.
 //
 // This package contains the Wails bootstrap and nothing else. Every decision

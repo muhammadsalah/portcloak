@@ -1,3 +1,6 @@
+// Copyright 2026 Muhammad Salah
+// SPDX-License-Identifier: Apache-2.0
+
 /** What the capture wizard is accumulating, shared by its five steps. */
 
 export type Step = "source" | "realms" | "options" | "storage" | "review";

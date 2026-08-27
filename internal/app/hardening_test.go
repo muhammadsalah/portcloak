@@ -1,3 +1,6 @@
+// Copyright 2026 Muhammad Salah
+// SPDX-License-Identifier: Apache-2.0
+
 package app
 
 import (
@@ -61,7 +64,7 @@ func TestMenu_OmitsTheDefaultViewAndHelpMenus(t *testing.T) {
 // runtime condition would still carry the inspector in the binary.
 func TestDeveloperMenu_IsCompiledOutOfProductionBuilds(t *testing.T) {
 	prod := readSource(t, "menu_production.go")
-	if !strings.HasPrefix(strings.TrimSpace(prod), "//go:build production") {
+	if !constrainedBy(prod, "//go:build production") {
 		t.Fatal("menu_production.go must be constrained to the production build tag")
 	}
 	if strings.Contains(prod, "OpenDevTools") {
@@ -69,9 +72,29 @@ func TestDeveloperMenu_IsCompiledOutOfProductionBuilds(t *testing.T) {
 	}
 
 	dev := readSource(t, "menu_dev.go")
-	if !strings.HasPrefix(strings.TrimSpace(dev), "//go:build !production") {
+	if !constrainedBy(dev, "//go:build !production") {
 		t.Fatal("menu_dev.go must be constrained to !production")
 	}
+}
+
+// constrainedBy reports whether a file carries a build constraint, which means
+// it appears above the package clause.
+//
+// Not "starts with": every file in this repository opens with a licence header,
+// and Go's rule is that a constraint may be preceded by blank lines and other
+// line comments — so byte zero was never what made the tag effective, and
+// checking for it there only pinned the header's absence.
+func constrainedBy(src, constraint string) bool {
+	head, _, found := strings.Cut(src, "\npackage ")
+	if !found {
+		return false
+	}
+	for _, line := range strings.Split(head, "\n") {
+		if strings.TrimSpace(line) == constraint {
+			return true
+		}
+	}
+	return false
 }
 
 // TestWindow_GatesDevToolsOnTheBuildTag pins the window options to the flag

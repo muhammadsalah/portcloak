@@ -1,3 +1,6 @@
+// Copyright 2026 Muhammad Salah
+// SPDX-License-Identifier: Apache-2.0
+
 // Package faketarget is the in-memory Executor every engine test runs against.
 //
 // It exists so `go test ./internal/engine/...` passes with no network, no

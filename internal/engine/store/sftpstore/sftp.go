@@ -1,3 +1,6 @@
+// Copyright 2026 Muhammad Salah
+// SPDX-License-Identifier: Apache-2.0
+
 // Package sftpstore pushes snapshots onto a folder on a remote host.
 //
 // It rides the same SSH transport as the SSH target, so an operator who has

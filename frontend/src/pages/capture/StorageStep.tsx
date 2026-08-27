@@ -1,3 +1,6 @@
+// Copyright 2026 Muhammad Salah
+// SPDX-License-Identifier: Apache-2.0
+
 /** Step four: where the bundle goes. */
 import type { WizardDefaults } from "../../api";
 import { Field, Notice, SectionTitle, Select } from "../../design-system";

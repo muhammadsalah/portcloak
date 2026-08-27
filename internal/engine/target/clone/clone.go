@@ -1,3 +1,6 @@
+// Copyright 2026 Muhammad Salah
+// SPDX-License-Identifier: Apache-2.0
+
 // Package clone owns ephemeral clone execution: deriving a throwaway copy of a
 // serving workload, running the export inside it, and guaranteeing it is
 // destroyed.

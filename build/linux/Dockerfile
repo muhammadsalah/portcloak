@@ -1,3 +1,6 @@
+# Copyright 2026 Muhammad Salah
+# SPDX-License-Identifier: Apache-2.0
+
 # Linux build environment.
 #
 # Linux is the one target that cannot be cross-compiled from macOS with the Go

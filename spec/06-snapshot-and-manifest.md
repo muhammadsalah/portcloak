@@ -1,3 +1,8 @@
+<!--
+  Copyright 2026 Muhammad Salah
+  SPDX-License-Identifier: Apache-2.0
+-->
+
 # 06 — Snapshot Bundle Format & Packaging
 
 ![Snapshot and manifest domain model](./diagrams/png/04-domain-model.png)

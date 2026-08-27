@@ -1,3 +1,6 @@
+// Copyright 2026 Muhammad Salah
+// SPDX-License-Identifier: Apache-2.0
+
 /** The eight views over an opened snapshot, in the order they are read in. */
 
 export type Tab =

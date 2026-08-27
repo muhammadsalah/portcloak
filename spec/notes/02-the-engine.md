@@ -1,3 +1,8 @@
+<!--
+  Copyright 2026 Muhammad Salah
+  SPDX-License-Identifier: Apache-2.0
+-->
+
 # 02 — The engine
 
 Targets, ephemeral clones, storage and resilience. The theme running through every entry here is

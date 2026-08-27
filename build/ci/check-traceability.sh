@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright 2026 Muhammad Salah
+# SPDX-License-Identifier: Apache-2.0
+
 # Every test named in the rollout traceability matrix must exist.
 #
 # The matrix is only worth reading if its evidence column is real. Without this

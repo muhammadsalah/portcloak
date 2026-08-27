@@ -1,3 +1,6 @@
+// Copyright 2026 Muhammad Salah
+// SPDX-License-Identifier: Apache-2.0
+
 // Package target is the seam that makes "capture from anywhere" one workflow
 // instead of four. The orchestrator knows only that it can Probe, Prepare, Run,
 // FetchDir and Teardown; it never knows whether that meant a local process, an

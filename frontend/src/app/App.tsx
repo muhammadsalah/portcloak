@@ -1,3 +1,6 @@
+// Copyright 2026 Muhammad Salah
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * The shell: masthead across the top, navigation rail down the left, and the
  * current screen in the column beside it.

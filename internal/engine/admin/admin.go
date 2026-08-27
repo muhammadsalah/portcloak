@@ -1,3 +1,6 @@
+// Copyright 2026 Muhammad Salah
+// SPDX-License-Identifier: Apache-2.0
+
 // Package admin is the optional Admin REST pass.
 //
 // Everything here is strictly secondary. Offline kc.sh export is the

@@ -1,3 +1,6 @@
+// Copyright 2026 Muhammad Salah
+// SPDX-License-Identifier: Apache-2.0
+
 // Package k8s captures from a clustered Keycloak through an ephemeral clone.
 //
 // The clone reads the shared database, so it does not matter which replica is

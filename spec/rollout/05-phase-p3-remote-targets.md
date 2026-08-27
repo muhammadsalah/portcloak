@@ -1,3 +1,8 @@
+<!--
+  Copyright 2026 Muhammad Salah
+  SPDX-License-Identifier: Apache-2.0
+-->
+
 # P3 — Remote Targets
 
 **Goal.** The same capture pipeline reaches Keycloak wherever it actually runs: over SSH, inside

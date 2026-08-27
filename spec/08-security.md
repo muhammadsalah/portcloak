@@ -1,3 +1,8 @@
+<!--
+  Copyright 2026 Muhammad Salah
+  SPDX-License-Identifier: Apache-2.0
+-->
+
 # 08 — Security & Secret Handling
 
 PortCloak snapshots are among the most sensitive artifacts an organization can produce: they

@@ -1,3 +1,8 @@
+<!--
+  Copyright 2026 Muhammad Salah
+  SPDX-License-Identifier: Apache-2.0
+-->
+
 # 05 — Restore
 
 > Restore imports a snapshot into a target **Environment**. It is **whole-realm** — there is no

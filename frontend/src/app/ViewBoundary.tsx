@@ -1,3 +1,6 @@
+// Copyright 2026 Muhammad Salah
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Every view puts a spinner up and replaces it once the engine has answered. If
  * it throws in between, nothing replaces the spinner and the application looks

@@ -1,3 +1,8 @@
+<!--
+  Copyright 2026 Muhammad Salah
+  SPDX-License-Identifier: Apache-2.0
+-->
+
 # The PortCloak mark
 
 A padlock whose shackle is a restore arc. It says the two things the tool is

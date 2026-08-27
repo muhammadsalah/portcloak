@@ -1,3 +1,6 @@
+// Copyright 2026 Muhammad Salah
+// SPDX-License-Identifier: Apache-2.0
+
 // Package storetest holds the BlobStore contract suite.
 //
 // There is one table and every backend runs it. Any divergence is a bug in the

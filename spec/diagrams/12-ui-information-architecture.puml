@@ -1,3 +1,5 @@
+' Copyright 2026 Muhammad Salah
+' SPDX-License-Identifier: Apache-2.0
 @startmindmap 12-ui-information-architecture
 skinparam backgroundColor #FFFFFF
 title PortCloak — UI Information Architecture (no sign-in)

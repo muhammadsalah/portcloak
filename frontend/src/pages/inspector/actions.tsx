@@ -1,3 +1,6 @@
+// Copyright 2026 Muhammad Salah
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * The three things the inspector's header can do to a snapshot: prove it,
  * export a view of it, and close it again.

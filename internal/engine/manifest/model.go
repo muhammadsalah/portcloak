@@ -1,3 +1,6 @@
+// Copyright 2026 Muhammad Salah
+// SPDX-License-Identifier: Apache-2.0
+
 // Package manifest turns a realm export into the inventory that is PortCloak's
 // central promise: exactly what this snapshot carries, down to the individual
 // secret, so a restore is a faithful clone and nothing important vanishes

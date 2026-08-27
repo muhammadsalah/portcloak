@@ -1,3 +1,6 @@
+// Copyright 2026 Muhammad Salah
+// SPDX-License-Identifier: Apache-2.0
+
 // Package ports allocates the free ports an offline kc.sh export binds.
 //
 // This is the mechanism behind FR-C10. Offline export starts an embedded

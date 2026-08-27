@@ -1,3 +1,8 @@
+<!--
+  Copyright 2026 Muhammad Salah
+  SPDX-License-Identifier: Apache-2.0
+-->
+
 <img src="assets/logo/mark.svg" width="72" alt="">
 
 # PortCloak

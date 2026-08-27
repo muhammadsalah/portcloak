@@ -1,3 +1,6 @@
+// Copyright 2026 Muhammad Salah
+// SPDX-License-Identifier: Apache-2.0
+
 // Package kc builds and interprets kc.sh invocations.
 //
 // kc.sh is a human-facing CLI, not a stable interface: it writes to both

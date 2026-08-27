@@ -1,3 +1,6 @@
+// Copyright 2026 Muhammad Salah
+// SPDX-License-Identifier: Apache-2.0
+
 // Package docker captures from a containerised Keycloak through an ephemeral
 // clone.
 //

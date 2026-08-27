@@ -1,3 +1,8 @@
+<!--
+  Copyright 2026 Muhammad Salah
+  SPDX-License-Identifier: Apache-2.0
+-->
+
 # P6 — Inspection
 
 **Goal.** A snapshot stops being an opaque file. An operator can survey every snapshot across

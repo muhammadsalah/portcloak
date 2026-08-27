@@ -1,3 +1,6 @@
+// Copyright 2026 Muhammad Salah
+// SPDX-License-Identifier: Apache-2.0
+
 // Package frontend embeds the built web assets into the binary, so PortCloak
 // ships as a single file with no server component (NFR-4).
 //

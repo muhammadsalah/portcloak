@@ -1,3 +1,6 @@
+// Copyright 2026 Muhammad Salah
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * One job: what it is, how far it got, what it said, and what can still be done
  * to it.

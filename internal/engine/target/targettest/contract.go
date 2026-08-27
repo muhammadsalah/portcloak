@@ -1,3 +1,6 @@
+// Copyright 2026 Muhammad Salah
+// SPDX-License-Identifier: Apache-2.0
+
 // Package targettest holds the Executor contract suite.
 //
 // There is one table and every target kind runs it: local, SSH, Docker and

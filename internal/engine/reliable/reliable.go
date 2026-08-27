@@ -1,3 +1,6 @@
+// Copyright 2026 Muhammad Salah
+// SPDX-License-Identifier: Apache-2.0
+
 // Package reliable wraps target and storage adapters so every remote operation
 // goes through the resilience layer.
 //

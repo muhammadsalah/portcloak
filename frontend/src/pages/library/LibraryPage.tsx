@@ -1,3 +1,6 @@
+// Copyright 2026 Muhammad Salah
+// SPDX-License-Identifier: Apache-2.0
+
 /** The library is Tier 0: every snapshot, across every backend, with no key. */
 import { useEffect, useMemo, useState } from "react";
 

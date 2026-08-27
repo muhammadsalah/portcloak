@@ -1,3 +1,8 @@
+<!--
+  Copyright 2026 Muhammad Salah
+  SPDX-License-Identifier: Apache-2.0
+-->
+
 # 12 — Design Decisions
 
 The nine open questions raised at the end of the first design pass have been answered. This is

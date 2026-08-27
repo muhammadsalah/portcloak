@@ -1,3 +1,6 @@
+// Copyright 2026 Muhammad Salah
+// SPDX-License-Identifier: Apache-2.0
+
 // Package crypto encrypts and decrypts sealed snapshot bundles.
 //
 // Encryption is opt-in (D8). It is offered prominently and recommended, and

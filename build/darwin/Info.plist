@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
+  Copyright 2026 Muhammad Salah
+  SPDX-License-Identifier: Apache-2.0
+-->
+<!--
   Template. build/package.sh substitutes {{VERSION}} and {{BUILD}} and writes
   the result into PortCloak.app/Contents/Info.plist.
 -->

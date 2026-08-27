@@ -1,3 +1,8 @@
+<!--
+  Copyright 2026 Muhammad Salah
+  SPDX-License-Identifier: Apache-2.0
+-->
+
 # Rollout Plan
 
 How PortCloak gets built. [The specification](../README.md) says *what* the tool is; this

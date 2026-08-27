@@ -1,3 +1,6 @@
+// Copyright 2026 Muhammad Salah
+// SPDX-License-Identifier: Apache-2.0
+
 // Package config owns everything PortCloak knows about itself: the environments
 // and storage definitions an operator has described, their preferences, and the
 // per-job checkpoints that let an interrupted transfer resume.

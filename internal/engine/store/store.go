@@ -1,3 +1,6 @@
+// Copyright 2026 Muhammad Salah
+// SPDX-License-Identifier: Apache-2.0
+
 // Package store is the seam that makes backend choice a configuration setting.
 //
 // Every backend implements BlobStore; the three network backends also implement

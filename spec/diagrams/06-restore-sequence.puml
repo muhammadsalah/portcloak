@@ -1,4 +1,6 @@
 @startuml 06-restore-sequence
+' Copyright 2026 Muhammad Salah
+' SPDX-License-Identifier: Apache-2.0
 skinparam backgroundColor #FFFFFF
 title PortCloak — Restore / Import Snapshot Sequence
 

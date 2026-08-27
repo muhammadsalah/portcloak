@@ -1,3 +1,8 @@
+<!--
+  Copyright 2026 Muhammad Salah
+  SPDX-License-Identifier: Apache-2.0
+-->
+
 # Screen Designs (Lunacy)
 
 The visual design lives in a Lunacy document following the Keycloak / PatternFly 4 idiom.
