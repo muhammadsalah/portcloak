@@ -18,8 +18,24 @@ export interface MaybeFailed {
   failure?: Failure | null;
 }
 
+/**
+ * Wails registers a bound method under its fully-qualified Go name —
+ * `<package path>.<type>.<method>` — and `Call.ByName` looks the string up
+ * verbatim. The Go package path is therefore part of the address, not
+ * decoration: without it every call fails with "unknown bound method name".
+ *
+ * A controller's `ServiceName()` does not change this. That method only names
+ * the service in log lines, which is exactly why it is easy to assume it
+ * controls the binding and to write `"ConfigController.Load"` here instead.
+ *
+ * `TestBindings_EveryFrontendCallResolves` reads this file and checks every
+ * call below against the real methods, so renaming the Go package breaks the
+ * build rather than the application.
+ */
+const goPackage = "portcloak/internal/app";
+
 async function call<T>(service: string, method: string, ...args: unknown[]): Promise<T> {
-  return (await Call.ByName(`${service}.${method}`, ...args)) as T;
+  return (await Call.ByName(`${goPackage}.${service}.${method}`, ...args)) as T;
 }
 
 /* ── Configuration ─────────────────────────────────────────────────────── */
@@ -727,6 +743,8 @@ export interface JobView {
   discardable: boolean;
   cancellable: boolean;
   checkpointNote?: string;
+  /** What pressing Resume would actually do: repeat the upload, or export again. */
+  resumeNote?: string;
 }
 
 export interface ActivityView extends MaybeFailed {

@@ -54,7 +54,9 @@ type JobView struct {
 	Cancellable bool `json:"cancellable"`
 	// CheckpointNote says what a resume would actually pick up from.
 	CheckpointNote string `json:"checkpointNote,omitempty"`
-	// ResumeNote says what pressing Resume would do — an upload continued, or
+	// ResumeNote travels on the row rather than behind its own call, so the
+	// button can label itself from data the screen already has.
+	// It says what pressing Resume would do — an upload continued, or
 	// the export run again.
 	ResumeNote string `json:"resumeNote,omitempty"`
 }
@@ -295,15 +297,4 @@ func (j *JobsController) Resume(jobID string) StartResult {
 			AcknowledgedUnencrypted: !job.Encrypted,
 		})
 	}
-}
-
-// ResumePlan says what resuming would do, so the button can say it too.
-func (j *JobsController) ResumePlan(jobID string) orchestrator.ResumePlan {
-	job, err := j.eng.Jobs.Load(jobID)
-	if err != nil {
-		return orchestrator.ResumePlan{
-			Kind: orchestrator.ResumeUnavailable, Reason: err.Error(),
-		}
-	}
-	return orchestrator.PlanResume(j.eng.Home, job)
 }

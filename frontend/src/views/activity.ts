@@ -147,23 +147,31 @@ function card(
     );
   }
   if (job.resumable) {
+    // Resuming can mean two very different things — repeating an upload that
+    // is already sealed, or running the whole export again — so the button
+    // says which before it is pressed rather than after.
+    const note = job.resumeNote ?? "";
+    const rerunsExport = note.includes("runs it again") || note.includes("runs the export again");
     actions.appendChild(
       h(
         "button",
         {
           class: "primary",
-          onClick: async () => {
-            const res = await JobsAPI.resume(job.id);
-            if (res.failure) {
-              modal({ title: "This job was not resumed", body: h("div", null, res.failure.message) });
+          title: note,
+          onClick: () => {
+            if (rerunsExport) {
+              confirmResume(job, note, reload);
               return;
             }
-            reload();
+            void doResume(job, reload);
           },
         },
-        "Resume",
+        rerunsExport ? "Resume (re-exports)" : "Resume",
       ),
     );
+    if (note) {
+      actions.appendChild(h("span", { class: "muted note" }, note));
+    }
   }
   if (job.discardable) {
     actions.appendChild(
@@ -300,6 +308,37 @@ function stateBadge(state: string): HTMLElement {
 
 function titleCase(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+async function doResume(job: JobView, reload: () => void): Promise<void> {
+  const res = await JobsAPI.resume(job.id);
+  if (res.failure) {
+    modal({ title: "This job was not resumed", body: h("div", null, res.failure.message) });
+    return;
+  }
+  reload();
+}
+
+// Resuming a job whose export never finished re-reads the realm out of the
+// database. That is the expensive half and it touches the source environment
+// again, so it is confirmed rather than assumed — unlike repeating an upload
+// from a bundle that is already sealed on this machine.
+function confirmResume(job: JobView, note: string, reload: () => void): void {
+  modal({
+    title: `Resume this ${job.kind}?`,
+    body: h(
+      "div",
+      null,
+      h("p", null, note),
+      h(
+        "p",
+        { class: "muted small" },
+        "The export runs against the source environment again. Nothing already stored is changed.",
+      ),
+    ),
+    confirmLabel: "Run the export again",
+    onConfirm: () => doResume(job, reload),
+  });
 }
 
 function confirmDiscard(job: JobView, reload: () => void): void {

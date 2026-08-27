@@ -17,9 +17,6 @@ type ConfigController struct{ eng *Engine }
 // NewConfigController binds the configuration screens.
 func NewConfigController(eng *Engine) *ConfigController { return &ConfigController{eng: eng} }
 
-// ServiceName is what the Wails binding layer calls this.
-func (c *ConfigController) ServiceName() string { return "ConfigController" }
-
 // EnvironmentView is one row of the environments list, plus everything its
 // detail pane needs.
 type EnvironmentView struct {

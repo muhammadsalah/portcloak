@@ -16,9 +16,6 @@ type CaptureController struct{ eng *Engine }
 // NewCaptureController binds the capture wizard.
 func NewCaptureController(eng *Engine) *CaptureController { return &CaptureController{eng: eng} }
 
-// ServiceName is what the Wails binding layer calls this.
-func (c *CaptureController) ServiceName() string { return "CaptureController" }
-
 // WizardDefaults is what the wizard opens with.
 type WizardDefaults struct {
 	Environments   []EnvironmentView  `json:"environments"`
