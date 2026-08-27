@@ -636,7 +636,7 @@ func TestCapture_BundleOpensAndVerifies(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	dir := filepath.Join(t.TempDir(), "open")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
@@ -646,7 +646,7 @@ func TestCapture_BundleOpensAndVerifies(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer opened.Close()
+	defer func() { _ = opened.Close() }()
 
 	if !opened.Verify.OK {
 		t.Fatalf("a freshly captured bundle did not verify: %s", opened.Verify.Message)

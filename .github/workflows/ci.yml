@@ -102,8 +102,19 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
       - run: go vet -tags gtk3 ./internal/... ./frontend/...
-      - uses: golangci/golangci-lint-action@v6
+      # v6 installs a golangci-lint v1 binary built with go1.24, which refuses
+      # to load a module whose go directive is newer than its own toolchain:
+      #
+      #   can't load config: the Go language version (go1.24) used to build
+      #   golangci-lint is lower than the targeted Go version (1.27)
+      #
+      # The action's major version and the linter's are coupled — v8 is the one
+      # that installs golangci-lint v2 — and the linter is pinned rather than
+      # floating so a new release cannot fail the build on a lint rule nobody
+      # here has run yet.
+      - uses: golangci/golangci-lint-action@v8
         with:
+          version: v2.13.1
           args: --timeout=5m --build-tags=gtk3 ./internal/...
 
   unit:

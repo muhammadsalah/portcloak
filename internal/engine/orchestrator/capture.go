@@ -601,8 +601,8 @@ func (o *Orchestrator) buildManifest(ctx context.Context, cc captureContext, j *
 	var userFiles []string
 	for _, name := range staged {
 		base := strings.TrimPrefix(name, snapshot.RealmDir)
-		switch {
-		case base == layout.RealmFile:
+		switch base {
+		case layout.RealmFile:
 			realmFile = filepath.Join(builder.Dir(), filepath.FromSlash(name))
 		default:
 			for _, uf := range layout.UserFiles {

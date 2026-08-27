@@ -44,7 +44,11 @@ func NewIntegrityTree(artifacts []ArtifactDigest) IntegrityTree {
 	for _, a := range sorted {
 		// Name and digest are both folded in, so moving an artifact's contents
 		// to a different name changes the root.
-		fmt.Fprintf(h, "%s\x00%s\x00%d\n", a.Name, a.SHA256, a.Size)
+		//
+		// The error is discarded on purpose: hash.Hash documents that Write
+		// never returns one, so there is nothing here that can fail and no
+		// branch worth writing for it.
+		_, _ = fmt.Fprintf(h, "%s\x00%s\x00%d\n", a.Name, a.SHA256, a.Size)
 	}
 	return IntegrityTree{
 		Algorithm: Algorithm,

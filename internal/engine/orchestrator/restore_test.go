@@ -211,7 +211,7 @@ func TestRestore_RefusesTamperedBundleBeforeContactingTarget(t *testing.T) {
 func TestPreconditions_NeverBlocks(t *testing.T) {
 	rh := newRestoreHarness(t)
 	session := rh.openSnapshot(t)
-	defer session.Close()
+	defer func() { _ = session.Close() }()
 
 	report := orchestrator.Preconditions(session)
 	if report.Blocks {
@@ -234,7 +234,7 @@ func TestPreconditions_NeverBlocks(t *testing.T) {
 func TestPreconditions_NotCheckedIsNotNone(t *testing.T) {
 	rh := newRestoreHarness(t)
 	session := rh.openSnapshot(t)
-	defer session.Close()
+	defer func() { _ = session.Close() }()
 
 	// The seeding capture ran with no Admin API, so detection did not run.
 	report := orchestrator.Preconditions(session)
@@ -265,7 +265,7 @@ func (rh *restoreHarness) openSnapshot(t *testing.T) *inspect.Session {
 func TestDryRun_EmptyTarget(t *testing.T) {
 	rh := newRestoreHarness(t)
 	session := rh.openSnapshot(t)
-	defer session.Close()
+	defer func() { _ = session.Close() }()
 
 	rh.dest.shape = orchestrator.RealmShape{Exists: false}
 	dry := orchestrator.ComputeDryRun(context.Background(), session, rh.dest, kc.StrategyOverwrite)
@@ -290,7 +290,7 @@ func TestDryRun_EmptyTarget(t *testing.T) {
 func TestDryRun_ReflectsStrategy(t *testing.T) {
 	rh := newRestoreHarness(t)
 	session := rh.openSnapshot(t)
-	defer session.Close()
+	defer func() { _ = session.Close() }()
 
 	rh.dest.shape = orchestrator.RealmShape{
 		Exists: true, Users: 3, Clients: 4, RealmRoles: 2, Groups: 3,
@@ -330,7 +330,7 @@ func TestDryRun_ReflectsStrategy(t *testing.T) {
 func TestDryRun_NotesTheThingsThatBreakLogins(t *testing.T) {
 	rh := newRestoreHarness(t)
 	session := rh.openSnapshot(t)
-	defer session.Close()
+	defer func() { _ = session.Close() }()
 
 	rh.dest.shape = orchestrator.RealmShape{Exists: true, Users: 5, Clients: 4, KeyIDs: []string{"old"}}
 	dry := orchestrator.ComputeDryRun(context.Background(), session, rh.dest, kc.StrategyOverwrite)
@@ -352,7 +352,7 @@ func TestDryRun_NotesTheThingsThatBreakLogins(t *testing.T) {
 func TestDryRun_UnreadableTargetIsSaidNotHidden(t *testing.T) {
 	rh := newRestoreHarness(t)
 	session := rh.openSnapshot(t)
-	defer session.Close()
+	defer func() { _ = session.Close() }()
 
 	rh.dest.reachable = false
 	dry := orchestrator.ComputeDryRun(context.Background(), session, rh.dest, kc.StrategyOverwrite)

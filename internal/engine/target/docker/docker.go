@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/image"
@@ -386,7 +387,7 @@ func (p *Platform) exec(ctx context.Context, id string, cmd target.Command) (tar
 func (p *Platform) CopyOut(ctx context.Context, ref, dir string, sink target.ArtifactSink) error {
 	rc, _, err := p.cli.CopyFromContainer(ctx, containerID(ref), dir)
 	if err != nil {
-		if client.IsErrNotFound(err) {
+		if cerrdefs.IsNotFound(err) {
 			// A directory that is not there is not an empty capture. Reporting
 			// success here would produce a snapshot that looks complete and
 			// contains nothing, which is the fidelity-loss failure this tool
@@ -461,7 +462,7 @@ func (p *Platform) CopyIn(ctx context.Context, ref, dest string, size int64, own
 // desired end state has been reached either way.
 func (p *Platform) Destroy(ctx context.Context, ref string) error {
 	err := p.cli.ContainerRemove(ctx, containerID(ref), container.RemoveOptions{Force: true, RemoveVolumes: true})
-	if err != nil && !client.IsErrNotFound(err) {
+	if err != nil && !cerrdefs.IsNotFound(err) {
 		return err
 	}
 	return nil

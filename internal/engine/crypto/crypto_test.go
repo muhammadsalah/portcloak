@@ -83,7 +83,7 @@ func TestCrypto_RoundTrip_Passphrase(t *testing.T) {
 		t.Fatal(err)
 	}
 	opened := open(t, sealed, opener)
-	defer opened.Close()
+	defer func() { _ = opened.Close() }()
 	if opened.Envelope.Realm != "acme" || !opened.Verify.OK {
 		t.Fatalf("round trip failed: %+v / %s", opened.Envelope, opened.Verify.Message)
 	}
@@ -117,7 +117,7 @@ func TestCrypto_RoundTrip_Recipients(t *testing.T) {
 		if opened.Envelope.Realm != "acme" {
 			t.Fatalf("recipient could not read the bundle: %+v", opened.Envelope)
 		}
-		opened.Close()
+		_ = opened.Close()
 	}
 
 	// Someone who is not a recipient cannot.

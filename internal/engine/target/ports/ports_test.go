@@ -45,7 +45,7 @@ func TestFree_SeesAnOccupiedPort(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer l.Close()
+	defer func() { _ = l.Close() }()
 	port := l.Addr().(*net.TCPAddr).Port
 
 	if Free(port) {

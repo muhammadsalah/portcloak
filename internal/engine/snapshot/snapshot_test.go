@@ -95,7 +95,7 @@ func TestPackager_NormalisesArchiveMetadata(t *testing.T) {
 		t.Fatal(err)
 	}
 	opened := openBytes(t, buf.Bytes())
-	defer opened.Close()
+	defer func() { _ = opened.Close() }()
 
 	// Every artifact came out with the same restricted mode, whatever the
 	// staging files had.
@@ -127,7 +127,7 @@ func TestPackager_RoundTrip(t *testing.T) {
 	}
 
 	opened := openBytes(t, buf.Bytes())
-	defer opened.Close()
+	defer func() { _ = opened.Close() }()
 
 	if opened.Envelope.Realm != "acme" || opened.Envelope.SnapshotID != "01HZY3" {
 		t.Fatalf("envelope round-tripped as %+v", opened.Envelope)
@@ -241,7 +241,7 @@ func TestOpen_TamperedBundleIsFlaggedNotRendered(t *testing.T) {
 		// Sealing may succeed or fail depending on size; either way the open
 		// below is what has to catch it.
 		opened := openBytes(t, buf.Bytes())
-		defer opened.Close()
+		defer func() { _ = opened.Close() }()
 		if opened.Verify.OK {
 			t.Fatal("a tampered bundle verified")
 		}

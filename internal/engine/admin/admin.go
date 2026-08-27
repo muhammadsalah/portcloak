@@ -35,7 +35,6 @@ import (
 // Client is the Admin REST client.
 type Client struct {
 	base   string
-	realm  string
 	client *http.Client
 
 	authRealm string
@@ -180,19 +179,19 @@ func (c *Client) VerifySecrets(ctx context.Context, realmName string, secrets []
 		case !s.Carried:
 			masked[s.Location] = fmt.Sprintf("No secret was carried for %s.", name)
 		default:
-			value, present := live[name]
-			if !present {
+			if _, present := live[name]; !present {
 				// The client exists in the export but not on the running
 				// server. Reporting "could not verify" is the honest answer;
 				// assuming good is how a dud secret ships.
 				masked[s.Location] = fmt.Sprintf("PortCloak could not confirm the secret for %s, because that client is not on the running server.", name)
-				continue
 			}
-			if manifest.IsMasked(value) {
-				// The Admin API itself masks on some versions, which says
-				// nothing about the export. Not a finding.
-				continue
-			}
+			// A client that is on the server is not a finding either way. The
+			// Admin API masks the secret on read on some versions, which says
+			// nothing about what the export produced, and an unmasked one only
+			// confirms what `s.Masked` and `s.Carried` above have already
+			// settled. Comparing the two values would be a different check —
+			// "does the export match the server" rather than "did the export
+			// produce a real secret" — and this pass does not make that claim.
 		}
 	}
 

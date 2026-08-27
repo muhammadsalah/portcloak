@@ -860,7 +860,7 @@ func TestOpen_TamperedBundleOpensDegradedAndNamesTheArtifact(t *testing.T) {
 	if err != nil {
 		return // Refused outright, which is the stronger outcome.
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 	if !s.Degraded() {
 		t.Fatal("a tampered bundle opened as if it were intact")
 	}
