@@ -191,13 +191,6 @@ jobs:
     # integration does not run on PRs; the other five jobs do.
     if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/phase/')
     services:
-      minio:
-        image: bitnami/minio:latest
-        env:
-          MINIO_ROOT_USER: portcloak
-          MINIO_ROOT_PASSWORD: portcloak-test-secret
-          MINIO_DEFAULT_BUCKETS: portcloak-test
-        ports: ["9000:9000"]
       azurite:
         image: mcr.microsoft.com/azure-storage/azurite:latest
         ports: ["10000:10000"]
@@ -214,6 +207,34 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
+      # MinIO is started here rather than declared as a service container.
+      #
+      # `bitnami/minio` published no tags at all after Bitnami moved its
+      # catalogue to `bitnamilegacy`, so the service failed at Initialize
+      # containers before a line of this repository ran. The maintained image
+      # is `minio/minio`, and it needs `server /data` — arguments a service
+      # container cannot supply, because the services block has no `command`.
+      #
+      # The bucket is a directory created before the server starts. MinIO
+      # treats each top-level directory under its data dir as a bucket, which
+      # replaces the MINIO_DEFAULT_BUCKETS variable the Bitnami image provided
+      # and which nothing upstream has.
+      - name: MinIO
+        run: |
+          mkdir -p "${{ runner.temp }}/minio/portcloak-test"
+          docker run -d --name minio -p 9000:9000 \
+            -e MINIO_ROOT_USER=portcloak \
+            -e MINIO_ROOT_PASSWORD=portcloak-test-secret \
+            -v "${{ runner.temp }}/minio:/data" \
+            minio/minio:RELEASE.2025-09-07T16-13-09Z server /data
+          for _ in $(seq 1 60); do
+            curl -sf -o /dev/null http://127.0.0.1:9000/minio/health/live && exit 0
+            sleep 1
+          done
+          echo "MinIO did not become healthy" >&2
+          docker logs minio >&2
+          exit 1
+
       - name: Storage backends
         env:
           PORTCLOAK_TEST_S3_ENDPOINT: http://127.0.0.1:9000
