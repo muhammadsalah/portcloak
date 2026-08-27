@@ -85,6 +85,8 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
       - run: go test ./internal/engine/obs -run 'TestRedaction|TestAuditLog_IsRedacted' -v
+      - name: The traceability matrix cites tests that exist
+        run: ./build/ci/check-traceability.sh
       - name: No secret material in committed fixtures or config templates
         run: |
           ! grep -rIn --include='*.yaml' --include='*.yml' \
