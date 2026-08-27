@@ -496,3 +496,30 @@ func SweepWorkDirs(home config.Home, keep map[string]bool) (removed int, err err
 // marshalIndent is the shared encoder for exports, kept here so every export
 // path produces the same shape.
 func marshalIndent(v any) ([]byte, error) { return json.MarshalIndent(v, "", "  ") }
+
+// RealmFiles are the export artifacts this snapshot carries, in bundle-relative
+// form.
+func (s *Session) RealmFiles() []string { return s.opened.RealmFiles }
+
+// PathOf resolves a bundle-relative artifact name to where it was extracted.
+func (s *Session) PathOf(name string) string { return s.opened.Path(name) }
+
+// RealmFileBytes returns the realm document verbatim.
+//
+// Verbatim matters: the realm JSON is what the destination consumes, and
+// re-serialising it would put PortCloak in the path of the very data it
+// promises to carry faithfully.
+func (s *Session) RealmFileBytes() ([]byte, error) {
+	for _, name := range s.opened.RealmFiles {
+		base := strings.TrimPrefix(name, snapshot.RealmDir)
+		if base == s.Realm+"-realm.json" || base == s.Realm+".json" {
+			return os.ReadFile(s.opened.Path(name))
+		}
+	}
+	for _, name := range s.opened.RealmFiles {
+		if strings.HasSuffix(name, "-realm.json") {
+			return os.ReadFile(s.opened.Path(name))
+		}
+	}
+	return nil, fmt.Errorf("this snapshot does not contain a realm file")
+}

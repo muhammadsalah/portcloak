@@ -58,6 +58,11 @@ type Registry struct {
 	Executor ExecutorFactory
 	Store    StoreFactory
 	Verifier VerifierFactory
+	// Destination is the Admin API view of a restore target, used for the dry
+	// run, the merge strategy and post-restore validation. A nil factory, or
+	// one that returns an error, means those steps report themselves as not
+	// performed rather than failing the restore.
+	Destination DestinationFactory
 }
 
 // Options configures an orchestrator.

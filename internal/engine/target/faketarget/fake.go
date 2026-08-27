@@ -246,6 +246,17 @@ func (e *Executor) WasTornDown() bool {
 	return e.TornDown
 }
 
+// Reset clears the recorded lifecycle, so a test that seeds through one phase
+// can assert cleanly about the next.
+func (e *Executor) Reset() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.Commands = nil
+	e.Pushed = map[string][]byte{}
+	e.Teardowns = 0
+	e.TornDown = false
+}
+
 // RunCount is how many commands were executed.
 func (e *Executor) RunCount() int {
 	e.mu.Lock()
