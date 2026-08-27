@@ -1,7 +1,12 @@
 # Copyright 2026 Muhammad Salah
 # SPDX-License-Identifier: Apache-2.0
 
-# CI is deliberately cheap enough to run on every push.
+# CI guards main, and nothing else automatically.
+#
+# It used to run on every push to every branch, which is a defensible policy
+# for a repository with one contributor and a cheap suite — but it spends
+# minutes on work-in-progress that is going to be rewritten before it lands.
+# The branch that has to stay green is the one releases are cut from.
 #
 # Integration tests are tagged rather than skipped by a runtime probe, so a
 # missing service container produces "not run" rather than a silent pass. A
@@ -10,7 +15,15 @@ name: CI
 
 on:
   push:
+    branches: [main]
+  # A pull request into main is main's problem before it is merged, not after.
+  # Without this, a branch could be merged having never been built.
   pull_request:
+    branches: [main]
+  # The way to run the suite against a branch that is not main: Actions → CI →
+  # Run workflow. Restricting the automatic triggers should not remove the
+  # ability to ask, only the obligation to run unasked.
+  workflow_dispatch:
 
 env:
   GO_VERSION: "1.27"
@@ -145,6 +158,13 @@ jobs:
   integration:
     name: Integration
     runs-on: ubuntu-latest
+    # Service containers cost minutes, so this is the one job that does not run
+    # everywhere the others do.
+    #
+    # Since the automatic triggers were narrowed to main, the `phase/` arm is
+    # reachable only through Run workflow on such a branch — which is the point
+    # of keeping it. Note that a pull request's ref is refs/pull/N/merge, so
+    # integration does not run on PRs; the other five jobs do.
     if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/phase/')
     services:
       minio:
