@@ -81,22 +81,22 @@ type Check struct {
 // writes, never restarts anything, and never creates the clone it reports as
 // feasible.
 type TargetFacts struct {
-	Kind            string      `json:"kind"`
-	Reachable       bool        `json:"reachable"`
-	KeycloakVersion string      `json:"keycloakVersion,omitempty"`
-	KcPath          string      `json:"kcPath,omitempty"`
-	TempDir         string      `json:"tempDir,omitempty"`
-	FreeBytes       int64       `json:"freeBytes,omitempty"`
-	HasTar          bool        `json:"hasTar"`
-	Mode            ExecMode    `json:"mode"`
-	CloneCapable    bool        `json:"cloneCapable"`
-	CloneDetail     string      `json:"cloneDetail,omitempty"`
-	AdminReachable  bool        `json:"adminReachable"`
-	AdminDetail     string      `json:"adminDetail,omitempty"`
-	Ports           PortSet     `json:"ports"`
-	Realms          []string    `json:"realms,omitempty"`
-	Checks          []Check     `json:"checks"`
-	ProbedAt        time.Time   `json:"probedAt"`
+	Kind            string    `json:"kind"`
+	Reachable       bool      `json:"reachable"`
+	KeycloakVersion string    `json:"keycloakVersion,omitempty"`
+	KcPath          string    `json:"kcPath,omitempty"`
+	TempDir         string    `json:"tempDir,omitempty"`
+	FreeBytes       int64     `json:"freeBytes,omitempty"`
+	HasTar          bool      `json:"hasTar"`
+	Mode            ExecMode  `json:"mode"`
+	CloneCapable    bool      `json:"cloneCapable"`
+	CloneDetail     string    `json:"cloneDetail,omitempty"`
+	AdminReachable  bool      `json:"adminReachable"`
+	AdminDetail     string    `json:"adminDetail,omitempty"`
+	Ports           PortSet   `json:"ports"`
+	Realms          []string  `json:"realms,omitempty"`
+	Checks          []Check   `json:"checks"`
+	ProbedAt        time.Time `json:"probedAt"`
 	// ReadOnlyNote is the sentence the UI shows under a probe result, because a
 	// probe against production has to be visibly harmless.
 	ReadOnlyNote string `json:"readOnlyNote"`
