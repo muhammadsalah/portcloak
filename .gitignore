@@ -1,0 +1,40 @@
+# Build output
+/bin/
+/build/
+/dist/
+portcloak
+*.exe
+
+# Go
+*.test
+*.out
+vendor/
+
+# Wails
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local runtime data — never committed
+.portcloak/
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+
+# Snapshot bundles and any exported realm material (may contain secrets)
+*.pcsnap
+*.pcsnap.age
+/testdata/snapshots/
+
+# Lunacy autosave / lock files
+*.sketch.lock
+*~
