@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -68,9 +69,8 @@ func (c *Client) token_(ctx context.Context) (string, error) {
 
 	resp, err := c.client.Do(req)
 	if err != nil {
-		return "", resil.Retry("reach the Admin API",
-			fmt.Sprintf("PortCloak could not reach the Admin API at %s.", c.base), err).
-			WithAdvice("Verification and dependency detection are optional; a capture succeeds without them.")
+		return "", c.classifyTransport("reach the Admin API",
+			fmt.Sprintf("PortCloak could not reach the Admin API at %s.", c.base), err)
 	}
 	defer resp.Body.Close() //nolint:errcheck
 
@@ -154,7 +154,7 @@ func (c *Client) do(ctx context.Context, method, p string, body []byte, into any
 
 	resp, err := c.client.Do(req)
 	if err != nil {
-		return resil.Retry("talk to the Admin API",
+		return c.classifyTransport("talk to the Admin API",
 			fmt.Sprintf("The connection to %s dropped.", c.base), err)
 	}
 	defer resp.Body.Close() //nolint:errcheck
@@ -175,6 +175,57 @@ func (c *Client) do(ctx context.Context, method, p string, body []byte, into any
 			fmt.Sprintf("The Admin API returned something PortCloak could not read from %s.", p), err)
 	}
 	return nil
+}
+
+// classifyTransport turns a failed request into the right kind of failure.
+//
+// Everything at this level used to be reported as retryable, which is right for
+// a dropped connection and wrong for a certificate: a Keycloak behind a
+// self-signed or private-CA certificate is not going to become trusted on the
+// fourth attempt, so the retry budget was being spent proving that. Worse, the
+// message said only that the server could not be reached — the operator was
+// looking at a working URL, being told it was unreachable, with no mention of a
+// certificate and no mention of the setting that accepts one.
+func (c *Client) classifyTransport(op, message string, err error) error {
+	if certProblem(err) {
+		return resil.Fatal(op,
+			fmt.Sprintf("The TLS certificate presented by %s is not trusted by this machine: %s", c.base, certReason(err)), err).
+			WithAdvice("If this is a self-signed or private-CA certificate you recognise, turn on " +
+				"“Accept a self-signed certificate” on this environment. It applies to the Admin API " +
+				"only, and never to a snapshot's contents.")
+	}
+	return resil.Retry(op, message, err).
+		WithAdvice("Verification and dependency detection are optional; a capture succeeds without them.")
+}
+
+// certProblem reports whether a request failed because the certificate could
+// not be verified, as opposed to the connection failing.
+func certProblem(err error) bool {
+	var unknown x509.UnknownAuthorityError
+	var hostname x509.HostnameError
+	var invalid x509.CertificateInvalidError
+	var verification *tls.CertificateVerificationError
+	return errors.As(err, &unknown) || errors.As(err, &hostname) ||
+		errors.As(err, &invalid) || errors.As(err, &verification)
+}
+
+// certReason states which way the certificate failed, because "self-signed",
+// "expired" and "wrong hostname" have three different answers and only one of
+// them is the setting this package offers.
+func certReason(err error) string {
+	var hostname x509.HostnameError
+	if errors.As(err, &hostname) {
+		return fmt.Sprintf("it is not valid for that host name (%s).", hostname.Host)
+	}
+	var invalid x509.CertificateInvalidError
+	if errors.As(err, &invalid) && invalid.Reason == x509.Expired {
+		return "it has expired, or is not valid yet."
+	}
+	var unknown x509.UnknownAuthorityError
+	if errors.As(err, &unknown) {
+		return "it was signed by an authority this machine does not know — which is what a self-signed or private-CA certificate looks like."
+	}
+	return "the certificate could not be verified."
 }
 
 // insecureTransport is used only when an environment explicitly asks for it,

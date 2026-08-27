@@ -12,13 +12,14 @@
 package k8s
 
 import (
-	"archive/tar"
+	"bufio"
 	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -218,7 +219,11 @@ func (p *Platform) Probe(ctx context.Context) (target.TargetFacts, error) {
 	}
 
 	facts.TempDir = "/tmp"
-	facts.HasTar = true
+	// Not assumed any more. The Keycloak image is built on ubi-micro and has no
+	// tar; PortCloak streams the export out over the exec channel itself, which
+	// is why an image without one is not a problem to report.
+	facts.HasTar = false
+	facts.Pass("File transfer", "streamed over exec — the clone needs no tar")
 	facts.Ports = target.PortSet{HTTP: 8080, HTTPS: 8443, Management: 9000}
 	facts.Pass("Free ports", "the clone has its own network namespace, so nothing can collide")
 
@@ -619,79 +624,192 @@ func (p *Platform) stream(ctx context.Context, ref string, argv []string, stdin 
 	})
 }
 
-// CopyOut streams a directory out of the clone as a tar over the exec channel,
-// which is what kubectl cp is built on.
+// copyOutScript streams a directory as a length-framed sequence of files.
+//
+// `kubectl cp`, and everything built the way it is built, runs tar inside the
+// container. The official Keycloak image has no tar — it is assembled on
+// ubi-micro, which ships neither tar nor gzip — so the export finished, the pod
+// was healthy, and the capture failed at "the stream from the clone ended
+// unexpectedly", which was the exec channel closing on a binary that does not
+// exist. Nothing said so, because tar's stderr was going to io.Discard.
+//
+// This needs sh, find, wc, cat and printf, which that image does have. Each
+// file arrives as
+//
+//	PCF <size> <name relative to dir>\n
+//	<exactly size bytes>
+//
+// which is a far smaller contract than tar's, and one no image can be missing.
+// A file whose name contains a newline would break the framing; Keycloak names
+// its export after the realm, and a realm name cannot contain one.
+func copyOutScript(dir string) string {
+	return "cd " + shellQuote(dir) + ` && find . -type f -print | while IFS= read -r f; do ` +
+		`printf 'PCF %s %s\n' "$(wc -c < "$f")" "${f#./}"; cat "$f"; done`
+}
+
+// CopyOut streams a directory out of the clone over the exec channel.
 func (p *Platform) CopyOut(ctx context.Context, ref, dir string, sink target.ArtifactSink) error {
 	pr, pw := io.Pipe()
 
+	// The command's stderr is kept rather than discarded. It is the half that
+	// says which binary was missing or which path did not exist, and throwing
+	// it away is what turned a one-line diagnosis into a mystery.
+	var stderr boundedBuffer
+
 	errCh := make(chan error, 1)
 	go func() {
-		// Bounded buffering: the tar is consumed as it arrives rather than
-		// accumulated, which is what keeps the large fixture from deadlocking.
-		err := p.stream(ctx, ref, []string{"tar", "cf", "-", "-C", dir, "."}, nil, pw, io.Discard)
+		// Bounded buffering: the stream is consumed as it arrives rather than
+		// accumulated, which is what keeps a very large realm from deadlocking.
+		err := p.stream(ctx, ref, []string{"/bin/sh", "-c", copyOutScript(dir)}, nil, pw, &stderr)
 		_ = pw.CloseWithError(err)
 		errCh <- err
 	}()
 
-	tr := tar.NewReader(pr)
+	fail := func(err error) error {
+		_ = pr.CloseWithError(err)
+		<-errCh
+		return collectFailure(err, &stderr)
+	}
+
+	br := bufio.NewReaderSize(pr, 64<<10)
 	for {
 		if err := ctx.Err(); err != nil {
 			_ = pr.CloseWithError(err)
 			return err
 		}
-		hdr, err := tr.Next()
-		if errors.Is(err, io.EOF) {
+
+		header, err := br.ReadString('\n')
+		if errors.Is(err, io.EOF) && strings.TrimSpace(header) == "" {
 			break
 		}
 		if err != nil {
-			_ = pr.CloseWithError(err)
-			<-errCh
-			return resil.Retry("collect the exported files",
-				"The stream from the clone ended unexpectedly.", err)
+			return fail(err)
 		}
-		if hdr.Typeflag != tar.TypeReg {
-			continue
+
+		name, size, err := parseFrame(header)
+		if err != nil {
+			return fail(err)
 		}
-		name := strings.TrimPrefix(strings.TrimPrefix(hdr.Name, "./"), "/")
 		if name == "" {
+			// Nothing to hand on, but the bytes still have to be drawn off or
+			// the next header is read out of the middle of a file.
+			if _, err := io.CopyN(io.Discard, br, size); err != nil {
+				return fail(err)
+			}
 			continue
 		}
-		if err := sink.Artifact(ctx, target.Artifact{Name: name, Size: hdr.Size, Mode: hdr.Mode}, tr); err != nil {
+
+		body := io.LimitReader(br, size)
+		if err := sink.Artifact(ctx, target.Artifact{Name: name, Size: size, Mode: 0o600}, body); err != nil {
 			_ = pr.CloseWithError(err)
 			<-errCh
 			return err
 		}
+		// A sink that read less than it was offered would otherwise leave the
+		// reader inside the file it just took.
+		if _, err := io.Copy(io.Discard, body); err != nil {
+			return fail(err)
+		}
 	}
+
 	_ = pr.Close()
-	return <-errCh
+	if err := <-errCh; err != nil {
+		return collectFailure(err, &stderr)
+	}
+	return nil
+}
+
+// collectFailure separates the two ways collecting can go wrong.
+//
+// A non-zero exit is a decision by the shell inside the clone — a directory
+// that is not there, a permission it does not have — and trying it three more
+// times only delays the same answer. A stream that ends without one is the exec
+// channel dropping, which is exactly what retrying is for. Exec already draws
+// this line; CopyOut used to call everything retryable.
+func collectFailure(err error, stderr *boundedBuffer) error {
+	var codeErr exitCoder
+	if errors.As(err, &codeErr) {
+		return resil.Fatal("collect the exported files",
+			"The clone could not hand the exported files back."+stderr.suffix(), err).
+			WithAdvice("The export's own output is in the job log above; it says whether it wrote anything.")
+	}
+	return resil.Retry("collect the exported files",
+		"The stream from the clone ended unexpectedly."+stderr.suffix(), err)
+}
+
+// parseFrame reads one `PCF <size> <name>` header.
+func parseFrame(line string) (name string, size int64, err error) {
+	fields := strings.SplitN(strings.TrimRight(line, "\r\n"), " ", 3)
+	if len(fields) != 3 || fields[0] != "PCF" {
+		return "", 0, fmt.Errorf("the clone sent something that is not a file header: %q", truncateLine(line))
+	}
+	size, err = strconv.ParseInt(fields[1], 10, 64)
+	if err != nil || size < 0 {
+		return "", 0, fmt.Errorf("the clone sent a file with an unreadable length: %q", truncateLine(line))
+	}
+	return strings.TrimPrefix(fields[2], "./"), size, nil
+}
+
+func truncateLine(s string) string {
+	s = strings.TrimRight(s, "\r\n")
+	if len(s) > 120 {
+		return s[:120] + "…"
+	}
+	return s
+}
+
+// boundedBuffer keeps the first few KiB of a command's stderr. A failing
+// command says why in its first line; the cap is there so a command that fails
+// by producing output forever cannot be the thing that runs the app out of
+// memory.
+type boundedBuffer struct {
+	buf bytes.Buffer
+}
+
+func (b *boundedBuffer) Write(p []byte) (int, error) {
+	if room := 8 << 10; b.buf.Len() < room {
+		if len(p) > room-b.buf.Len() {
+			b.buf.Write(p[:room-b.buf.Len()])
+		} else {
+			b.buf.Write(p)
+		}
+	}
+	return len(p), nil
+}
+
+// suffix renders the captured stderr for the end of a failure sentence.
+func (b *boundedBuffer) suffix() string {
+	s := strings.TrimSpace(b.buf.String())
+	if s == "" {
+		return ""
+	}
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		s = s[:i]
+	}
+	return " The clone said: " + truncateLine(s)
 }
 
 // CopyIn writes a file into the clone, for the restore path.
-func (p *Platform) CopyIn(ctx context.Context, ref, dest string, size int64, owner clone.FileOwner, r io.Reader) error {
-	var buf bytes.Buffer
-	tw := tar.NewWriter(&buf)
-	// `tar` runs as the pod's own user here and cannot chown, so it lands the
-	// file as that user whatever the header says. The ids are written anyway:
-	// they are correct, and a pod that does run as root would otherwise get
-	// Docker's failure mode.
-	if err := tw.WriteHeader(&tar.Header{
-		Typeflag: tar.TypeReg, Name: path.Base(dest), Size: size, Mode: 0o600,
-		Uid: owner.UID, Gid: owner.GID,
-	}); err != nil {
-		return err
-	}
-	if _, err := io.Copy(tw, r); err != nil {
-		return err
-	}
-	if err := tw.Close(); err != nil {
-		return err
-	}
-	err := p.stream(ctx, ref, []string{"tar", "xf", "-", "-C", path.Dir(dest)}, &buf, io.Discard, io.Discard)
+//
+// The bytes go in over stdin rather than as a tar, for the same reason CopyOut
+// does not read one out: the Keycloak image has no tar. Ownership is not set
+// and never was — the shell runs as the pod's own user and cannot chown, which
+// is the same result the tar header used to produce.
+func (p *Platform) CopyIn(ctx context.Context, ref, dest string, _ int64, _ clone.FileOwner, r io.Reader) error {
+	var stderr boundedBuffer
+	err := p.stream(ctx, ref, []string{"/bin/sh", "-c", copyInScript(dest)}, r, io.Discard, &stderr)
 	if err != nil {
 		return resil.Retry("send the snapshot",
-			fmt.Sprintf("PortCloak could not write %s into the clone.", dest), err)
+			fmt.Sprintf("PortCloak could not write %s into the clone.", dest)+stderr.suffix(), err)
 	}
 	return nil
+}
+
+// copyInScript writes stdin to one file, for the same reason CopyOut does not
+// use tar: the image has none. The umask is what makes the file 0600 from the
+// moment it exists rather than briefly after.
+func copyInScript(dest string) string {
+	return "umask 077 && cat > " + shellQuote(dest)
 }
 
 // Destroy deletes the clone pod. A pod that is already gone is success.

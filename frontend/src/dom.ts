@@ -106,8 +106,23 @@ export function notice(
     "div",
     { class: `notice ${tone}` },
     h("div", { class: "notice-title" }, title),
-    body ? h("div", null, body) : null,
+    body ? lines(body) : null,
   );
+}
+
+/**
+ * A message that carries newlines is several statements, not one paragraph.
+ *
+ * The engine reports a rejected edit as one problem per line, because a
+ * configuration can be wrong in more than one place at a time and fixing them
+ * one launch at a time is the thing the validator exists to avoid. Rendered
+ * into a single text node those newlines collapse into spaces and the problems
+ * run together into a sentence that reads like one long complaint.
+ */
+function lines(text: string): Node {
+  const parts = text.split("\n").filter((l) => l.trim() !== "");
+  if (parts.length <= 1) return h("div", null, text);
+  return frag(...parts.map((l) => h("div", null, l)));
 }
 
 export function field(
@@ -187,7 +202,7 @@ export function failureNotice(f: { message: string; hint?: string; retryable?: b
     "div",
     { class: `notice ${f.retryable ? "warn" : "danger"}` },
     h("div", { class: "notice-title" }, f.message),
-    f.hint ? h("div", null, f.hint) : null,
+    f.hint ? lines(f.hint) : null,
   );
 }
 

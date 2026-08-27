@@ -6,7 +6,7 @@ import {
   type EnvironmentView,
   type ProbeResult,
 } from "../api";
-import { badge, clear, failureNotice, field, h, input, modal, notice, select, spinner } from "../dom";
+import { badge, checkbox, clear, failureNotice, field, h, input, modal, notice, select, spinner } from "../dom";
 import { navigate } from "../main";
 import { probePanel } from "./capture";
 
@@ -348,7 +348,7 @@ function editor(state: State, draw: () => void, root: HTMLElement): HTMLElement 
           input(env.dockerEndpoint, (v) => (env.dockerEndpoint = v), {
             placeholder: "unix:///var/run/docker.sock",
           }),
-          "A local socket, a DOCKER_HOST over TLS, or Docker over SSH.",
+          "Leave it empty for DOCKER_HOST or the local socket. Fill it in for a specific socket, a TLS endpoint, or Docker over SSH.",
         ),
       );
       form.appendChild(
@@ -399,7 +399,7 @@ function editor(state: State, draw: () => void, root: HTMLElement): HTMLElement 
       break;
   }
 
-  form.appendChild(adminSection(state));
+  form.appendChild(adminSection(state, draw));
 
   const foot = h(
     "div",
@@ -436,7 +436,7 @@ function editor(state: State, draw: () => void, root: HTMLElement): HTMLElement 
         {
           class: "primary",
           disabled: state.saving || !env.name,
-          onClick: () => void save(state, root),
+          onClick: () => void save(state, draw, root),
         },
         state.saving ? "Saving…" : "Save",
       ),
@@ -548,7 +548,7 @@ function kcPathField(env: Environment): HTMLElement {
   );
 }
 
-function adminSection(state: State): HTMLElement {
+function adminSection(state: State, draw: () => void): HTMLElement {
   const env = state.draft!;
   return h(
     "div",
@@ -584,6 +584,26 @@ function adminSection(state: State): HTMLElement {
           : "Stored in this machine's keychain; config.yaml will hold only a handle.",
       ),
     ),
+    // Off by default, per environment, and never inferred from a failed
+    // handshake — an internal Keycloak behind a private CA is an ordinary
+    // deployment, and quietly trusting whatever answers is not.
+    checkbox(
+      Boolean(env.adminInsecureTls),
+      "Accept a self-signed certificate",
+      "For an internal server whose certificate is self-signed or signed by a private CA this machine does not carry. It applies to this environment's Admin API alone.",
+      (v) => {
+        env.adminInsecureTls = v;
+        draw();
+      },
+    ),
+    env.adminInsecureTls
+      ? notice(
+          "warn",
+          "TLS verification is off for this Admin API",
+          "PortCloak will accept whatever certificate answers at that URL, so it can no longer tell that server from anything able to occupy its address. " +
+            "The admin credential above is sent over that connection. Nothing else changes: a snapshot's integrity is checked by its own digests and its encryption is unaffected.",
+        )
+      : null,
   );
 }
 
@@ -609,18 +629,34 @@ function credentialField(state: State, label: string, draw: () => void): HTMLEle
   );
 }
 
-async function save(state: State, root: HTMLElement): Promise<void> {
+/**
+ * A save that the engine refuses has to leave the form exactly as it was, with
+ * the reason on top of it.
+ *
+ * The failing path used to re-enter renderEnvironments, which builds a fresh
+ * State from the configuration on disk. That threw away two things at once: the
+ * message, because it had just been written to the State object being replaced,
+ * and the operator's draft, because the file is the version without their
+ * edits. A rejected workload reference therefore looked like a Save button that
+ * did nothing and then blanked the form — with the sentence naming the field
+ * and the fix already computed, and discarded.
+ *
+ * Only a save that succeeded re-reads the configuration. A failure redraws the
+ * state it already has, which is the same thing the Storage editor does.
+ */
+async function save(state: State, draw: () => void, root: HTMLElement): Promise<void> {
   state.saving = true;
   state.error = undefined;
+  draw();
 
   const env = state.draft!;
   const adminSecret = state.adminSecret;
 
   const failure = await ConfigAPI.saveEnvironment(state.originalName, env, state.secret);
+  state.saving = false;
   if (failure) {
-    state.saving = false;
     state.error = failure.message;
-    void renderEnvironments(root, state.originalName || undefined);
+    draw();
     return;
   }
   if (adminSecret) {

@@ -16,62 +16,132 @@ import (
 	"portcloak/internal/engine/target/clone"
 )
 
-// MaintenanceController is the audit log and maintenance screen.
-type MaintenanceController struct{ eng *Engine }
+// SettingsController is the configuration screen: where PortCloak keeps its
+// files, what a previous session left running in someone else's cluster, and
+// what is sitting on this disk.
+//
+// Everything here is an action on PortCloak itself rather than on a realm,
+// which is why it is not on the audit screen: that one is a record, and a
+// record you can press buttons in is neither.
+type SettingsController struct{ eng *Engine }
 
-// NewMaintenanceController binds the maintenance screen.
-func NewMaintenanceController(eng *Engine) *MaintenanceController {
-	return &MaintenanceController{eng: eng}
+// NewSettingsController binds the settings screen.
+func NewSettingsController(eng *Engine) *SettingsController {
+	return &SettingsController{eng: eng}
 }
 
 // ServiceName is what the Wails binding layer calls this.
-func (m *MaintenanceController) ServiceName() string { return "MaintenanceController" }
+func (s *SettingsController) ServiceName() string { return "SettingsController" }
 
-// AuditView is the audit log panel.
-type AuditView struct {
-	Entries []obs.AuditEntry `json:"entries"`
-	Path    string           `json:"path"`
-	// Note states the thing that surprises people: there is no user recorded,
-	// because there is no user.
-	Note    string   `json:"note"`
-	Failure *Failure `json:"failure,omitempty"`
-}
-
-// Audit returns the audit log, newest first.
-func (m *MaintenanceController) Audit(action string, sinceDays int) (res AuditView) {
-	defer func() { res = lists(res) }()
-	filter := obs.AuditFilter{Action: obs.Action(action)}
-	if sinceDays > 0 {
-		filter.Since = time.Now().AddDate(0, 0, -sinceDays)
-	}
-	entries, err := m.eng.Audit.Read(filter)
-	if err != nil {
-		return AuditView{Failure: Fail(err)}
-	}
-	return AuditView{
-		Entries: entries, Path: m.eng.Audit.Path(),
-		Note: "No user is recorded, because there is none — PortCloak is a single-user local tool. Each entry says what happened and when.",
-	}
-}
-
-// ConfigFileView is the configuration panel on the maintenance screen.
-type ConfigFileView struct {
-	Path string `json:"path"`
-	Note string `json:"note"`
+// LocationView is the "where PortCloak keeps its files" panel.
+type LocationView struct {
+	// Root is the folder itself; ConfigFile is the file inside it that an
+	// operator is most likely to want to open by hand.
+	Root       string `json:"root"`
+	ConfigFile string `json:"configFile"`
+	// Source is how the location was decided: "default", "chosen" or
+	// "environment". The last of those cannot be changed from here.
+	Source string `json:"source"`
+	// SourceNote says the same thing in a sentence.
+	SourceNote string `json:"sourceNote"`
+	// Default is ~/.portcloak, reported whether or not it is in force, so the
+	// screen can offer the way back.
+	Default string `json:"default"`
+	// Pointer is the file that records a chosen folder. It sits outside the
+	// tree, because a note saying where the folder went cannot live in the
+	// folder that went.
+	Pointer   string `json:"pointer"`
+	Movable   bool   `json:"movable"`
+	AtDefault bool   `json:"atDefault"`
+	// Blocked is why a move would be refused right now — an open snapshot, a
+	// running job — and empty when nothing is in the way.
+	Blocked string `json:"blocked"`
+	Note    string `json:"note"`
 	// Credentials reports, per entry, whether its keychain secret is on this
 	// machine — which is what turns "copied the config across" from an obscure
 	// connection failure into a prompt.
 	Credentials []config.CredentialStatus `json:"credentials"`
+	Failure     *Failure                  `json:"failure,omitempty"`
 }
 
-// ConfigFile describes where configuration lives and what is in it.
-func (m *MaintenanceController) ConfigFile() (res ConfigFileView) {
+// Location describes where configuration lives, how that was decided, and what
+// is in it.
+func (s *SettingsController) Location() (res LocationView) {
 	defer func() { res = lists(res) }()
-	return ConfigFileView{
-		Path:        m.eng.Home.ConfigFile(),
+	return s.location(nil)
+}
+
+func (s *SettingsController) location(failure *Failure) LocationView {
+	home := s.eng.Home()
+	out := LocationView{
+		Root:        home.Root,
+		ConfigFile:  home.ConfigFile(),
 		Note:        "Plain YAML — read it, diff it, commit it, hand-edit a hostname. PortCloak re-reads it on launch. No credential is ever written here; only keychain handles.",
-		Credentials: m.eng.Config.CheckCredentials(m.eng.Creds),
+		Credentials: s.eng.Config.CheckCredentials(s.eng.Creds),
+		Failure:     failure,
 	}
+
+	loc, err := config.Locate()
+	if err != nil {
+		out.Source = string(config.HomeDefault)
+		out.SourceNote = "PortCloak could not work out where your home folder is."
+		return out
+	}
+	out.Source = string(loc.Source)
+	out.Default = loc.Default
+	out.Pointer = loc.Pointer
+	out.AtDefault = loc.Source == config.HomeDefault
+
+	switch loc.Source {
+	case config.HomePinned:
+		out.SourceNote = "PORTCLOAK_HOME is set in this application's environment, and it wins over anything chosen here."
+		out.Blocked = "Unset PORTCLOAK_HOME and restart PortCloak to choose a folder from this screen."
+	case config.HomeChosen:
+		out.Movable = true
+		out.SourceNote = "You chose this folder. The choice is recorded in the file below, which is why it survives an update."
+	default:
+		out.Movable = true
+		out.SourceNote = "The default. Nothing has been chosen, so PortCloak uses the folder beside your other dotfiles."
+	}
+
+	if out.Movable {
+		if err := s.eng.idleForRelocation(); err != nil {
+			out.Blocked = Fail(err).Message
+		}
+	}
+	return out
+}
+
+// Move relocates the whole folder — config.yaml, job checkpoints, the audit
+// log, the logs — and rebinds the running application to it, so nothing has to
+// be restarted.
+//
+// It returns the panel again rather than a bare failure: whether the move
+// happened or not, the one thing the screen has to show afterwards is where
+// PortCloak is now actually reading from.
+func (s *SettingsController) Move(folder string) (res LocationView) {
+	defer func() { res = lists(res) }()
+	if err := s.eng.Relocate(folder); err != nil {
+		return s.location(Fail(err))
+	}
+	_ = s.eng.Audit.Record(obs.AuditEntry{
+		Action: obs.ActionHomeMoved, Outcome: "moved",
+		Detail: s.eng.Home().Root,
+	})
+	return s.location(nil)
+}
+
+// UseDefault moves the folder back to ~/.portcloak.
+func (s *SettingsController) UseDefault() (res LocationView) {
+	defer func() { res = lists(res) }()
+	if err := s.eng.UseDefaultLocation(); err != nil {
+		return s.location(Fail(err))
+	}
+	_ = s.eng.Audit.Record(obs.AuditEntry{
+		Action: obs.ActionHomeMoved, Outcome: "moved",
+		Detail: s.eng.Home().Root,
+	})
+	return s.location(nil)
 }
 
 // OrphanView is one ephemeral clone a previous session left behind.
@@ -100,9 +170,9 @@ type UncheckedEnvironment struct {
 //
 // Removal is offered, never automatic — the operator's cluster is not ours to
 // garbage-collect without asking.
-func (m *MaintenanceController) Orphans() (res OrphanReport) {
+func (s *SettingsController) Orphans() (res OrphanReport) {
 	defer func() { res = lists(res) }()
-	cfg := m.eng.Config.Config()
+	cfg := s.eng.Config.Config()
 	report := OrphanReport{}
 	now := time.Now()
 
@@ -111,7 +181,7 @@ func (m *MaintenanceController) Orphans() (res OrphanReport) {
 			// Local and SSH have no clone to orphan.
 			continue
 		}
-		exec, err := m.eng.executorFor(env)
+		exec, err := s.eng.executorFor(env)
 		if err != nil {
 			report.Unchecked = append(report.Unchecked, UncheckedEnvironment{
 				Environment: env.Name, Reason: err.Error(),
@@ -161,13 +231,13 @@ func (m *MaintenanceController) Orphans() (res OrphanReport) {
 }
 
 // RemoveOrphan deletes one clone, on the operator's say-so.
-func (m *MaintenanceController) RemoveOrphan(environment, ref string) *Failure {
-	cfg := m.eng.Config.Config()
+func (s *SettingsController) RemoveOrphan(environment, ref string) *Failure {
+	cfg := s.eng.Config.Config()
 	env, ok := cfg.Environment(environment)
 	if !ok {
 		return Fail(config.ErrNotFound)
 	}
-	exec, err := m.eng.executorFor(env)
+	exec, err := s.eng.executorFor(env)
 	if err != nil {
 		return Fail(err)
 	}
@@ -184,7 +254,7 @@ func (m *MaintenanceController) RemoveOrphan(environment, ref string) *Failure {
 	if err := sweeper.RemoveOrphan(ctx, ref); err != nil {
 		return Fail(err)
 	}
-	_ = m.eng.Audit.Record(obs.AuditEntry{
+	_ = s.eng.Audit.Record(obs.AuditEntry{
 		Action: obs.ActionOrphanRemoved, Outcome: "removed",
 		Environment: environment, Detail: ref,
 	})
@@ -208,7 +278,7 @@ type WorkingData struct {
 }
 
 // WorkingData reports what a purge would remove and what it would leave.
-func (m *MaintenanceController) WorkingData() (res WorkingData) {
+func (s *SettingsController) WorkingData() (res WorkingData) {
 	defer func() { res = lists(res) }()
 	out := WorkingData{
 		Keeps: []string{
@@ -219,8 +289,8 @@ func (m *MaintenanceController) WorkingData() (res WorkingData) {
 		},
 	}
 
-	open := m.eng.OpenSessionIDs()
-	if entries, err := os.ReadDir(m.eng.Home.IndexDir()); err == nil {
+	open := s.eng.OpenSessionIDs()
+	if entries, err := os.ReadDir(s.eng.Home().IndexDir()); err == nil {
 		for _, e := range entries {
 			if e.IsDir() || !strings.HasSuffix(e.Name(), ".sqlite") {
 				continue
@@ -240,11 +310,11 @@ func (m *MaintenanceController) WorkingData() (res WorkingData) {
 		out.IndexNote = fmt.Sprintf("%d left by a previous session", out.IndexCount)
 	}
 
-	if jobs, err := m.eng.Jobs.List(); err == nil {
+	if jobs, err := s.eng.Jobs.List(); err == nil {
 		for _, j := range jobs {
 			if j.State.Terminal() {
 				out.FinishedJobs++
-				if info, err := os.Stat(m.eng.Home.JobFile(j.ID)); err == nil {
+				if info, err := os.Stat(s.eng.Home().JobFile(j.ID)); err == nil {
 					out.FinishedBytes += info.Size()
 				}
 			}
@@ -253,8 +323,8 @@ func (m *MaintenanceController) WorkingData() (res WorkingData) {
 			}
 		}
 	}
-	out.WorkBytes = dirSize(m.eng.Home.WorkDir())
-	out.LogBytes = dirSize(m.eng.Home.LogsDir())
+	out.WorkBytes = dirSize(s.eng.Home().WorkDir())
+	out.LogBytes = dirSize(s.eng.Home().LogsDir())
 
 	out.Note = "Purging clears inspection indexes, decrypted working files, finished job records and rotated logs."
 	return out
@@ -286,12 +356,12 @@ type PurgeResult struct {
 // local working data must never be a way to accidentally destroy a backup.
 // Interrupted jobs are kept too, because discarding one is job control rather
 // than housekeeping.
-func (m *MaintenanceController) Purge() (res PurgeResult) {
+func (s *SettingsController) Purge() (res PurgeResult) {
 	defer func() { res = lists(res) }()
 	out := PurgeResult{}
 
-	open := m.eng.OpenSessionIDs()
-	if count, bytes, err := inspect.SweepIndexes(m.eng.Home, open); err != nil {
+	open := s.eng.OpenSessionIDs()
+	if count, bytes, err := inspect.SweepIndexes(s.eng.Home(), open); err != nil {
 		return PurgeResult{Failure: Fail(err)}
 	} else if count > 0 {
 		out.Removed = append(out.Removed, fmt.Sprintf("%d inspection index%s", count, pluralES(count)))
@@ -302,32 +372,32 @@ func (m *MaintenanceController) Purge() (res PurgeResult) {
 	for id := range open {
 		keep["open-"+id] = true
 	}
-	if jobs, err := m.eng.Jobs.List(); err == nil {
+	if jobs, err := s.eng.Jobs.List(); err == nil {
 		for _, j := range jobs {
 			if !j.State.Terminal() {
 				keep[j.ID] = true
 			}
 		}
 	}
-	if count, err := inspect.SweepWorkDirs(m.eng.Home, keep); err != nil {
+	if count, err := inspect.SweepWorkDirs(s.eng.Home(), keep); err != nil {
 		return PurgeResult{Failure: Fail(err)}
 	} else if count > 0 {
 		out.Removed = append(out.Removed, fmt.Sprintf("%d set%s of decrypted working files", count, plural(count)))
 	}
 
-	if count, bytes, err := m.eng.Jobs.PurgeFinished(); err != nil {
+	if count, bytes, err := s.eng.Jobs.PurgeFinished(); err != nil {
 		return PurgeResult{Failure: Fail(err)}
 	} else if count > 0 {
 		out.Removed = append(out.Removed, fmt.Sprintf("%d finished job record%s", count, plural(count)))
 		out.Bytes += bytes
 	}
 
-	if count, bytes := purgeRotatedLogs(m.eng.Home); count > 0 {
+	if count, bytes := purgeRotatedLogs(s.eng.Home()); count > 0 {
 		out.Removed = append(out.Removed, fmt.Sprintf("%d rotated log%s", count, plural(count)))
 		out.Bytes += bytes
 	}
 
-	_ = m.eng.Audit.Record(obs.AuditEntry{
+	_ = s.eng.Audit.Record(obs.AuditEntry{
 		Action: obs.ActionPurge, Outcome: "purged",
 		Detail: join(out.Removed, ", "),
 	})

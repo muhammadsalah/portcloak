@@ -34,7 +34,6 @@ import (
 type Engine struct {
 	Version string
 
-	Home     config.Home
 	Config   *config.Store
 	Jobs     *config.JobStore
 	Creds    config.CredentialStore
@@ -49,7 +48,10 @@ type Engine struct {
 	// that refused to open.
 	LoadError error
 
-	mu       sync.RWMutex
+	mu sync.RWMutex
+	// home is guarded because it is the one thing about a running engine that
+	// can change: the operator can move the PortCloak folder from Settings.
+	home     config.Home
 	sink     obs.Sink
 	sessions map[string]*inspect.Session
 	// unlocked holds the keys that have opened a snapshot during this run of
@@ -91,7 +93,7 @@ func NewEngine(version string) (*Engine, error) {
 
 	eng := &Engine{
 		Version:   version,
-		Home:      home,
+		home:      home,
 		Config:    store,
 		Jobs:      config.NewJobStore(home),
 		Creds:     config.NewKeychain(),
@@ -124,6 +126,14 @@ func NewEngine(version string) (*Engine, error) {
 		logger.Error("configuration could not be loaded", "err", loadErr)
 	}
 	return eng, nil
+}
+
+// Home is where PortCloak keeps its files. It is read through a method rather
+// than a field because Relocate can change it while the app is running.
+func (e *Engine) Home() config.Home {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.home
 }
 
 // policy is the retry policy every adapter is wrapped with.
@@ -195,6 +205,15 @@ func (e *Engine) rawStore(st config.Storage) (store.BlobStore, error) {
 		return nil, resil.Fatal("reach the storage",
 			fmt.Sprintf("%q is not a storage kind PortCloak knows.", st.Kind), nil)
 	}
+}
+
+// adminFor builds the concrete Admin API client.
+//
+// The probe uses this rather than verifierFor because it reports *why* the
+// Admin API did not answer, and the Verifier interface only says whether it
+// did — which is all a capture needs and not enough for an editor.
+func (e *Engine) adminFor(env config.Environment) (*admin.Client, error) {
+	return admin.New(env, e.Creds)
 }
 
 // verifierFor builds the optional Admin API client. A nil client is a supported
@@ -336,12 +355,12 @@ func (e *Engine) StartupSweep() {
 	}
 
 	open := e.OpenSessionIDs()
-	if removed, bytes, err := inspect.SweepIndexes(e.Home, open); err != nil {
+	if removed, bytes, err := inspect.SweepIndexes(e.Home(), open); err != nil {
 		e.Log.Error("inspection indexes could not be swept", "err", err)
 	} else if removed > 0 {
 		e.Log.Info("removed inspection indexes left by a previous session", "count", removed, "bytes", bytes)
 	}
-	if removed, err := inspect.SweepWorkDirs(e.Home, open); err != nil {
+	if removed, err := inspect.SweepWorkDirs(e.Home(), open); err != nil {
 		e.Log.Error("working directories could not be swept", "err", err)
 	} else if removed > 0 {
 		e.Log.Info("removed decrypted working files left by a previous session", "count", removed)

@@ -26,6 +26,7 @@ func controllers(eng *Engine) []application.Service {
 		application.NewService(NewRestoreController(eng)),
 		application.NewService(NewJobsController(eng)),
 		application.NewService(NewKeysController(eng)),
-		application.NewService(NewMaintenanceController(eng)),
+		application.NewService(NewAuditController(eng)),
+		application.NewService(NewSettingsController(eng)),
 	}
 }

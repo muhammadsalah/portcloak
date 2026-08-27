@@ -56,6 +56,83 @@ keeps it from returning.
   now the kubeconfig path, which the model has carried all along with nowhere to enter it.
 - A view that threw left its spinner on screen forever. Views are now invoked through a guard
   that puts the failure on the pane instead.
+- **Every Kubernetes capture exported successfully and then failed collecting the files.** The
+  clone was read with `tar cf -` over the exec channel, which is how `kubectl cp` works — and the
+  official Keycloak image has no tar. It is assembled on ubi-micro, which ships neither tar nor
+  gzip. So `kc.sh` logged `Export finished successfully`, the pod was healthy, the clone was torn
+  down cleanly, and the job died at *"The stream from the clone ended unexpectedly"*: the exec
+  channel closing on a binary that does not exist. Nothing said which binary, because that
+  command's stderr was going to `io.Discard`.
+
+  PortCloak now streams the directory itself, framed as `PCF <size> <name>` and the bytes, using
+  only `sh`, `find`, `wc`, `cat` and `printf` — a far smaller contract than tar's, and one no
+  image can be missing. The restore path's `tar xf -` is gone the same way. Stderr is kept and
+  put in the failure, so the next missing binary names itself. A non-zero exit is now terminal
+  rather than retryable: a directory that is not there does not become there on the fourth
+  attempt. And `hasTar` is no longer asserted `true` on Kubernetes without anyone having looked —
+  it was the assumption underneath all of this.
+
+  Docker was never affected: it reads through the daemon's own archive endpoint, which tars
+  outside the container.
+- **An interrupted encrypted capture could not be resumed at all.** The job recorded `encrypted:
+  true` and nothing else, so resuming rebuilt the configuration as "on, mode unset" and the run
+  was refused before it started with *"Encryption is on but no mode was chosen"* — an internal
+  complaint about a field the operator never filled in, and no way forward but capturing the
+  whole realm again. The job now carries the mode and the recipients, which are public keys and
+  belong on disk. The passphrase does not and never will: that one is asked for again on resume,
+  and the Activity screen knows to prompt rather than discovering it from a rejection. A job
+  written before the mode was recorded says so and points at the Capture screen.
+- **Every Kubernetes capture died at the clone step.** The `created-at` label was written as
+  RFC 3339, which renders `2026-08-27T18:54:58Z`; a label value may not contain a colon, so the
+  API server rejected the whole pod — over a field nothing reads back, since both platforms take
+  a clone's age from the object's own creation timestamp. The label is now basic ISO 8601
+  (`20260827T185458Z`): same instant, still sortable, still legible under `--show-labels`.
+  The sanitiser was only ever applied to the realm name, so the fix is that **every** label value
+  goes through it on the way out — the next label added there cannot reintroduce this by
+  forgetting a call. It also truncated to 63 characters *after* trimming separators, so a long
+  realm whose 63rd character was a `-` produced the same rejection in a rarer disguise; the order
+  is now truncate, then trim. A value with nothing legal left in it is dropped rather than
+  replaced with a placeholder. The test that should have caught this asserted the created-at
+  label equalled the exact string the cluster refuses; it now checks every value against the
+  API server's own regex, quoted from its rejection message.
+- **A self-signed Admin API certificate reported itself as an unreachable server.** An internal
+  Keycloak behind a self-signed or private-CA certificate — CRC, OpenShift Local, anything with
+  its own ingress CA — is the deployment this tool is most often pointed at, and the failure said
+  only that the URL could not be reached. It is now named for what it is, with which way the
+  certificate failed (unknown authority, wrong host name, expired) and the setting that accepts
+  one. It is also terminal rather than retryable: a certificate this machine does not trust will
+  not become trusted on the fourth attempt, and the retry budget was being spent proving that.
+- **Accept a self-signed certificate** — a per-environment switch on the Admin API block. The
+  engine has carried `adminInsecureTls` and wired it to the transport all along; nothing in the
+  UI could set it, so it could only be turned on by hand-editing `config.yaml`. Off by default,
+  never inferred from a failed handshake, and it says what it costs while it is on. It applies to
+  that one environment's Admin API and to nothing else — a snapshot's integrity is checked by its
+  own digests and its encryption is unaffected.
+- **A probe that could not reach the Admin API now says why.** `Reachable` answers a bool, which
+  is all a capture needs; the environment editor gets the reason, because "not reachable" over a
+  URL the operator can open in a browser diagnoses nothing.
+- **An environment the engine refused to save gave no reason and lost the form.** The failing
+  path re-entered `renderEnvironments`, which builds a fresh state from the configuration on
+  disk — throwing away the message, because it had just been written to the state object being
+  replaced, and the operator's draft, because the file is the version without their edits. A
+  Kubernetes workload typed as `kc-a` rather than `deployment/kc-a` therefore looked like a Save
+  button that did nothing and then blanked the form, with the sentence naming the value and the
+  fix already computed and discarded. A failed save now redraws the state it has, as the Storage
+  editor always did; only a save that succeeded re-reads the file.
+- **A rejected edit is reported as the problems, not as the file.** `Fail` renders a validation
+  error as "<path> has 2 problems:" followed by indented lines, which is right for the launch
+  banner about a hand-edited `config.yaml` and wrong over a form. Saving an environment or a
+  storage now returns one problem per line, and a notice renders those as separate lines — so an
+  entry wrong in two places is fixed in one pass rather than one save at a time.
+- **A correct Docker or Kubernetes environment was labelled "Not usable yet".** Readiness demanded
+  a `dockerEndpoint` or a kubeconfig `context`, but blank is how a working configuration says
+  "DOCKER_HOST or the local socket" and "whatever kubectl is pointed at" — the adapters fall
+  through to `client.FromEnv` and to client-go's default loading rules, and the Docker error path
+  already calls it "the default endpoint". The Docker banner was worse than merely wrong: it
+  offered `runtime` as the way to become ready, and nothing in the engine reads that field. The
+  rule is now what it should always have been — a field belongs in readiness only if `Validate`
+  lets it be empty *and* the adapter has no default for it, which is true of an SSH key and an S3
+  access key and of nothing on those two kinds.
 
 ### Added
 - **Keys** — a screen, a `keys:` section in `config.yaml`, and a place for the material to live.
@@ -78,6 +155,26 @@ keeps it from returning.
 - Real `kc.sh export --help-all` output from four Keycloak versions in `testdata/kc-help`, which
   is what the option-support tests run against.
 - Empty states on Environments and Storage, saying what the thing is and where the file lives.
+- **Settings** — a screen for the things PortCloak does to itself. Where it keeps its files, the
+  orphaned-clone sweep and the local working-data purge moved here off the audit screen, which
+  had become a record of what happened with four buttons in it that make things happen. Audit is
+  a record again, full width, with a time range beside the action filter.
+- **The folder PortCloak keeps its files in can be moved.** `config.yaml`, the audit log, job
+  checkpoints, logs and working files go with it; this machine's keychain and every stored
+  snapshot do not. The move is refused before a byte shifts if a snapshot is open or a job is in
+  flight, and the running application follows the folder rather than asking to be restarted.
+  Resolution order is `PORTCLOAK_HOME` → the chosen folder → `~/.portcloak`, and the note
+  recording the choice lives in the OS's per-application settings folder, because a note saying
+  where the folder went cannot live in the folder that went.
+- Icons in the navigation rail, one per screen, drawn on the thing the screen acts on — a tray
+  with an arrow into it for Capture, the same tray with the arrow coming out for Restore.
+- **A logo** — [`assets/logo/`](./assets/logo/README.md). A padlock whose shackle is a restore
+  arc: sealed, and put back. Extracted verbatim from the design source in `spec/design/`, with
+  the five variants the sheet calls for and the rules around them. It is the masthead, the first
+  run's empty state and the favicon. Its two colours are brand tokens rather than interface ones,
+  because the interface stays on the Keycloak admin console palette it was built to sit beside —
+  the mark is the one place the teal appears.
+- `homeMoved` in the audit log. Every entry above it was written somewhere else.
 
 ## [0.0.1] — 2026-08-27
 

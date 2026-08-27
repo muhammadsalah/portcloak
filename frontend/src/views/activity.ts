@@ -1,5 +1,5 @@
 import { JobsAPI, type ActivityView, type JobView, type ProgressEvent } from "../api";
-import { badge, clear, h, modal, notice, spinner } from "../dom";
+import { badge, clear, failureNotice, h, modal, notice, setModalConfirmDisabled, spinner } from "../dom";
 import { navigate, subscribeProgress } from "../main";
 
 /**
@@ -367,6 +367,10 @@ function card(job: JobView, live: Map<string, LiveCard>, reload: () => void): HT
           class: "primary",
           title: resumeNote,
           onClick: () => {
+            if (job.needsPassphrase) {
+              askPassphrase(job, resumeNote, reload);
+              return;
+            }
             if (rerunsExport) {
               confirmResume(job, resumeNote, reload);
               return;
@@ -509,13 +513,58 @@ function titleCase(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-async function doResume(job: JobView, reload: () => void): Promise<void> {
-  const res = await JobsAPI.resume(job.id);
+async function doResume(job: JobView, reload: () => void, passphrase = ""): Promise<void> {
+  const res = await JobsAPI.resume(job.id, passphrase);
   if (res.failure) {
-    modal({ title: "This job was not resumed", body: h("div", null, res.failure.message) });
+    modal({
+      title: "This job was not resumed",
+      body: failureNotice(res.failure),
+      cancelLabel: "Close",
+    });
     return;
   }
   reload();
+}
+
+/**
+ * A capture sealed with a passphrase has to be given it again.
+ *
+ * The mode and the recipients are on the job and are rebuilt without asking;
+ * the passphrase is not, because nothing sensitive is written to a job file.
+ * Asking is the cost of that, and it is asked here rather than discovered from
+ * a rejected resume.
+ */
+function askPassphrase(job: JobView, note: string, reload: () => void): void {
+  let passphrase = "";
+  modal({
+    title: "The passphrase this capture was sealed with",
+    body: h(
+      "div",
+      null,
+      h(
+        "div",
+        { class: "field" },
+        h("label", null, "Passphrase"),
+        h("input", {
+          type: "password",
+          placeholder: "passphrase",
+          onInput: (e: Event) => {
+            passphrase = (e.target as HTMLInputElement).value;
+            setModalConfirmDisabled(passphrase === "");
+          },
+        }),
+        h(
+          "div",
+          { class: "field-hint" },
+          "PortCloak does not keep it. Sealing the resumed snapshot with a different one would produce a second bundle nobody could tell apart from the first.",
+        ),
+      ),
+      note ? h("p", { class: "muted small" }, note) : null,
+    ),
+    confirmLabel: "Resume",
+    confirmDisabled: true,
+    onConfirm: () => doResume(job, reload, passphrase),
+  });
 }
 
 // Resuming a job whose export never finished re-reads the realm out of the

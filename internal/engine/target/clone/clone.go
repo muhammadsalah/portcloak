@@ -102,22 +102,55 @@ var KeptFields = []string{
 	"terminationGracePeriodSeconds",
 }
 
+// labelTimestamp is RFC 3339 with the separators a Kubernetes label cannot
+// carry taken out — the same instant, still sortable, still legible in
+// `kubectl get pods --show-labels`, and legal as a value without having to be
+// rewritten into something that is no longer a timestamp.
+//
+// Nothing reads this label back. Both platforms take a clone's age from the
+// object's own creation timestamp, which is the authority; this is here for the
+// person looking at the cluster.
+const labelTimestamp = "20060102T150405Z"
+
 // Labels are the only labels a clone ever carries.
+//
+// Every value is put through labelValue on the way out, not just the ones that
+// look like they need it. A label value is narrower than almost anything it
+// might be built from, and the created-at label proved it: RFC 3339 renders
+// 18:54:58, colons are not legal in a label, and the cluster rejected the whole
+// pod — so a capture died at the clone step over a field nothing even reads.
+// Sanitising at each call site leaves the next label added here one forgotten
+// call away from the same failure.
 func Labels(jobID, realm string, createdAt time.Time) map[string]string {
 	l := map[string]string{
 		target.LabelEphemeral: "true",
 		target.LabelJob:       jobID,
-		target.LabelCreatedAt: createdAt.UTC().Format(time.RFC3339),
+		target.LabelCreatedAt: createdAt.UTC().Format(labelTimestamp),
 	}
 	if realm != "" {
-		l[target.LabelRealm] = sanitiseLabelValue(realm)
+		l[target.LabelRealm] = realm
+	}
+	for k, v := range l {
+		clean := labelValue(v)
+		if clean == "" {
+			// A value with nothing legal left in it is dropped rather than
+			// replaced with a placeholder. LabelEphemeral is the one the sweep
+			// selects on and its value is a constant, so it can never be the
+			// one that goes.
+			delete(l, k)
+			continue
+		}
+		l[k] = clean
 	}
 	return l
 }
 
-// sanitiseLabelValue makes a realm name safe as a Kubernetes label value, which
-// is stricter than a realm name is.
-func sanitiseLabelValue(s string) string {
+// labelValue makes a string safe as a Kubernetes label value, which is stricter
+// than a realm name, a job id or a timestamp.
+//
+// The rule the cluster applies is at most 63 characters of alphanumerics, '-',
+// '_' and '.', beginning and ending with an alphanumeric.
+func labelValue(s string) string {
 	var b strings.Builder
 	for _, r := range s {
 		switch {
@@ -127,14 +160,14 @@ func sanitiseLabelValue(s string) string {
 			b.WriteByte('-')
 		}
 	}
-	out := strings.Trim(b.String(), "-._")
+	// Truncation comes before the trim, not after it. A 70-character realm
+	// whose 63rd character is a separator would otherwise be cut to a value
+	// ending in '-', which is the same rejection in a rarer disguise.
+	out := b.String()
 	if len(out) > 63 {
 		out = out[:63]
 	}
-	if out == "" {
-		return "realm"
-	}
-	return out
+	return strings.Trim(out, "-._")
 }
 
 // HangCommand is what replaces the workload's entrypoint.
@@ -479,7 +512,7 @@ func firstRealm(realms []string) string {
 	return realms[0]
 }
 
-// DescribeOrphan renders an orphan for the maintenance screen: what it is, how
+// DescribeOrphan renders an orphan for the Settings screen: what it is, how
 // old, and why it matters.
 func DescribeOrphan(o target.Orphan, now time.Time) string {
 	age := o.Age(now)

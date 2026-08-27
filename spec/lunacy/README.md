@@ -53,7 +53,8 @@ content column with 24px padding.
 | 15 | Restore — dry run & strategy | Overwrite / skip / merge, diff computed for the selected strategy | UC-R3, UC-R4, UC-R7 |
 | 16 | Restore — result & validation | What was applied, validation, authentication continuity, what the destination still needs | UC-R1, UC-R5, UC-R6, UC-C11 |
 | 17 | Job outcome — failure & cancellation | Stage timeline, plain-language cause, retry ledger, checkpoint, partial restore | UC-O5, UC-O6, UC-R8 |
-| 18 | Audit log & maintenance | Audit entries, config file, orphaned clones, working data and purge | UC-O7, UC-O8, UC-O10, UC-C12 |
+| 18 | Audit log | Audit entries, filtered by action and time range; a record, with nothing to press | UC-O8 |
+| 18b | Settings | Where the files live and how to move them, config file and credentials, orphaned clones, working data and purge | UC-O7, UC-O10, UC-C12 |
 | 19 | Inspector — External dependencies | Themes, provider JARs and keystores with the consequence of each being absent | UC-C9, UC-I10 |
 | 20 | First run | Empty state naming the two things needed before a capture | UC-O9 |
 

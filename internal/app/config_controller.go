@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"portcloak/internal/engine/config"
@@ -54,7 +55,7 @@ type ConfigSnapshot struct {
 	Environments []EnvironmentView  `json:"environments"`
 	Storage      []StorageView      `json:"storage"`
 	Preferences  config.Preferences `json:"preferences"`
-	// ConfigFile is shown on the maintenance screen so an operator can open it.
+	// ConfigFile is shown on the Settings screen so an operator can open it.
 	ConfigFile string `json:"configFile"`
 	FirstRun   bool   `json:"firstRun"`
 	// LoadProblems are the validation failures that stopped configuration from
@@ -79,7 +80,7 @@ func (c *ConfigController) Load() (res ConfigSnapshot) {
 
 	out := ConfigSnapshot{
 		Preferences: c.eng.Config.Preferences(),
-		ConfigFile:  c.eng.Home.ConfigFile(),
+		ConfigFile:  c.eng.Home().ConfigFile(),
 		FirstRun:    c.eng.FirstRun,
 		NoSignIn:    "There is no account and no sign-in. PortCloak is a local tool; the only credentials involved are the ones each environment and storage carries.",
 	}
@@ -185,6 +186,12 @@ func (c *ConfigController) StorageKinds() []string {
 //
 // Secret carries the value the operator typed; it goes to the OS keychain and
 // only a handle is written to config.yaml.
+//
+// A validation failure is shaped for the form rather than for the file. Fail
+// renders a *config.ValidationError as "<path> has 2 problems:" followed by
+// indented lines, which is right for the banner about a hand-edited config and
+// wrong over an editor: the operator is looking at the field, not the file, and
+// each problem already quotes the value it rejected and states the fix.
 func (c *ConfigController) SaveEnvironment(originalName string, env config.Environment, secret string) *Failure {
 	if secret != "" {
 		handle := env.CredentialRef
@@ -197,9 +204,22 @@ func (c *ConfigController) SaveEnvironment(originalName string, env config.Envir
 		}
 	}
 	if originalName == "" {
-		return Fail(c.eng.Config.AddEnvironment(env))
+		return failSave(c.eng.Config.AddEnvironment(env))
 	}
-	return Fail(c.eng.Config.SaveEnvironment(originalName, env))
+	return failSave(c.eng.Config.SaveEnvironment(originalName, env))
+}
+
+// failSave reports a rejected edit as the problems themselves, one per line.
+func failSave(err error) *Failure {
+	var ve *config.ValidationError
+	if errors.As(err, &ve) && len(ve.Problems) > 0 {
+		lines := make([]string, 0, len(ve.Problems))
+		for _, p := range ve.Problems {
+			lines = append(lines, p.Message)
+		}
+		return &Failure{Message: strings.Join(lines, "\n")}
+	}
+	return Fail(err)
 }
 
 // SaveAdminCredential stores the Admin API credential separately, because it is
@@ -251,9 +271,9 @@ func (c *ConfigController) SaveStorage(originalName string, st config.Storage, s
 		}
 	}
 	if originalName == "" {
-		return Fail(c.eng.Config.AddStorage(st))
+		return failSave(c.eng.Config.AddStorage(st))
 	}
-	return Fail(c.eng.Config.SaveStorage(originalName, st))
+	return failSave(c.eng.Config.SaveStorage(originalName, st))
 }
 
 // DuplicateStorage copies a storage definition without its credential.
@@ -322,19 +342,27 @@ func (c *ConfigController) TestEnvironment(name string) (res ProbeResult) {
 		return ProbeResult{Failure: Fail(err)}
 	}
 
-	// The Admin API is optional. Its absence is a note, never a failure.
-	if v, verr := c.eng.verifierFor(env); verr == nil && v != nil {
-		facts.AdminReachable = v.Reachable(ctx)
-		if facts.AdminReachable {
+	// The Admin API is optional. Its absence is a note, never a failure — but
+	// the reason for the absence is carried through, because "not reachable"
+	// over a URL the operator can open in a browser diagnoses nothing.
+	if v, verr := c.eng.adminFor(env); verr == nil && v != nil {
+		reason := v.Check(ctx)
+		facts.AdminReachable = reason == nil
+		switch {
+		case facts.AdminReachable:
 			facts.AdminDetail = "reachable"
 			if realms, rerr := v.Realms(ctx); rerr == nil {
 				facts.Realms = realms
 			}
 			facts.Pass("Admin API", "reachable")
-		} else {
-			facts.AdminDetail = "not reachable — secret verification and dependency detection will be skipped"
-			facts.Warn("Admin API", facts.AdminDetail,
-				"This does not stop a capture. The export reads the realm from the database.")
+		default:
+			f := Fail(reason)
+			facts.AdminDetail = f.Message
+			advice := f.Hint
+			if advice == "" {
+				advice = "This does not stop a capture. The export reads the realm from the database."
+			}
+			facts.Warn("Admin API", f.Message, advice)
 		}
 	} else {
 		facts.Skipped("Admin API", "not configured on this environment")

@@ -2,11 +2,12 @@
 // and storage definitions an operator has described, their preferences, and the
 // per-job checkpoints that let an interrupted transfer resume.
 //
-// All of it lives in plain files under ~/.portcloak/ (NFR-11). There is no
-// database for tool state — a readable file can be diffed, committed,
-// hand-edited and copied between machines, none of which is pleasant against an
-// opaque store. SQLite appears elsewhere in the engine, and only ever for
-// throwaway inspection indexes.
+// All of it lives in plain files under ~/.portcloak/ (NFR-11) — or wherever
+// the operator has moved that folder to; see location.go. There is no database
+// for tool state — a readable file can be diffed, committed, hand-edited and
+// copied between machines, none of which is pleasant against an opaque store.
+// SQLite appears elsewhere in the engine, and only ever for throwaway
+// inspection indexes.
 //
 // Secrets never appear here. Each credential is held in the OS keychain and
 // referenced by a handle of the form keychain://portcloak/<kind>/<name>.
@@ -22,19 +23,6 @@ import (
 // anything lives.
 type Home struct {
 	Root string
-}
-
-// DefaultHome resolves ~/.portcloak, honouring PORTCLOAK_HOME so a test or a
-// portable install can point somewhere else.
-func DefaultHome() (Home, error) {
-	if override := os.Getenv("PORTCLOAK_HOME"); override != "" {
-		return Home{Root: override}, nil
-	}
-	dir, err := os.UserHomeDir()
-	if err != nil {
-		return Home{}, fmt.Errorf("finding your home folder: %w", err)
-	}
-	return Home{Root: filepath.Join(dir, ".portcloak")}, nil
 }
 
 // ConfigFile is the environments, storage definitions and preferences.

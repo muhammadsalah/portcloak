@@ -43,7 +43,8 @@ func screenLoads(eng *Engine) map[string]func() any {
 	restore := NewRestoreController(eng)
 	jobs := NewJobsController(eng)
 	keys := NewKeysController(eng)
-	maint := NewMaintenanceController(eng)
+	audit := NewAuditController(eng)
+	settings := NewSettingsController(eng)
 
 	return map[string]func() any{
 		"ConfigController.Load":             func() any { return cfg.Load() },
@@ -58,10 +59,10 @@ func screenLoads(eng *Engine) map[string]func() any {
 		"JobsController.List":               func() any { return jobs.List() },
 		"KeysController.List":               func() any { return keys.List() },
 		"KeysController.Recipients":         func() any { return keys.Recipients() },
-		"MaintenanceController.Audit":       func() any { return maint.Audit("", 30) },
-		"MaintenanceController.ConfigFile":  func() any { return maint.ConfigFile() },
-		"MaintenanceController.Orphans":     func() any { return maint.Orphans() },
-		"MaintenanceController.WorkingData": func() any { return maint.WorkingData() },
+		"AuditController.Audit":             func() any { return audit.Audit("", 30) },
+		"SettingsController.Location":       func() any { return settings.Location() },
+		"SettingsController.Orphans":        func() any { return settings.Orphans() },
+		"SettingsController.WorkingData":    func() any { return settings.WorkingData() },
 	}
 }
 

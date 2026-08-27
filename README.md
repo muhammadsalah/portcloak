@@ -1,3 +1,5 @@
+<img src="assets/logo/mark.svg" width="72" alt="">
+
 # PortCloak
 
 A desktop tool for moving Keycloak realms between environments with full fidelity — users and
@@ -43,6 +45,7 @@ Two constraints shape most of the design:
 | How it gets built, tested and verified | [`spec/rollout/`](./spec/rollout/README.md) — 9 phases |
 | What it looks like | [`spec/lunacy/`](./spec/lunacy/README.md) — 20 screens |
 | Why the scope boundaries are where they are | [`spec/12-decisions.md`](./spec/12-decisions.md) |
+| The mark, and the rules around it | [`assets/logo/`](./assets/logo/README.md) |
 | How the code is laid out | [`spec/rollout/00-engineering-foundations.md`](./spec/rollout/00-engineering-foundations.md) |
 
 ## What it deliberately does not do

@@ -18,6 +18,19 @@ type Readiness struct {
 // EnvironmentReadiness reports whether an environment has everything a capture
 // would need from its definition. It does not touch the network — that is what
 // Probe is for.
+//
+// The bar is narrow on purpose: a field belongs here only if Validate lets it
+// be empty *and* the adapter has no usable default for it. That is true of an
+// SSH private key and of an S3 access key, and it is not true of a Docker
+// endpoint or a kubeconfig context — both of which are blank in most working
+// configurations, because blank is how you say "the local socket" and "whatever
+// kubectl is pointed at".
+//
+// Both were on this list once, and the result was a Docker environment that
+// captured perfectly while the screen above it said it was not usable yet. The
+// Docker suggestion was worse than merely wrong: it offered `runtime` as the
+// way to become ready, and nothing in the engine reads that field, so taking
+// the advice would have cleared the banner and changed nothing.
 func EnvironmentReadiness(e Environment) Readiness {
 	switch e.Kind {
 	case EnvSSH:
@@ -36,14 +49,6 @@ func EnvironmentReadiness(e Environment) Readiness {
 					return notReady("the jump host %s still needs its %s.", e.JumpHost.Host, authNoun(e.JumpHost.Auth))
 				}
 			}
-		}
-	case EnvKubernetes:
-		if e.Context == "" && e.Kubeconfig == "" {
-			return notReady("pick a kubeconfig context, or point at a kubeconfig file.")
-		}
-	case EnvDocker:
-		if e.DockerEndpoint == "" && e.Runtime == "" {
-			return notReady("say which Docker endpoint to use, or which runtime to shell out to.")
 		}
 	}
 	return Readiness{Ready: true}

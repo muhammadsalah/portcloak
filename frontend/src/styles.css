@@ -38,6 +38,18 @@
   --nav-width: 260px;
   --content-padding: 24px;
 
+  /*
+   * Brand colours, which are not interface colours.
+   *
+   * The interface is the Keycloak admin console's palette, so PortCloak looks
+   * like it belongs beside it. The mark is the one place these appear — see
+   * assets/logo/README.md. Keeping them as separate tokens is what stops the
+   * logo's teal leaking into buttons and badges that should stay PatternFly
+   * blue.
+   */
+  --brand-ink: #0e1a24;
+  --brand-accent: #1fa896;
+
   --font-heading: "Red Hat Display", "Helvetica Neue", Arial, sans-serif;
   --font-body: "Red Hat Text", "Helvetica Neue", Arial, sans-serif;
   --font-mono: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
@@ -105,18 +117,23 @@ a:hover {
   -webkit-app-region: drag;
 }
 
-.masthead .mark {
-  width: 22px;
-  height: 22px;
-  border-radius: 4px;
-  background: var(--primary);
+.masthead svg {
+  flex: none;
+  /* The traffic lights and the drag region are above; the mark is not a
+     control and must not swallow a drag on the title bar. */
+  pointer-events: none;
 }
 
 .masthead .wordmark {
   font-family: var(--font-heading);
   font-size: 19px;
   font-weight: 500;
-  letter-spacing: 0.2px;
+  /* The wordmark is one word set tight, not two words with a space. */
+  letter-spacing: -0.3px;
+}
+
+.masthead .wordmark-accent {
+  color: var(--brand-accent);
 }
 
 .body {
@@ -172,6 +189,36 @@ a:hover {
 .nav-item.disabled:hover {
   background: transparent;
   color: #d2d2d2;
+}
+
+/*
+ * Icon and label travel together, so the trailing count or badge stays pinned
+ * to the right edge by the item's own space-between.
+ */
+.nav-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+/*
+ * The glyph is dimmer than the label at rest and comes up to full strength with
+ * it on hover and when active. A line drawing at 16px reads as noise at the
+ * same weight as its text.
+ */
+.nav-item .icon {
+  flex: none;
+  opacity: 0.75;
+}
+
+.nav-item:hover .icon,
+.nav-item.active .icon {
+  opacity: 1;
+}
+
+.nav-item.active .icon {
+  color: var(--info-border);
 }
 
 .nav-count {
@@ -735,6 +782,47 @@ label {
   margin-top: 2px;
 }
 
+/*
+ * A filesystem path shown as the thing itself: monospaced, boxed, and free to
+ * wrap anywhere, because a home folder or a container reference has no spaces
+ * to break at and would otherwise run past the card.
+ */
+.path-box {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--surface-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  overflow-wrap: anywhere;
+}
+
+/* One line of the audit log: time, tone, what happened, date. */
+.audit-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid #ededed;
+}
+
+.audit-row:last-child {
+  border-bottom: none;
+}
+
+.audit-time {
+  width: 64px;
+  flex: none;
+}
+
+.audit-row .dot {
+  margin-top: 6px;
+}
+
+.audit-date {
+  flex: none;
+}
+
 .kv {
   display: grid;
   grid-template-columns: 170px 1fr;
@@ -886,11 +974,8 @@ label {
 }
 
 .empty-mark {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  background: var(--primary);
   margin: 0 auto 20px;
+  line-height: 0;
 }
 
 .empty h2 {

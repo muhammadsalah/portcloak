@@ -9,6 +9,7 @@ import (
 	"portcloak/internal/engine/config"
 	"portcloak/internal/engine/obs"
 	"portcloak/internal/engine/orchestrator"
+	"portcloak/internal/engine/snapshot"
 	"portcloak/internal/engine/store"
 )
 
@@ -59,6 +60,10 @@ type JobView struct {
 	// It says what pressing Resume would do — an upload continued, or
 	// the export run again.
 	ResumeNote string `json:"resumeNote,omitempty"`
+	// NeedsPassphrase says that resuming this job has to ask for the passphrase
+	// it was sealed with, because a job file never holds one. The screen reads
+	// it to prompt, rather than discovering it from a rejected resume.
+	NeedsPassphrase bool `json:"needsPassphrase,omitempty"`
 }
 
 // ActivityView is the whole screen.
@@ -94,7 +99,12 @@ func (j *JobsController) List() (res ActivityView) {
 		v.CheckpointNote = describeCheckpoint(job)
 		if v.Resumable {
 			// The note and the button agree because they come from one plan.
-			v.ResumeNote = orchestrator.PlanResume(j.eng.Home, job).Reason
+			plan := orchestrator.PlanResume(j.eng.Home(), job)
+			v.ResumeNote = plan.Reason
+			// Only a resume that re-runs the export needs it. One that merely
+			// repeats the upload is sending a bundle that is already sealed.
+			v.NeedsPassphrase = plan.Kind != orchestrator.ResumeUpload &&
+				job.Encrypted && job.EncryptionMode == string(snapshot.EncryptionPassphrase)
 		}
 
 		switch job.State {
@@ -244,7 +254,7 @@ func (j *JobsController) Discard(jobID string) DiscardResult {
 		}
 	}
 	// The whole working directory for the job goes, not just the bundle.
-	if err := os.RemoveAll(j.eng.Home.WorkPath(jobID, "")); err == nil {
+	if err := os.RemoveAll(j.eng.Home().WorkPath(jobID, "")); err == nil {
 		removed = append(removed, "its working files")
 	}
 	if err := j.eng.Jobs.Delete(jobID); err != nil {
@@ -267,14 +277,21 @@ func (j *JobsController) Discard(jobID string) DiscardResult {
 // rather than assumed: a capture whose bundle is already sealed resumes as an
 // upload, and anything earlier runs the export again. Implying a fine-grained
 // resume that does not exist would be worse than saying so.
-func (j *JobsController) Resume(jobID string) (res StartResult) {
+// Resume restarts an interrupted job.
+//
+// passphrase is used only by a capture that was sealed with one. Nothing
+// sensitive is written to a job file, so that is the one part of the original
+// encryption decision PortCloak cannot recover on its own — everything else
+// (the mode, the recipients, which are public keys) is on the job and is
+// rebuilt without asking.
+func (j *JobsController) Resume(jobID, passphrase string) (res StartResult) {
 	defer func() { res = lists(res) }()
 	job, err := j.eng.Jobs.Load(jobID)
 	if err != nil {
 		return StartResult{Failure: Fail(err)}
 	}
 
-	plan := orchestrator.PlanResume(j.eng.Home, job)
+	plan := orchestrator.PlanResume(j.eng.Home(), job)
 	switch plan.Kind {
 	case orchestrator.ResumeUnavailable:
 		return StartResult{Failure: &Failure{Message: plan.Reason}}
@@ -286,6 +303,23 @@ func (j *JobsController) Resume(jobID string) (res StartResult) {
 		return StartResult{JobIDs: []string{jobID}, Realms: []string{job.Realm}}
 
 	default:
+		if job.Encrypted && job.EncryptionMode == "" {
+			// A job written before the mode was recorded. Re-running the
+			// export would seal it to nothing, so it is refused with the one
+			// thing that recovers it rather than an internal-sounding
+			// complaint about a mode.
+			return StartResult{Failure: &Failure{
+				Message: "This capture was sealed by a version of PortCloak that did not record how, so resuming it cannot reproduce the encryption.",
+				Hint:    "Start the capture again from the Capture screen. Nothing was uploaded, so there is nothing to clean up.",
+			}}
+		}
+		if job.Encrypted && job.EncryptionMode == string(snapshot.EncryptionPassphrase) && passphrase == "" {
+			return StartResult{Failure: &Failure{
+				Message: "This capture was sealed with a passphrase, which PortCloak does not keep.",
+				Hint:    "Enter the same passphrase to resume. A snapshot sealed with a different one would be a second bundle nobody could tell apart from the first.",
+			}}
+		}
+
 		prefs := j.eng.Config.Preferences()
 		return (&CaptureController{eng: j.eng}).Start(CaptureOptions{
 			Environment:  job.Environment,
@@ -293,9 +327,14 @@ func (j *JobsController) Resume(jobID string) (res StartResult) {
 			Storage:      job.Storage,
 			UsersMode:    prefs.UsersMode,
 			UsersPerFile: prefs.UsersPerFile,
-			// Resuming reuses the original encryption decision, which is
-			// recorded on the job rather than asked again.
+			// Resuming reuses the original encryption decision. The mode and
+			// the recipients come off the job; the passphrase is the one part
+			// that has to be supplied again, because keeping one on disk to
+			// save a prompt is not a trade this tool makes.
 			Encrypt:                 job.Encrypted,
+			EncryptionMode:          job.EncryptionMode,
+			Recipients:              job.Recipients,
+			Passphrase:              passphrase,
 			AcknowledgedUnencrypted: !job.Encrypted,
 		})
 	}

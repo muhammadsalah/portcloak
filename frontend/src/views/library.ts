@@ -1,5 +1,6 @@
 import { SnapshotAPI, type FirstRun, type LibraryEntry, type LibraryView } from "../api";
 import { badge, bytes, clear, count, h, modal, notice, spinner, when } from "../dom";
+import { mark, onLight } from "../logo";
 import { navigate, setHasSnapshots } from "../main";
 
 /** The library is Tier 0: every snapshot, across every backend, with no key. */
@@ -282,7 +283,7 @@ function renderFirstRun(fr: FirstRun): HTMLElement {
   return h(
     "div",
     { class: "empty" },
-    h("div", { class: "empty-mark" }),
+    h("div", { class: "empty-mark" }, mark(44, onLight)),
     h("h2", null, fr.heading),
     h("p", { class: "muted" }, fr.body),
     h(

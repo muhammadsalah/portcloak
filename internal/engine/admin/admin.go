@@ -13,6 +13,7 @@ package admin
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -79,22 +80,36 @@ func New(env config.Environment, creds config.CredentialStore) (*Client, error) 
 	}, nil
 }
 
+// ErrNotConfigured is what Check reports for an environment that has no Admin
+// API. It is a supported configuration, so callers treat it as a note.
+var ErrNotConfigured = errors.New("no Admin API is configured on this environment")
+
 // Reachable reports whether the Admin API answered.
 //
 // It is a question, not a transfer, so it is asked once and the answer is the
 // first one — a slow retry loop here would delay a capture that does not need
 // the Admin API at all.
-func (c *Client) Reachable(ctx context.Context) bool {
+func (c *Client) Reachable(ctx context.Context) bool { return c.Check(ctx) == nil }
+
+// Check is Reachable with the reason kept.
+//
+// The bool is what a capture needs — the Admin API is optional and its absence
+// is a note. The reason is what the environment editor needs: "not reachable"
+// over a URL the operator can open in a browser is not a diagnosis, and an
+// untrusted certificate is the case where the difference decides whether they
+// find the setting that fixes it.
+func (c *Client) Check(ctx context.Context) error {
+	// A nil client is an environment with no Admin API — a supported
+	// configuration, and not a reachable one. Returning nil here would have
+	// made Reachable answer true for a server that does not exist.
 	if c == nil {
-		return false
+		return ErrNotConfigured
 	}
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	if _, err := c.token_(ctx); err != nil {
-		return false
-	}
-	return true
+	_, err := c.token_(ctx)
+	return err
 }
 
 // Realms lists the realms the credentials can see, for the capture wizard.

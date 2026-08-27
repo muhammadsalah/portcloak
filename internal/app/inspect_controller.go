@@ -88,7 +88,7 @@ func (i *InspectController) Open(req OpenRequest) (res Overview) {
 	defer cancel()
 
 	rep := obs.NewReporter(req.SnapshotID, i.eng.Sink())
-	session, err := inspect.Open(ctx, i.eng.Home, blobs, inspect.OpenRequest{
+	session, err := inspect.Open(ctx, i.eng.Home(), blobs, inspect.OpenRequest{
 		Storage: req.Storage, BundleKey: req.BundleKey, SnapshotID: req.SnapshotID,
 		Passphrase: req.Passphrase, Identities: req.Identities,
 		// The keys already in this machine's keychain are tried without being

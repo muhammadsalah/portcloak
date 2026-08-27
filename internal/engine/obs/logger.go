@@ -40,6 +40,10 @@ func DefaultLogOptions(file string) LogOptions {
 type Logger struct {
 	*slog.Logger
 	closer io.Closer
+	// rot is the same writer as closer when there is a file, kept under its own
+	// name so the log can follow the home folder to a new location without the
+	// handler behind it being rebuilt.
+	rot *rotatingWriter
 }
 
 // Close releases the underlying log file.
@@ -50,11 +54,32 @@ func (l *Logger) Close() error {
 	return l.closer.Close()
 }
 
+// Suspend closes the log file while keeping the logger usable. Records written
+// meanwhile go to stderr if it is attached and are otherwise dropped.
+//
+// It exists for one moment: the home folder is being moved, and Windows will
+// not rename a directory that has a file open inside it.
+func (l *Logger) Suspend() error {
+	if l.rot == nil {
+		return nil
+	}
+	return l.rot.suspend()
+}
+
+// Reopen points the log at a new path, creating it if need be.
+func (l *Logger) Reopen(path string) error {
+	if l.rot == nil {
+		return nil
+	}
+	return l.rot.reopen(path)
+}
+
 // NewLogger builds a logger whose every record passes through RedactingHandler.
 // There is deliberately no way to construct an engine logger that skips it.
 func NewLogger(opts LogOptions) (*Logger, error) {
 	var sinks []io.Writer
 	var closer io.Closer
+	var rot *rotatingWriter
 
 	if opts.File != "" {
 		if err := os.MkdirAll(filepath.Dir(opts.File), 0o700); err != nil {
@@ -66,6 +91,7 @@ func NewLogger(opts LogOptions) (*Logger, error) {
 		}
 		sinks = append(sinks, rw)
 		closer = rw
+		rot = rw
 	}
 	if opts.AlsoStderr || opts.File == "" {
 		sinks = append(sinks, os.Stderr)
@@ -80,7 +106,7 @@ func NewLogger(opts LogOptions) (*Logger, error) {
 	}
 
 	base := slog.NewJSONHandler(w, &slog.HandlerOptions{Level: opts.Level})
-	return &Logger{Logger: slog.New(NewRedactingHandler(base)), closer: closer}, nil
+	return &Logger{Logger: slog.New(NewRedactingHandler(base)), closer: closer, rot: rot}, nil
 }
 
 // Discard returns a logger that writes nowhere. Tests that do not assert on log
@@ -118,6 +144,12 @@ func (w *rotatingWriter) Write(p []byte) (int, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
+	// Suspended: the home folder is moving underneath us. Dropping the record
+	// beats failing the write, which slog reports by writing to stderr about
+	// having failed to write.
+	if w.f == nil {
+		return len(p), nil
+	}
 	if w.maxBytes > 0 && w.size+int64(len(p)) > w.maxBytes {
 		if err := w.rotate(); err != nil {
 			return 0, err
@@ -155,5 +187,38 @@ func (w *rotatingWriter) rotate() error {
 func (w *rotatingWriter) Close() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	return w.f.Close()
+	if w.f == nil {
+		return nil
+	}
+	f := w.f
+	w.f = nil
+	return f.Close()
+}
+
+// suspend releases the file without ending the writer's life.
+func (w *rotatingWriter) suspend() error { return w.Close() }
+
+// reopen attaches the writer to a new path.
+func (w *rotatingWriter) reopen(path string) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	if w.f != nil {
+		_ = w.f.Close()
+		w.f = nil
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return fmt.Errorf("creating the log directory %s: %w", filepath.Dir(path), err)
+	}
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+	if err != nil {
+		return fmt.Errorf("opening the log file %s: %w", path, err)
+	}
+	st, err := f.Stat()
+	if err != nil {
+		_ = f.Close()
+		return fmt.Errorf("reading the size of %s: %w", path, err)
+	}
+	w.path, w.f, w.size = path, f, st.Size()
+	return nil
 }

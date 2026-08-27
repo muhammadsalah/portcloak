@@ -33,7 +33,9 @@ each asking only for what that kind actually needs:
 | **Docker** | Docker endpoint (socket / `DOCKER_HOST` / over-SSH), **service or container** running Keycloak, optional **path to `kc.sh`** inside the container |
 | **Kubernetes / OpenShift** | Kubeconfig context and optional kubeconfig file, **namespace**, **Deployment or StatefulSet** running Keycloak, container name, optional **path to `kc.sh`** inside the pod |
 
-Every kind also takes an optional **Admin API** block — base URL, user, credential. It is shown
+Every kind also takes an optional **Admin API** block — base URL, user, credential, and an
+**Accept a self-signed certificate** switch for an internal server behind a private CA
+([08 §8.4](./08-security.md)). It is shown
 in full from the start rather than revealed once a base URL is typed: this form does not redraw
 per keystroke, so a field gated on another field's value is a field that cannot be filled.
 
@@ -80,6 +82,47 @@ All three lists live in `~/.portcloak/config.yaml` — readable, diffable, hand-
 credential held in the **OS keychain** and referenced by handle
 ([02 §2.6](./02-architecture.md)). Deleting an entry that something references is warned about,
 not silently allowed.
+
+## 9.1c Settings, and why it is not the audit log
+
+A fourth configuration screen holds what PortCloak does to *itself*: where it keeps its files,
+the ephemeral clones a crashed session left behind, and the working data sitting on this disk.
+
+These three lived beside the audit log until they were moved. The screen that resulted was a
+permanent record of what had happened with four buttons in it that make things happen, which is
+two jobs and a confusing one. **Audit is a record**: read, filtered by action and time range,
+never edited and never cleared from the app. **Settings is where things change.**
+
+### Where PortCloak keeps its files
+
+`~/.portcloak/` is the default, not a constant. The folder can be moved — onto an encrypted
+volume, off a synced home directory, onto an external disk — and the resolution order is:
+
+    PORTCLOAK_HOME  →  a folder chosen in the app  →  ~/.portcloak
+
+`PORTCLOAK_HOME` is set outside the application and wins, so the screen reports the folder as
+pinned and disables the move rather than offering something it cannot deliver. A chosen folder is
+recorded in a one-line pointer in the OS's per-application settings directory — deliberately
+*outside* the tree, because a note saying where the folder went cannot live in the folder that
+went.
+
+What moves is everything PortCloak wrote: `config.yaml`, the audit log, job checkpoints, logs,
+inspection indexes and decrypted working files. What does not move is the OS keychain and every
+snapshot in storage — moving this folder moves no backup and loses no credential, and the
+confirmation says so before the folder is picked.
+
+Two properties make it safe to offer at all:
+
+- **Nothing starts until the destination has been refused for every reason it can be.** Relative,
+  identical, inside the folder being moved, a parent of it, a file, non-empty, or with no parent
+  to be created in. A move that fails halfway leaves an operator's environments, keys and
+  checkpoints across two folders with the app bound to neither.
+- **It is refused outright while a snapshot is open or a job is in flight**, because both hold
+  paths under the old root for their whole lives. That refusal names the screen to go to.
+
+The move then takes effect *without a restart*: the config store, job store, audit log, logger
+and orchestrator are rebound behind the pointers the rest of the engine holds. A setting that
+says one thing while the running application does another is worse than not offering it.
 
 ## 9.2 Capture workflow
 

@@ -2,13 +2,16 @@ import "./styles.css";
 
 import { ConfigAPI, JobsAPI, onProgress, type ProgressEvent } from "./api";
 import { clear, h, notice } from "./dom";
+import { icon } from "./icons";
+import { mark, onDark } from "./logo";
 import { renderLibrary } from "./views/library";
 import { renderCapture } from "./views/capture";
 import { renderRestore } from "./views/restore";
 import { renderActivity } from "./views/activity";
 import { renderEnvironments } from "./views/environments";
 import { renderStorage } from "./views/storage";
-import { renderMaintenance } from "./views/maintenance";
+import { renderAudit } from "./views/audit";
+import { renderSettings } from "./views/settings";
 import { renderInspector } from "./views/inspector";
 import { renderKeys } from "./views/keys";
 
@@ -21,7 +24,8 @@ export type Route =
   | { name: "storage"; select?: string }
   | { name: "browse"; storage: string }
   | { name: "keys" }
-  | { name: "maintenance" }
+  | { name: "audit" }
+  | { name: "settings" }
   | { name: "inspect"; storage: string; bundleKey: string; snapshotId: string; tab?: string };
 
 /** App-wide state the shell owns: the current route and the live counters. */
@@ -78,7 +82,8 @@ const nav: { section: string; items: { label: string; route: Route; key: string 
       { key: "environments", label: "Environments", route: { name: "environments" } },
       { key: "storage", label: "Storage", route: { name: "storage" } },
       { key: "keys", label: "Keys", route: { name: "keys" } },
-      { key: "maintenance", label: "Audit log", route: { name: "maintenance" } },
+      { key: "settings", label: "Settings", route: { name: "settings" } },
+      { key: "audit", label: "Audit log", route: { name: "audit" } },
     ],
   },
 ];
@@ -126,7 +131,7 @@ function renderNav(): HTMLElement {
               if (!disabled) navigate(item.route);
             },
           },
-          h("span", null, item.label),
+          h("span", { class: "nav-label" }, icon(item.key), h("span", null, item.label)),
           trailing,
         ),
       );
@@ -145,8 +150,11 @@ function render(): void {
     h(
       "div",
       { class: "masthead" },
-      h("div", { class: "mark" }),
-      h("div", { class: "wordmark" }, "PortCloak"),
+      mark(30, onDark),
+      // One word, two colours: the wordmark is set live rather than shipped as
+      // a picture of text, so it stays crisp at any scale and searchable to
+      // anything reading the DOM.
+      h("div", { class: "wordmark" }, "Port", h("span", { class: "wordmark-accent" }, "Cloak")),
     ),
   );
   root.appendChild(h("div", { class: "body" }, renderNav(), content));
@@ -177,8 +185,11 @@ function render(): void {
     case "keys":
       show(content, () => renderKeys(content));
       break;
-    case "maintenance":
-      show(content, () => renderMaintenance(content));
+    case "audit":
+      show(content, () => renderAudit(content));
+      break;
+    case "settings":
+      show(content, () => renderSettings(content));
       break;
     case "inspect":
       show(content, () => renderInspector(content, route));

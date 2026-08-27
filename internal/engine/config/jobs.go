@@ -120,7 +120,20 @@ type Job struct {
 	SnapshotID  string `json:"snapshotId,omitempty"`
 	StorageKey  string `json:"storageKey,omitempty"`
 
-	Encrypted bool `json:"encrypted"`
+	// Encrypted, and enough of how, to resume without asking again.
+	//
+	// A bool was all this used to be, and it was not enough: resuming rebuilt
+	// the encryption configuration as "on, mode unset" and the run was refused
+	// before it started with "Encryption is on but no mode was chosen" — so
+	// every encrypted capture that was interrupted had to be started over.
+	//
+	// The mode and the recipients are public and are written here. The
+	// passphrase is not: nothing sensitive is written to a job file, so a
+	// passphrase-sealed capture asks for it again on resume rather than
+	// PortCloak keeping one on disk to save a prompt.
+	Encrypted      bool     `json:"encrypted"`
+	EncryptionMode string   `json:"encryptionMode,omitempty"`
+	Recipients     []string `json:"recipients,omitempty"`
 
 	CreatedAt time.Time  `json:"createdAt"`
 	UpdatedAt time.Time  `json:"updatedAt"`
@@ -152,6 +165,14 @@ type JobStore struct {
 // NewJobStore creates a job store rooted at home.
 func NewJobStore(home Home) *JobStore {
 	return &JobStore{home: home, now: time.Now}
+}
+
+// Rebind points the store at a moved home folder. Job files are read on demand,
+// so there is nothing to reload.
+func (s *JobStore) Rebind(home Home) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.home = home
 }
 
 // Save writes a job atomically. Every caller goes through here rather than

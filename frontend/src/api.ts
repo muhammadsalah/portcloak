@@ -80,7 +80,9 @@ export interface Environment {
   adminBaseUrl?: string;
   adminRealm?: string;
   adminUser?: string;
+  adminClientId?: string;
   adminCredentialRef?: string;
+  adminInsecureTls?: boolean;
   credentialRef?: string;
   lastProbe?: ProbeStamp | null;
 }
@@ -741,6 +743,8 @@ export interface JobView {
   checkpointNote?: string;
   /** What pressing Resume would actually do: repeat the upload, or export again. */
   resumeNote?: string;
+  /** Resuming this job has to ask for the passphrase it was sealed with. */
+  needsPassphrase?: boolean;
 }
 
 export interface ActivityView extends MaybeFailed {
@@ -758,10 +762,11 @@ export const JobsAPI = {
   list: () => call<ActivityView>("JobsController", "List"),
   cancel: (jobId: string) => call<Failure | null>("JobsController", "Cancel", jobId),
   discard: (jobId: string) => call<DiscardResult>("JobsController", "Discard", jobId),
-  resume: (jobId: string) => call<StartResult>("JobsController", "Resume", jobId),
+  resume: (jobId: string, passphrase = "") =>
+    call<StartResult>("JobsController", "Resume", jobId, passphrase),
 };
 
-/* ── Maintenance ───────────────────────────────────────────────────────── */
+/* ── Audit ─────────────────────────────────────────────────────────────── */
 
 export interface AuditEntry {
   at: string;
@@ -782,6 +787,13 @@ export interface AuditView extends MaybeFailed {
   note: string;
 }
 
+export const AuditAPI = {
+  entries: (action: string, sinceDays: number) =>
+    call<AuditView>("AuditController", "Audit", action, sinceDays),
+};
+
+/* ── Settings ──────────────────────────────────────────────────────────── */
+
 export interface CredentialStatus {
   name: string;
   kind: string;
@@ -789,8 +801,20 @@ export interface CredentialStatus {
   present: boolean;
 }
 
-export interface ConfigFileView {
-  path: string;
+/** How the folder PortCloak keeps everything in was decided. */
+export type HomeSource = "default" | "chosen" | "environment";
+
+export interface LocationView extends MaybeFailed {
+  root: string;
+  configFile: string;
+  source: HomeSource;
+  sourceNote: string;
+  default: string;
+  pointer: string;
+  movable: boolean;
+  atDefault: boolean;
+  /** Why a move would be refused right now; empty when nothing is in the way. */
+  blocked: string;
   note: string;
   credentials: CredentialStatus[];
 }
@@ -831,15 +855,15 @@ export interface PurgeResult extends MaybeFailed {
   note: string;
 }
 
-export const MaintenanceAPI = {
-  audit: (action: string, sinceDays: number) =>
-    call<AuditView>("MaintenanceController", "Audit", action, sinceDays),
-  configFile: () => call<ConfigFileView>("MaintenanceController", "ConfigFile"),
-  orphans: () => call<OrphanReport>("MaintenanceController", "Orphans"),
+export const SettingsAPI = {
+  location: () => call<LocationView>("SettingsController", "Location"),
+  move: (folder: string) => call<LocationView>("SettingsController", "Move", folder),
+  useDefault: () => call<LocationView>("SettingsController", "UseDefault"),
+  orphans: () => call<OrphanReport>("SettingsController", "Orphans"),
   removeOrphan: (environment: string, ref: string) =>
-    call<Failure | null>("MaintenanceController", "RemoveOrphan", environment, ref),
-  workingData: () => call<WorkingData>("MaintenanceController", "WorkingData"),
-  purge: () => call<PurgeResult>("MaintenanceController", "Purge"),
+    call<Failure | null>("SettingsController", "RemoveOrphan", environment, ref),
+  workingData: () => call<WorkingData>("SettingsController", "WorkingData"),
+  purge: () => call<PurgeResult>("SettingsController", "Purge"),
 };
 
 /* ── Keys ──────────────────────────────────────────────────────────────── */

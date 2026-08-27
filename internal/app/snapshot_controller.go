@@ -79,7 +79,7 @@ func (s *SnapshotController) Library() (res LibraryView) {
 			StorageBody:      "A folder for the snapshots — on disk, on a host over SSH, in an S3 bucket, or in Azure Blob. You can mark one as requiring encryption, and nothing plaintext will ever be written there.",
 			NoAccountHeading: "There is no account and no sign-in",
 			NoAccountBody:    "PortCloak is a local tool. Everything it knows lives in plain files in your home folder — config.yaml holds your environments and storage, and every credential goes to this machine's keychain, referenced by handle. You can read that file, diff it, and commit it without leaking anything.",
-			ConfigFile:       s.eng.Home.ConfigFile(),
+			ConfigFile:       s.eng.Home().ConfigFile(),
 		}
 	}
 	return view

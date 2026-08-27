@@ -3,6 +3,7 @@ package clone_test
 import (
 	"context"
 	"errors"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -204,13 +205,58 @@ func TestLabels_AreTheOnlyOnesApplied(t *testing.T) {
 	at := time.Date(2026, 8, 27, 9, 14, 0, 0, time.UTC)
 	l := clone.Labels("01HZY3", "acme", at)
 
-	if l[target.LabelCreatedAt] != "2026-08-27T09:14:00Z" {
+	if l[target.LabelCreatedAt] != "20260827T091400Z" {
 		t.Errorf("the created-at label is %q", l[target.LabelCreatedAt])
 	}
 	// The sweep finds orphans by the ephemeral label alone, so it must always
 	// be present even when there is no realm.
 	if clone.Labels("x", "", at)[target.LabelEphemeral] != "true" {
 		t.Error("a clone with no realm lost its sweep label")
+	}
+}
+
+// kubeLabelValue is the rule the API server applies, quoted from its own
+// rejection message. Asserting against the real regex rather than against the
+// strings we happen to produce is the difference between catching this class of
+// fault and re-encoding it: the previous version of the test above asserted the
+// created-at label was "2026-08-27T09:14:00Z", which is precisely the value the
+// cluster refuses.
+var kubeLabelValue = regexp.MustCompile(`^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$`)
+
+// A clone that cannot be created is a capture that dies at the clone step, so
+// every label value has to be one the API server will accept — including the
+// ones assembled from something that is not free text.
+func TestLabels_AreAlwaysValidKubernetesLabelValues(t *testing.T) {
+	at := time.Date(2026, 8, 27, 18, 54, 58, 0, time.UTC)
+
+	for _, tc := range []struct{ name, jobID, realm string }{
+		{"ordinary", "00003824jfann7v2", "acme"},
+		{"a realm with spaces and punctuation", "job-1", "Corp A / Customers (EU)"},
+		{"a realm of only illegal characters", "job-1", "!!!"},
+		{"a realm with leading and trailing separators", "job-1", "-.acme._"},
+		{"a realm longer than a label", "job-1", strings.Repeat("a", 40) + "-" + strings.Repeat("b", 40)},
+		// 63 legal characters then a separator: truncating to 63 and trimming
+		// in the wrong order leaves a value ending in '-'.
+		{"a realm that truncates onto a separator", "job-1", strings.Repeat("a", 62) + "-tail"},
+		{"no realm at all", "job-1", ""},
+		{"a unicode realm", "job-1", "réalm-München-日本"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			l := clone.Labels(tc.jobID, tc.realm, at)
+
+			for k, v := range l {
+				if len(v) > 63 {
+					t.Errorf("%s is %d characters; a label value may be 63", k, len(v))
+				}
+				if !kubeLabelValue.MatchString(v) {
+					t.Errorf("%s = %q, which the API server rejects", k, v)
+				}
+			}
+			// Whatever else happens, the sweep has to still be able to find it.
+			if l[target.LabelEphemeral] != "true" {
+				t.Error("the label the orphan sweep selects on was lost")
+			}
+		})
 	}
 }
 

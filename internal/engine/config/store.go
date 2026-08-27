@@ -37,7 +37,22 @@ func NewStore(home Home) *Store {
 }
 
 // Home is where this store's files live.
-func (s *Store) Home() Home { return s.home }
+func (s *Store) Home() Home {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.home
+}
+
+// Rebind points the store at a moved home folder and re-reads config.yaml from
+// it. The store object itself survives, because half the engine holds a pointer
+// to it and swapping that pointer under them would be a race for no gain.
+func (s *Store) Rebind(home Home) error {
+	s.mu.Lock()
+	s.home = home
+	s.raw, s.baseline, s.locate = nil, nil, nil
+	s.mu.Unlock()
+	return s.Load()
+}
 
 // Load reads and validates config.yaml.
 //

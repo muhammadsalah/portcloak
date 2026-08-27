@@ -105,6 +105,10 @@ func (o *Orchestrator) Capture(ctx context.Context, req CaptureRequest) (Capture
 		j.Storage = st.Name
 		j.Source = env.Target()
 		j.Encrypted = req.Encryption.Enabled
+		if req.Encryption.Enabled {
+			j.EncryptionMode = string(req.Encryption.Mode)
+			j.Recipients = append([]string(nil), req.Encryption.Recipients...)
+		}
 		j.Provenance.EnvironmentKind = string(env.Kind)
 		j.Provenance.CaptureMode = "offline-export"
 		j.Message = "Queued."
@@ -367,7 +371,7 @@ func (o *Orchestrator) collect(ctx context.Context, cc captureContext, j *config
 
 	// Everything the job writes locally lives under the PortCloak home rather
 	// than the system temp directory, because these files hold realm material.
-	stageDir := o.opts.Home.WorkPath(j.ID, "stage")
+	stageDir := o.home().WorkPath(j.ID, "stage")
 	builder, err := snapshot.NewBuilder(stageDir)
 	if err != nil {
 		return nil, o.fail(j, rep, obs.PhasePackage, err)
@@ -768,7 +772,7 @@ func (o *Orchestrator) seal(ctx context.Context, cc captureContext, j *config.Jo
 		return sealResult{}, err
 	}
 
-	bundlePath := o.opts.Home.WorkPath(j.ID, j.ID+store.BundleExt)
+	bundlePath := o.home().WorkPath(j.ID, j.ID+store.BundleExt)
 	if err := os.MkdirAll(filepath.Dir(bundlePath), 0o700); err != nil {
 		return sealResult{}, err
 	}

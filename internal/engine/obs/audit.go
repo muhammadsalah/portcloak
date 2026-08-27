@@ -31,6 +31,10 @@ const (
 	ActionKeyImported Action = "keyImported"
 	ActionKeyRevealed Action = "keyRevealed"
 	ActionKeyDeleted  Action = "keyDeleted"
+	// ActionHomeMoved records the folder PortCloak keeps everything in being
+	// moved. It belongs in the permanent record because every entry above it
+	// was written somewhere else.
+	ActionHomeMoved Action = "homeMoved"
 )
 
 // AuditEntry is one line of the append-only log.
@@ -74,6 +78,25 @@ func NewAuditLog(path string) (*AuditLog, error) {
 	}
 	host, _ := os.Hostname()
 	return &AuditLog{path: path, now: time.Now, host: host}, nil
+}
+
+// Rebind points the log at a moved file, creating it if it is not there.
+func (a *AuditLog) Rebind(path string) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return fmt.Errorf("creating the audit log directory: %w", err)
+	}
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+	if err != nil {
+		return fmt.Errorf("opening the audit log %s: %w", path, err)
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	a.path = path
+	return nil
 }
 
 // Record appends one entry. Every free-text field goes through the same

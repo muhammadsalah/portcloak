@@ -73,7 +73,7 @@ func (o *Orchestrator) ResumeUpload(ctx context.Context, jobID string) error {
 	if err != nil {
 		return err
 	}
-	plan := PlanResume(o.opts.Home, j)
+	plan := PlanResume(o.home(), j)
 	if plan.Kind != ResumeUpload {
 		return resil.Fatal("resume the job", plan.Reason, nil)
 	}

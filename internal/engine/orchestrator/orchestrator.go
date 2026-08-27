@@ -106,6 +106,21 @@ func New(opts Options) *Orchestrator {
 	}
 }
 
+// SetHome rebinds the orchestrator to a moved PortCloak home. Only ever called
+// with no job running — a job holds paths under the old root for its whole
+// life, and rewriting them mid-flight would strand its checkpoint.
+func (o *Orchestrator) SetHome(home config.Home) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.opts.Home = home
+}
+
+func (o *Orchestrator) home() config.Home {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.opts.Home
+}
+
 // SetSink points progress events at a destination.
 func (o *Orchestrator) SetSink(s obs.Sink) {
 	o.mu.Lock()

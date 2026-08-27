@@ -364,7 +364,7 @@ func (o *Orchestrator) runRestore(ctx context.Context, env config.Environment, s
 	// Verification and decryption gate the restore before the target is
 	// contacted at all. A restore that half-writes a corrupted realm is worse
 	// than one that never starts.
-	session, err := inspect.Open(ctx, o.opts.Home, blobs, inspect.OpenRequest{
+	session, err := inspect.Open(ctx, o.home(), blobs, inspect.OpenRequest{
 		Storage: st.Name, BundleKey: req.BundleKey, SnapshotID: req.SnapshotID,
 		Passphrase: req.Passphrase, Identities: req.Identities,
 		Candidates: req.Candidates,

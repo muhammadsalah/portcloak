@@ -105,6 +105,27 @@ and auditable via the ledger.
   the **OS keychain** via `go-keyring` (macOS Keychain / Windows Credential Manager / libsecret).
 - Nothing sensitive is written to the config file or to logs.
 
+### TLS to the Admin API, and the opt-out
+
+The Admin API is the only HTTPS endpoint PortCloak originates a connection to with a credential
+of its own, and certificates are verified by default. An internal Keycloak behind a self-signed
+or private-CA certificate is an ordinary deployment, though — CRC, OpenShift Local, anything
+serving its own ingress CA — so `adminInsecureTls` accepts one.
+
+Four properties keep it honest:
+
+- **Per environment, never global.** One environment accepting a certificate relaxes nothing for
+  the next, which a shared or default transport would do.
+- **Off by default, and never inferred.** A failed handshake is reported, not worked around.
+  Quietly trusting whatever answers is the failure mode the default exists to prevent.
+- **Scoped to the Admin API.** A snapshot's integrity is checked by its own per-artifact digests
+  ([06](./06-snapshot-and-manifest.md)) and its encryption is unaffected, so this switch cannot
+  weaken what a bundle guarantees. It does mean the admin credential is sent over a connection
+  whose far end is no longer authenticated, and the UI says so while it is on.
+- **The failure that leads here names it.** An untrusted certificate is reported as a certificate
+  — with which way it failed — and as terminal rather than retryable, since it will not become
+  trusted on the fourth attempt.
+
 ## 8.5 Redaction & logging
 
 - A `slog` redaction handler scrubs known-sensitive keys and pattern-matches secret-shaped values

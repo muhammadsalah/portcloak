@@ -184,6 +184,29 @@ database. Large-realm exports are therefore still best scheduled off-peak.
   matching inherited `nodeSelector`; exec disabled by policy (surfaced clearly, with the
   suggestion to run the capture from a host that has database access instead).
 
+### Getting the export back out, without tar
+
+`kubectl cp` runs `tar` inside the container, and so did PortCloak. The official Keycloak image
+does not have one: it is assembled on `ubi-micro`, which ships neither `tar` nor `gzip`. The
+result was a capture that exported the realm successfully, tore the clone down cleanly, and then
+failed — because the exec channel closed on a binary that was not there.
+
+PortCloak streams the directory itself instead. One `sh` invocation walks it and emits, per file:
+
+    PCF <size> <name relative to the directory>\n
+    <exactly size bytes>
+
+which needs only `sh`, `find`, `wc`, `cat` and `printf`. That is a much smaller contract than
+tar's, and it is one a minimal image cannot fail to meet. The restore path writes a file in over
+stdin for the same reason. Neither direction sets ownership, and neither did before: the shell
+runs as the pod's own user and cannot `chown`.
+
+Two things follow from having been burned once. The command's stderr is captured and put in the
+failure rather than discarded, because it is the half that names the missing binary. And a
+non-zero exit is terminal rather than retryable — a directory that is not there does not become
+there on the fourth attempt, and Docker's own archive endpoint (which tars *outside* the
+container, and is why Docker was never affected) draws the same line.
+
 ## 3.8 The `kc.sh export` invocation
 
 The Kc CLI Driver builds the command; the Executor runs it in whichever context applies.
