@@ -28,7 +28,7 @@ func Run(version string) error {
 		Name:        "PortCloak",
 		Description: "Move Keycloak realms between environments with full fidelity.",
 		LogLevel:    slog.LevelInfo,
-		Services: controllers(eng),
+		Services:    controllers(eng),
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(frontend.Assets()),
 		},
