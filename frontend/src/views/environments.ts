@@ -205,7 +205,11 @@ function list(state: State, draw: () => void): HTMLElement {
           },
         },
         h("div", { style: "font-weight:500" }, env.name),
-        h("div", { class: "muted small" }, `${kindLabel(env.kind)} · ${env.target}`),
+        h(
+          "div",
+          { class: "muted small truncate", title: `${kindLabel(env.kind)} · ${env.target}` },
+          `${kindLabel(env.kind)} · ${env.target}`,
+        ),
         probeLine(env),
       ),
     );

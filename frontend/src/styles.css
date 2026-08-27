@@ -748,6 +748,11 @@ label {
 
 .kv dd {
   margin: 0;
+  /* A value here can be a filesystem path or a bucket and prefix, which have
+     nowhere to break. This column has the width to wrap one, so it wraps rather
+     than running past the card as the list rows did. */
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .facet-group {
@@ -993,6 +998,26 @@ label {
   display: flex;
   gap: 8px;
   align-items: center;
+}
+
+/*
+ * A one-line summary of something that can be arbitrarily long and has nowhere
+ * to break: a filesystem path, a bucket and prefix, an install root.
+ *
+ * Truncated rather than wrapped. These appear in the 260px list column beside a
+ * form, where a wrapped path takes four lines and pushes the row's actual
+ * content — its name, whether it was reachable — out of view. The full value is
+ * on the element's title, and the form next to it shows it in full anyway.
+ *
+ * `min-width: 0` on the row is what makes this work inside a flex or grid
+ * parent: without it a flex item refuses to shrink below its content's width,
+ * and the text overflows instead of being clipped.
+ */
+.truncate {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .stack {

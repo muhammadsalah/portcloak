@@ -198,7 +198,11 @@ function list(state: State, draw: () => void): HTMLElement {
           st.default ? badge("default", "info") : null,
           st.encryptionRequired ? badge("encryption required", "ok") : null,
         ),
-        h("div", { class: "muted small" }, `${kindLabel(st.kind)} · ${st.root}`),
+        h(
+          "div",
+          { class: "muted small truncate", title: `${kindLabel(st.kind)} · ${st.root}` },
+          `${kindLabel(st.kind)} · ${st.root}`,
+        ),
         probeLine(st),
       ),
     );
