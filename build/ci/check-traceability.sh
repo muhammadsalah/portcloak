@@ -25,10 +25,26 @@ cited="$work/cited"
 # cgo over GTK on Linux, and the job had no headers installed. A check whose
 # failure is indistinguishable from a crash is worse than no check, so the
 # build error is captured and shown rather than sent to /dev/null.
+# On Linux the listing also needs the tag every other job passes. Wails
+# defaults to GTK4 + webkitgtk-6.0; the runners install webkit2gtk-4.1, and
+# `gtk3` is what selects it. Headers alone are not enough — see the matrix
+# comment in .github/workflows/ci.yml, which this has to stay in step with.
+# The tag selects nothing off Linux, so it is set by platform rather than
+# passed in, and the script behaves the same wherever it is run.
+tags="gtk3"
+if [ "$(uname -s)" != "Linux" ]; then
+	tags=""
+fi
+
+# `-tags ""` is passed unconditionally rather than built into an array and
+# expanded. Go accepts an empty tag list, and macOS ships bash 3.2, where
+# expanding an empty array under `set -u` is itself an "unbound variable"
+# error — the check would then fail on a developer's machine for a reason
+# that has nothing to do with the matrix it is meant to be checking.
 list_tests() {
 	local errors="$work/err"
-	if ! go test "$@" ./internal/... -list '.*' 2>"$errors" | grep -E '^Test' | sort -u; then
-		echo "the test list could not be built (go test $*):" >&2
+	if ! go test -tags "$tags" "$@" ./internal/... -list '.*' 2>"$errors" | grep -E '^Test' | sort -u; then
+		echo "the test list could not be built (go test -tags \"$tags\" $*):" >&2
 		sed 's/^/  /' "$errors" >&2
 		exit 1
 	fi
