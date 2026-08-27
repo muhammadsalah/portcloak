@@ -9,6 +9,7 @@ import {
 } from "../api";
 import { badge, clear, count, failureNotice, h, modal, notice, select, spinner, when } from "../dom";
 import { navigate } from "../main";
+import { hasKey, keyFields, noKey, type SnapshotKey } from "./key";
 
 type Step = "snapshot" | "destination" | "preconditions" | "strategy" | "apply";
 
@@ -26,6 +27,12 @@ interface State {
   destinations: EnvironmentView[];
   strategies: Strategy[];
   snapshot?: LibraryEntry;
+  /**
+   * The key for an encrypted snapshot. It is carried rather than used and
+   * discarded: the restore job opens the bundle again on its own, so a key that
+   * only reached the pre-flight check would fail at the point of no return.
+   */
+  key: SnapshotKey;
   opened: boolean;
   environment: string;
   strategy: string;
@@ -53,6 +60,7 @@ export async function renderRestore(root: HTMLElement, snapshotId?: string): Pro
     entries: library.entries,
     destinations,
     strategies,
+    key: noKey(),
     opened: false,
     environment: destinations[0]?.name ?? "",
     strategy: "overwrite",
@@ -175,7 +183,15 @@ function advanceable(state: State): { ok: boolean; reason?: string } {
     case "snapshot":
       return state.snapshot ? { ok: true } : { ok: false, reason: "Choose a snapshot." };
     case "destination":
-      return state.environment ? { ok: true } : { ok: false, reason: "Choose a destination environment." };
+      if (!state.environment) {
+        return { ok: false, reason: "Choose a destination environment." };
+      }
+      if (state.snapshot?.encrypted && !hasKey(state.key)) {
+        // Asked for here rather than discovered at Apply: without it the next
+        // step downloads the bundle only to fail on it.
+        return { ok: false, reason: "Enter the key this snapshot was sealed with." };
+      }
+      return { ok: true };
     case "preconditions":
       // Informative only. Next stays enabled even when every dependency is
       // missing — the operator manages these environments.
@@ -202,8 +218,8 @@ async function advance(state: State, draw: () => void): Promise<void> {
       storage: state.snapshot.storage,
       bundleKey: state.snapshot.bundleKey,
       snapshotId: state.snapshot.snapshotId,
-      passphrase: "",
-      identities: [],
+      passphrase: state.key.passphrase,
+      identities: state.key.identities,
     });
     if (overview.failure) {
       state.planning = false;
@@ -239,8 +255,10 @@ function snapshotStep(state: State, draw: () => void): HTMLElement {
           class: `selectable ${state.snapshot?.snapshotId === e.snapshotId ? "selected" : ""}`,
           onClick: () => {
             state.snapshot = e;
+            state.key = noKey();
             state.opened = false;
             state.plan = undefined;
+            state.error = undefined;
             draw();
           },
         },
@@ -314,11 +332,47 @@ function destinationStep(state: State, draw: () => void): HTMLElement {
           "Keep capture and restore environments separate where you can: a restore target carries the higher privilege, and defining it as its own entry means that credential is only present where a restore is actually intended.",
         ),
       ),
+      state.snapshot?.encrypted ? keyStep(state, draw) : null,
       notice(
         "info",
         "PortCloak verifies the snapshot before contacting this environment",
         "Integrity and decryption are checked first. A snapshot that cannot be proven intact is never written to a target.",
       ),
+    ),
+  );
+}
+
+/**
+ * The key is asked for here, beside the notice that promises decryption runs
+ * before the destination is contacted — because that promise is what needs it.
+ *
+ * It sits on the step rather than in a modal so that a key which turns out to
+ * be wrong can be corrected next to the message saying so; the failure from
+ * pressing Next lands on this same screen.
+ */
+function keyStep(state: State, draw: () => void): HTMLElement {
+  return h(
+    "div",
+    { class: "field" },
+    h(
+      "div",
+      { class: "row", style: "margin-bottom:6px" },
+      h("span", { style: "font-weight:500" }, "Decryption key"),
+      badge("Encrypted", "neutral"),
+    ),
+    keyFields(state.key, () => {
+      // A changed key has to be proven against the bundle again, or Apply would
+      // send one the pre-flight check never saw.
+      state.opened = false;
+      state.error = undefined;
+      draw();
+    }),
+    h(
+      "div",
+      { class: "field-hint" },
+      state.snapshot?.encryptionMode === "recipients"
+        ? "This snapshot was sealed to age recipients, so it takes the private key of one of them. PortCloak never stored it."
+        : "PortCloak did not store this key when the snapshot was written, and cannot recover it. Without it the bundle stays sealed.",
     ),
   );
 }
@@ -583,8 +637,8 @@ async function apply(state: State, draw: () => void): Promise<void> {
     realm: state.snapshot!.realm,
     environment: state.environment,
     strategy: state.strategy,
-    passphrase: "",
-    identities: [],
+    passphrase: state.key.passphrase,
+    identities: state.key.identities,
     confirmRealm: state.confirmRealm,
   });
   state.applying = false;

@@ -21,6 +21,7 @@ import {
   when,
 } from "../dom";
 import { navigate } from "../main";
+import { keyFields, noKey } from "./key";
 
 type Tab = "overview" | "users" | "clients" | "keys" | "federations" | "flows" | "deps" | "secrets";
 
@@ -120,8 +121,9 @@ async function openWithKey(root: HTMLElement, route: Route): Promise<Overview | 
   }
 
   return await new Promise<Overview | null>((resolve) => {
-    let passphrase = "";
-    let identity = "";
+    // The same question the restore wizard asks, in a modal rather than on a
+    // step: see views/key.ts.
+    const key = noKey();
     const error = h("div");
 
     modal({
@@ -135,21 +137,7 @@ async function openWithKey(root: HTMLElement, route: Route): Promise<Overview | 
           "The library listing needed no key. Reading inside one does.",
         ),
         error,
-        h("label", null, "Passphrase"),
-        h("input", {
-          type: "password",
-          onInput: (e: Event) => {
-            passphrase = (e.target as HTMLInputElement).value;
-          },
-        }),
-        h("label", { style: "margin-top:12px" }, "…or an age private key"),
-        h("textarea", {
-          rows: "3",
-          placeholder: "AGE-SECRET-KEY-1…",
-          onInput: (e: Event) => {
-            identity = (e.target as HTMLTextAreaElement).value.trim();
-          },
-        }),
+        keyFields(key),
       ),
       confirmLabel: "Open",
       onConfirm: async () => {
@@ -157,8 +145,8 @@ async function openWithKey(root: HTMLElement, route: Route): Promise<Overview | 
           storage: route.storage,
           bundleKey: route.bundleKey,
           snapshotId: route.snapshotId,
-          passphrase,
-          identities: identity ? [identity] : [],
+          passphrase: key.passphrase,
+          identities: key.identities,
         });
         if (result.failure) {
           clear(root);
