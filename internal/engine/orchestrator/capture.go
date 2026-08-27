@@ -144,7 +144,7 @@ func (o *Orchestrator) runCaptureBatch(ctx context.Context, env config.Environme
 	}
 	defer blobs.Close() //nolint:errcheck
 
-	batchReporter := obs.NewReporter(jobs[0].ID, o.currentSink())
+	batchReporter := o.reporterFor(jobs...)
 
 	// Probe once and share the result: the wizard already ran this probe, and
 	// running it per realm would tell the operator the same thing four times.
@@ -182,8 +182,15 @@ func (o *Orchestrator) runCaptureBatch(ctx context.Context, env config.Environme
 		o.failAll(jobs, obs.PhaseClone, err)
 		return
 	}
+	// The phase is closed either way. A target that exports in place creates no
+	// clone, and leaving the step open left the pipeline showing a preparation
+	// that never finished for the rest of the run.
 	if execCtx.CloneRef != "" {
 		batchReporter.CloneCreated(execCtx.CloneRef)
+		batchReporter.CompletePhase(obs.PhaseClone, execCtx.CloneRef+" is running.")
+	} else {
+		batchReporter.CompletePhase(obs.PhaseClone,
+			"This environment exports in place, so no clone was needed. The serving instance is not touched either way.")
 	}
 
 	var verifier Verifier
@@ -216,7 +223,7 @@ func (o *Orchestrator) runCaptureBatch(ctx context.Context, env config.Environme
 			// realms fail fast with that reason rather than each re-attempting
 			// and re-failing against something that is not there.
 			for _, rest := range jobs[i:] {
-				_ = o.fail(rest, obs.NewReporter(rest.ID, o.currentSink()), obs.PhaseExport, err)
+				_ = o.fail(rest, o.reporterFor(rest), obs.PhaseExport, err)
 			}
 			break
 		}
@@ -287,7 +294,7 @@ func (o *Orchestrator) teardown(ctx context.Context, exec target.Executor, execC
 
 func (o *Orchestrator) failAll(jobs []*config.Job, phase obs.Phase, err error) {
 	for _, j := range jobs {
-		_ = o.fail(j, obs.NewReporter(j.ID, o.currentSink()), phase, err)
+		_ = o.fail(j, o.reporterFor(j), phase, err)
 	}
 }
 
@@ -346,7 +353,7 @@ type collected struct {
 
 // collect is the first pass: everything that needs the target.
 func (o *Orchestrator) collect(ctx context.Context, cc captureContext, j *config.Job) (*collected, error) {
-	rep := obs.NewReporter(j.ID, o.currentSink())
+	rep := o.reporterFor(j)
 	started := o.opts.Now()
 
 	j.State = config.JobRunning

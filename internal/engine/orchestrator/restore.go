@@ -343,7 +343,7 @@ func (o *Orchestrator) runRestore(ctx context.Context, env config.Environment, s
 	defer cancel()
 	defer o.track(j.ID, cancel)()
 
-	rep := obs.NewReporter(j.ID, o.currentSink())
+	rep := o.reporterFor(j)
 	started := o.opts.Now()
 	j.State = config.JobRunning
 	j.StartedAt = &started

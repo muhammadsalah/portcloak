@@ -5,8 +5,48 @@ import { navigate, subscribeProgress } from "../main";
 /**
  * The Activity screen is where resilience becomes legible. A dropped
  * connection has to look like a wait with a reason, not a hang.
+ *
+ * That only holds if the screen keeps up with the run. It used to draw itself
+ * once and then patch three elements from the event stream: the phase pipeline,
+ * the state badge, the elapsed time and the ledger were all frozen at whatever
+ * they were when the screen opened, so a capture that had finished still looked
+ * like one that was stuck, and the only way to see the truth was to navigate
+ * away and back. Everything below exists to make that unnecessary:
+ *
+ *   · the event stream patches what it can reach immediately, so a streamed log
+ *     line and a phase tick appear the instant they happen;
+ *   · anything structural — a phase boundary, a job changing state — asks the
+ *     engine for the job list again, coalesced so a burst costs one call;
+ *   · a slow poll runs while anything is in flight, so a missed event is a
+ *     second of staleness rather than a permanently wrong screen;
+ *   · and a repaint only happens when something actually changed, so a screen
+ *     that is merely ticking does not rebuild itself under the operator.
  */
+
+/** Teardown for the render currently on screen: listener, timers, observer. */
+let teardown: (() => void) | null = null;
+
+/**
+ * Streamed output per job, kept outside the render so a repaint does not throw
+ * away what the export has already said. Bounded, because a large export talks
+ * a lot and this is a log tail, not a log file.
+ */
+const logLines = new Map<string, string[]>();
+const maxLogLines = 500;
+
+/** The last painted shape, so an unchanged view is not rebuilt. */
+let painted = "";
+
+/** How long a burst of events is allowed to coalesce into one refresh. */
+const coalesceMs = 400;
+/** How often the screen re-reads the job list while anything is in flight. */
+const pollMs = 2000;
+
 export async function renderActivity(root: HTMLElement): Promise<void> {
+  teardown?.();
+  teardown = null;
+  painted = "";
+
   clear(root);
   root.appendChild(spinner("Reading jobs…"));
 
@@ -19,56 +59,161 @@ export async function renderActivity(root: HTMLElement): Promise<void> {
     return;
   }
 
-  clear(root);
-  root.appendChild(
-    h(
-      "div",
-      null,
-      h("h1", { class: "page-title" }, "Activity"),
-      h("div", { class: "page-subtitle" }, view.summary),
-    ),
-  );
+  // Live handles for the job cards currently on screen, rebuilt on every paint.
+  const live = new Map<string, LiveCard>();
+  let disposed = false;
 
-  if (view.jobs.length === 0) {
-    root.appendChild(
-      notice(
-        "info",
-        "Nothing has run yet",
-        "Captures and restores appear here while they run, and stay afterwards with what they did.",
-      ),
-    );
-    return;
-  }
+  const reload = async (): Promise<void> => {
+    if (disposed) return;
+    try {
+      paint(await JobsAPI.list());
+    } catch {
+      // A single failed refresh is not worth replacing a screen that is still
+      // showing the truth as of a moment ago. The poll will try again.
+    }
+  };
 
-  // Live output per job, so a running export streams rather than appearing at
-  // the end.
-  const live = new Map<string, { log: HTMLElement; bar: HTMLElement; note: HTMLElement }>();
+  let pending: number | undefined;
+  const scheduleReload = (): void => {
+    if (disposed || pending !== undefined) return;
+    pending = window.setTimeout(() => {
+      pending = undefined;
+      void reload();
+    }, coalesceMs);
+  };
 
-  for (const job of view.jobs) {
-    root.appendChild(card(job, live, () => void renderActivity(root)));
-  }
+  const paint = (next: ActivityView): void => {
+    if (disposed) return;
+    const shape = shapeOf(next);
+    if (shape === painted) {
+      // Nothing structural moved. The clock still has to, or a running job
+      // looks frozen for as long as it runs.
+      for (const job of next.jobs) {
+        const card = live.get(job.id);
+        if (card) card.elapsed.textContent = elapsedLine(job);
+      }
+      return;
+    }
+    painted = shape;
+
+    live.clear();
+    clear(root);
+    root.appendChild(header(next));
+    if (next.jobs.length === 0) {
+      root.appendChild(
+        notice(
+          "info",
+          "Nothing has run yet",
+          "Captures and restores appear here while they run, and stay afterwards with what they did.",
+        ),
+      );
+      return;
+    }
+    for (const job of next.jobs) {
+      root.appendChild(card(job, live, () => void reload()));
+    }
+  };
+
+  paint(view);
 
   const unsubscribe = subscribeProgress((e: ProgressEvent) => {
+    if (e.message && e.kind === "log") remember(e.jobId, e.message);
     const target = live.get(e.jobId);
-    if (!target) return;
-    apply(target, e);
+    if (target) apply(target, e);
+    // A phase boundary or a state change alters the pipeline, the badge, the
+    // buttons and the ledger — all of which come from the engine rather than
+    // from the event. Ask for them rather than half-deriving them here.
+    if (structural(e.kind)) scheduleReload();
   });
 
-  // The listener belongs to this render. Navigating away must not leave one
-  // writing into a detached node.
+  const poll = window.setInterval(() => {
+    if (live.size > 0) void reload();
+  }, pollMs);
+
+  // The listener and the timers belong to this render. Navigating away must not
+  // leave one writing into a detached node, and — the older failure — must not
+  // leave the previous one subscribed alongside the new one either.
   const observer = new MutationObserver(() => {
-    if (!document.body.contains(root) || root.childElementCount === 0) {
-      unsubscribe();
-      observer.disconnect();
-    }
+    if (!document.body.contains(root)) teardown?.();
   });
   observer.observe(document.body, { childList: true, subtree: true });
+
+  teardown = () => {
+    disposed = true;
+    unsubscribe();
+    observer.disconnect();
+    window.clearInterval(poll);
+    if (pending !== undefined) window.clearTimeout(pending);
+    teardown = null;
+  };
 }
 
-function apply(
-  target: { log: HTMLElement; bar: HTMLElement; note: HTMLElement },
-  e: ProgressEvent,
-): void {
+/** The handles on one card that the event stream can write into directly. */
+interface LiveCard {
+  log: HTMLElement;
+  bar: HTMLElement;
+  note: HTMLElement;
+  elapsed: HTMLElement;
+  steps: Map<string, HTMLElement>;
+}
+
+/**
+ * The shape a repaint depends on. Elapsed time is deliberately excluded: it
+ * changes every second and needs a text update, not a rebuilt screen.
+ */
+function shapeOf(view: ActivityView): string {
+  return JSON.stringify({
+    summary: view.summary,
+    jobs: view.jobs.map((j) => ({
+      id: j.id,
+      state: j.state,
+      message: j.message,
+      hint: j.hint,
+      phase: j.phases.map((p) => (p.done ? "d" : p.live ? "l" : "-")).join(""),
+      ledger: j.ledger?.length ?? 0,
+      resumable: j.resumable,
+      discardable: j.discardable,
+      cancellable: j.cancellable,
+      checkpoint: j.checkpointNote,
+      clone: j.provenance?.cloneRef,
+    })),
+  });
+}
+
+/** Kinds that change what the engine would say about a job, not just its text. */
+function structural(kind: string): boolean {
+  return (
+    kind === "phaseStarted" ||
+    kind === "phaseCompleted" ||
+    kind === "phaseFailed" ||
+    kind === "jobState" ||
+    kind === "cloneCreated" ||
+    kind === "cloneDestroyed"
+  );
+}
+
+function remember(jobId: string, line: string): void {
+  const lines = logLines.get(jobId) ?? [];
+  lines.push(line);
+  if (lines.length > maxLogLines) lines.splice(0, lines.length - maxLogLines);
+  logLines.set(jobId, lines);
+}
+
+function header(view: ActivityView): HTMLElement {
+  return h(
+    "div",
+    null,
+    h("h1", { class: "page-title" }, "Activity"),
+    h("div", { class: "page-subtitle" }, view.summary),
+  );
+}
+
+function elapsedLine(job: JobView): string {
+  const done = job.phases.filter((p) => p.done).length;
+  return `${done} of ${job.phases.length} phases${job.elapsed ? ` · ${job.elapsed} elapsed` : ""}`;
+}
+
+function apply(target: LiveCard, e: ProgressEvent): void {
   switch (e.kind) {
     case "log":
       if (e.message) {
@@ -79,7 +224,8 @@ function apply(
     case "progress":
       if (e.total && e.total > 0 && e.current !== undefined) {
         const pct = Math.min(100, Math.round((e.current / e.total) * 100));
-        (target.bar as HTMLElement).style.width = `${pct}%`;
+        target.bar.style.width = `${pct}%`;
+        target.bar.classList.remove("warn");
         target.note.textContent = `${pct}% · ${e.item ?? ""}`;
       } else if (e.current !== undefined) {
         target.note.textContent = `${e.current.toLocaleString()} ${e.unit ?? ""} · ${e.item ?? ""}`;
@@ -95,6 +241,17 @@ function apply(
       break;
     case "phaseStarted":
       target.note.textContent = e.label ?? e.phase ?? "";
+      // Moved here rather than waiting for the refresh: the tick is the one
+      // piece of feedback that has to feel immediate.
+      markStep(target, e.phase, "live");
+      break;
+    case "phaseCompleted":
+      markStep(target, e.phase, "done");
+      break;
+    case "phaseFailed":
+      markStep(target, e.phase, "failed");
+      target.bar.classList.add("warn");
+      if (e.message) target.note.textContent = e.message;
       break;
     case "cloneCreated":
       target.log.appendChild(h("div", { class: "cmd" }, `Ephemeral clone ${e.item} is running.`));
@@ -105,29 +262,67 @@ function apply(
   }
 }
 
-function card(
-  job: JobView,
-  live: Map<string, { log: HTMLElement; bar: HTMLElement; note: HTMLElement }>,
-  reload: () => void,
-): HTMLElement {
+function markStep(target: LiveCard, phase: string | undefined, state: "live" | "done" | "failed"): void {
+  if (!phase) return;
+  const step = target.steps.get(phase);
+  if (!step) return;
+  if (state === "live") {
+    for (const other of target.steps.values()) other.classList.remove("live");
+    step.classList.add("live");
+    setGlyph(step, "●");
+    return;
+  }
+  step.classList.remove("live");
+  if (state === "done") {
+    step.classList.add("done");
+    setGlyph(step, "✓");
+  } else {
+    step.classList.add("failed");
+    setGlyph(step, "✕");
+  }
+}
+
+function setGlyph(step: HTMLElement, glyph: string): void {
+  const mark = step.firstElementChild;
+  if (mark) mark.textContent = glyph;
+}
+
+function card(job: JobView, live: Map<string, LiveCard>, reload: () => void): HTMLElement {
   const running = job.state === "running" || job.state === "queued";
   const interrupted = job.state === "interrupted";
 
   const bar = h("div", { class: "progress-bar", style: "width:0%" });
   const note = h("div", { class: "muted small" }, job.message ?? "");
   const log = h("div", { class: "log" });
-  if (running) live.set(job.id, { log, bar, note });
+  const elapsed = h("span", { class: "muted small" }, elapsedLine(job));
 
   const pipeline = h("div", { class: "pipeline" });
+  const steps = new Map<string, HTMLElement>();
   for (const p of job.phases) {
-    pipeline.appendChild(
-      h(
-        "div",
-        { class: `pipeline-step ${p.done ? "done" : ""} ${p.live ? "live" : ""}` },
-        h("span", null, p.done ? "✓" : p.live ? "●" : "○"),
-        p.label,
-      ),
+    const step = h(
+      "div",
+      { class: `pipeline-step ${p.done ? "done" : ""} ${p.live ? "live" : ""}` },
+      h("span", null, p.done ? "✓" : p.live ? "●" : "○"),
+      p.label,
     );
+    steps.set(p.phase, step);
+    pipeline.appendChild(step);
+  }
+
+  if (running) {
+    // The tail this job has already produced survives the repaint that brought
+    // this card back, so a refresh does not look like the export going quiet.
+    for (const line of logLines.get(job.id) ?? []) {
+      log.appendChild(h("div", null, line));
+    }
+    live.set(job.id, { log, bar, note, elapsed, steps });
+    // Appending happens before the node is in the document, so the scroll has
+    // to be asked for once it is.
+    window.setTimeout(() => {
+      log.scrollTop = log.scrollHeight;
+    }, 0);
+  } else {
+    logLines.delete(job.id);
   }
 
   const actions = h("div", { class: "row" });
@@ -150,17 +345,18 @@ function card(
     // Resuming can mean two very different things — repeating an upload that
     // is already sealed, or running the whole export again — so the button
     // says which before it is pressed rather than after.
-    const note = job.resumeNote ?? "";
-    const rerunsExport = note.includes("runs it again") || note.includes("runs the export again");
+    const resumeNote = job.resumeNote ?? "";
+    const rerunsExport =
+      resumeNote.includes("runs it again") || resumeNote.includes("runs the export again");
     actions.appendChild(
       h(
         "button",
         {
           class: "primary",
-          title: note,
+          title: resumeNote,
           onClick: () => {
             if (rerunsExport) {
-              confirmResume(job, note, reload);
+              confirmResume(job, resumeNote, reload);
               return;
             }
             void doResume(job, reload);
@@ -169,8 +365,8 @@ function card(
         rerunsExport ? "Resume (re-exports)" : "Resume",
       ),
     );
-    if (note) {
-      actions.appendChild(h("span", { class: "muted note" }, note));
+    if (resumeNote) {
+      actions.appendChild(h("span", { class: "muted note" }, resumeNote));
     }
   }
   if (job.discardable) {
@@ -232,16 +428,7 @@ function card(
         job.storage ? h("span", { class: "muted small" }, `→ ${job.storage}`) : null,
         stateBadge(job.state),
       ),
-      h(
-        "div",
-        { class: "row" },
-        h(
-          "span",
-          { class: "muted small" },
-          `${job.phases.filter((p) => p.done).length} of ${job.phases.length} phases${job.elapsed ? ` · ${job.elapsed} elapsed` : ""}`,
-        ),
-        actions,
-      ),
+      h("div", { class: "row" }, elapsed, actions),
     ),
     body,
   );

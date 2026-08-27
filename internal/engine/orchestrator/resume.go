@@ -94,7 +94,7 @@ func (o *Orchestrator) runResumeUpload(ctx context.Context, st config.Storage, j
 	defer cancel()
 	defer o.track(j.ID, cancel)()
 
-	rep := obs.NewReporter(j.ID, o.currentSink())
+	rep := o.reporterFor(j)
 	started := o.opts.Now()
 	j.State = config.JobRunning
 	j.StartedAt = &started

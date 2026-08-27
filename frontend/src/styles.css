@@ -829,6 +829,13 @@ label {
   font-weight: 500;
 }
 
+/* A phase that failed is named as such rather than simply left un-ticked:
+   "did not happen" and "went wrong here" are different answers. */
+.pipeline-step.failed {
+  color: var(--danger);
+  font-weight: 500;
+}
+
 .progress {
   height: 4px;
   background: #ededed;

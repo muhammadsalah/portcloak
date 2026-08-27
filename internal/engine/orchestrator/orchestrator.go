@@ -228,3 +228,57 @@ func (o *Orchestrator) newJob(kind config.JobKind, id string) *config.Job {
 		UpdatedAt: now,
 	}
 }
+
+// reporterFor builds the progress reporter for one or more jobs.
+//
+// It exists because two things were true of every screen watching a run, and
+// both made the tool look stuck when it was not.
+//
+// The first is that phases were announced to the event stream and nowhere else.
+// A job record therefore never learned which phase it was in, so anything that
+// re-read the job list — a poll, a reopened Activity screen, a relaunch after a
+// crash — drew a pipeline with no live step in it. Every phase announcement is
+// now written onto the record and persisted as it happens, so the live stream
+// and a cold read of the same job agree.
+//
+// The second is that a batch of realms shares one probe and one clone, and
+// those phases were reported under the first realm's job id alone. The other
+// realms' cards sat blank through the slowest part of the run. Passing every
+// job in the batch here fans each event out to all of them, so a shared phase
+// is visible on every card it applies to.
+func (o *Orchestrator) reporterFor(jobs ...*config.Job) *obs.Reporter {
+	if len(jobs) == 0 {
+		return obs.NewReporter("", o.currentSink())
+	}
+	return obs.NewReporter(jobs[0].ID, obs.SinkFunc(func(e obs.Event) {
+		sink := o.currentSink()
+		for _, j := range jobs {
+			if o.recordPhase(j, e) {
+				o.saveJob(j)
+			}
+			out := e
+			out.JobID = j.ID
+			sink.Emit(out)
+		}
+	}))
+}
+
+// recordPhase mirrors a phase announcement onto the job record, reporting
+// whether anything actually changed so an unchanged record is not rewritten
+// once per streamed log line.
+func (o *Orchestrator) recordPhase(j *config.Job, e obs.Event) bool {
+	switch e.Kind {
+	case obs.EventPhaseStarted:
+		if j.Phase == string(e.Phase) {
+			return false
+		}
+		j.Phase = string(e.Phase)
+		return true
+	case obs.EventPhaseCompleted:
+		before := len(j.CompletedPhases)
+		j.CompletePhase(string(e.Phase))
+		return len(j.CompletedPhases) != before
+	default:
+		return false
+	}
+}
