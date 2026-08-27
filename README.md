@@ -43,15 +43,15 @@ Two constraints shape most of the design:
 
 | If you want | Read |
 |---|---|
-| The problem, goals and full requirement set | [`spec/01-vision-and-requirements.md`](./spec/01-vision-and-requirements.md) |
-| The module map and core interfaces | [`spec/02-architecture.md`](./spec/02-architecture.md) |
 | Exactly what a snapshot carries, secret by secret | [`spec/07-realm-carryover-manifest.md`](./spec/07-realm-carryover-manifest.md) |
-| What the tool actually does, as behaviour | [`spec/usecases/`](./spec/usecases/README.md) — 60 use cases |
-| How it gets built, tested and verified | [`spec/rollout/`](./spec/rollout/README.md) — 9 phases |
-| What it looks like | [`spec/lunacy/`](./spec/lunacy/README.md) — 20 screens |
+| How secrets are handled, and the threat model | [`spec/08-security.md`](./spec/08-security.md) |
 | Why the scope boundaries are where they are | [`spec/12-decisions.md`](./spec/12-decisions.md) |
 | The mark, and the rules around it | [`assets/logo/`](./assets/logo/README.md) |
-| How the code is laid out | [`spec/rollout/00-engineering-foundations.md`](./spec/rollout/00-engineering-foundations.md) |
+
+The design record the tool was built from — requirements, architecture, 60 use cases, the
+nine-phase rollout and its traceability matrix — is in [`spec/`](./spec/README.md). It says how
+PortCloak was constructed, not how to use it. Faults that reached working code, each with the
+test that keeps it from returning, are in [`spec/notes/`](./spec/notes/README.md).
 
 ## What it deliberately does not do
 
