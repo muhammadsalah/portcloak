@@ -1,5 +1,6 @@
 import {
   SettingsAPI,
+  type AboutView,
   type LocationView,
   type OrphanReport,
   type WorkingData,
@@ -31,10 +32,11 @@ export async function renderSettings(root: HTMLElement): Promise<void> {
   root.appendChild(spinner("Reading your settings…"));
 
   const draw = async () => {
-    const [location, orphans, working] = await Promise.all([
+    const [location, orphans, working, about] = await Promise.all([
       SettingsAPI.location(),
       SettingsAPI.orphans(),
       SettingsAPI.workingData(),
+      SettingsAPI.about(),
     ]);
     clear(root);
     root.appendChild(
@@ -58,6 +60,7 @@ export async function renderSettings(root: HTMLElement): Promise<void> {
         workingPanel(working, () => void draw()),
       ),
     );
+    root.appendChild(aboutPanel(about));
   };
   await draw();
 }
@@ -437,4 +440,64 @@ function confirmPurge(w: WorkingData, reload: () => void): void {
       reload();
     },
   });
+}
+
+/* ── Which build this is ───────────────────────────────────────────────── */
+
+/**
+ * The one screen that answers "which PortCloak wrote this bundle?".
+ *
+ * A snapshot manifest records the version that produced it, so when a restore
+ * refuses the first thing anyone needs is the identity of the binary in front
+ * of them. Copying it has its own button because the alternative is a reporter
+ * transcribing a commit hash by eye, and half of those arrive wrong.
+ */
+function aboutPanel(a: AboutView): HTMLElement {
+  const dl = h("dl", { class: "kv" });
+  const rows: [string, string, boolean][] = [
+    ["Version", a.version, false],
+    ["Commit", a.commit, true],
+    ["Built", a.date, false],
+    ["Platform", a.platform, true],
+    ["Go", a.go, true],
+    ["Log file", a.logFile, true],
+  ];
+  for (const [k, v, mono] of rows) {
+    dl.appendChild(h("dt", null, k));
+    dl.appendChild(h("dd", { class: mono ? "mono small" : "" }, v));
+  }
+
+  const copy = h(
+    "button",
+    {
+      class: "plain",
+      onClick: (e: Event) => {
+        void navigator.clipboard.writeText(a.support).then(() => {
+          const btn = e.currentTarget as HTMLButtonElement;
+          const was = btn.textContent;
+          btn.textContent = "Copied";
+          window.setTimeout(() => (btn.textContent = was), 1500);
+        });
+      },
+    },
+    "Copy build details",
+  );
+
+  return h(
+    "div",
+    { class: "card" },
+    h("div", { class: "card-head" }, h("span", { class: "card-title" }, "About PortCloak")),
+    h(
+      "div",
+      { class: "card-body" },
+      dl,
+      h(
+        "p",
+        { class: "muted small" },
+        "A commit marked dirty was built from a tree with uncommitted changes, so it is not " +
+          "exactly the commit it names.",
+      ),
+      h("div", { class: "row", style: "margin-top:12px" }, copy),
+    ),
+  );
 }

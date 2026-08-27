@@ -440,3 +440,37 @@ func pluralES(n int) string {
 	}
 	return "es"
 }
+
+// AboutView is what the About panel shows: which build this is, and where its
+// files live.
+//
+// The release gate requires version, commit and build date to be visible in the
+// app. They are here rather than in a dialog behind the menu bar because on
+// Windows and Linux PortCloak has no menu bar at all, and a support detail that
+// only exists on one platform is not a support detail.
+type AboutView struct {
+	Version  string `json:"version"`
+	Commit   string `json:"commit"`
+	Date     string `json:"date"`
+	Go       string `json:"go"`
+	Platform string `json:"platform"`
+	// Support is every field above on one line, formatted to be pasted into a
+	// bug report without the reporter having to transcribe five values.
+	Support string `json:"support"`
+	// LogFile is the file to attach to that report.
+	LogFile string `json:"logFile"`
+}
+
+// About reports the identity of the running build.
+func (s *SettingsController) About() AboutView {
+	b := s.eng.Build
+	return AboutView{
+		Version:  b.Version,
+		Commit:   b.Commit,
+		Date:     b.DisplayDate(),
+		Go:       b.Go,
+		Platform: b.Platform,
+		Support:  b.String(),
+		LogFile:  s.eng.Home().LogFile(),
+	}
+}

@@ -855,7 +855,19 @@ export interface PurgeResult extends MaybeFailed {
   note: string;
 }
 
+/** The identity of the running build, for the About panel and bug reports. */
+export interface AboutView {
+  version: string;
+  commit: string;
+  date: string;
+  go: string;
+  platform: string;
+  support: string;
+  logFile: string;
+}
+
 export const SettingsAPI = {
+  about: () => call<AboutView>("SettingsController", "About"),
   location: () => call<LocationView>("SettingsController", "Location"),
   move: (folder: string) => call<LocationView>("SettingsController", "Move", folder),
   useDefault: () => call<LocationView>("SettingsController", "UseDefault"),

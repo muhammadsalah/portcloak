@@ -33,6 +33,11 @@ import (
 // runtime present.
 type Engine struct {
 	Version string
+	// Build is the full identity of the running binary — version, commit
+	// and compile date. Version above stays a plain string because it is
+	// what goes into a snapshot manifest, and a manifest field is a
+	// format promise that must not grow a struct underneath it.
+	Build Build
 
 	Config   *config.Store
 	Jobs     *config.JobStore
@@ -93,6 +98,7 @@ func NewEngine(version string) (*Engine, error) {
 
 	eng := &Engine{
 		Version:   version,
+		Build:     NewBuild(version, "", ""),
 		home:      home,
 		Config:    store,
 		Jobs:      config.NewJobStore(home),
