@@ -1,0 +1,207 @@
+{
+  "realm": "acme",
+  "id": "acme",
+  "enabled": true,
+  "displayName": "Acme Corporation",
+  "sslRequired": "external",
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "passwordPolicy": "length(12) and hashAlgorithm(pbkdf2-sha512) and hashIterations(210000)",
+  "bruteForceProtected": true,
+  "failureFactor": 5,
+  "otpPolicyType": "totp",
+  "otpPolicyAlgorithm": "HmacSHA1",
+  "otpPolicyDigits": 6,
+  "otpPolicyPeriod": 30,
+  "webAuthnPolicyRpEntityName": "Acme",
+  "webAuthnPolicySignatureAlgorithms": ["ES256", "RS256"],
+  "internationalizationEnabled": true,
+  "supportedLocales": ["en", "de"],
+  "defaultLocale": "en",
+  "loginTheme": "acme-login",
+  "accountTheme": "keycloak.v2",
+  "emailTheme": "acme-login",
+  "adminTheme": "keycloak.v2",
+  "defaultGroups": ["/Everyone"],
+  "eventsEnabled": true,
+  "eventsListeners": ["jboss-logging", "acme-event-listener"],
+  "attributes": {
+    "frontendUrl": "https://sso.acme.example",
+    "acme.webhookSecret": "s3cr3t-webhook-value"
+  },
+  "smtpServer": {
+    "host": "smtp.acme.example",
+    "port": "587",
+    "from": "noreply@acme.example",
+    "auth": "true",
+    "user": "smtp-user",
+    "password": "smtp-password-value"
+  },
+  "components": {
+    "org.keycloak.keys.KeyProvider": [
+      {
+        "id": "k1",
+        "name": "rsa-generated",
+        "providerId": "rsa-generated",
+        "config": {
+          "priority": ["100"],
+          "active": ["true"],
+          "algorithm": ["RS256"],
+          "kid": ["abc123"],
+          "privateKey": ["MIIEowIBAAKCAQEAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"],
+          "certificate": ["MIICmzCCAYMCBg"]
+        }
+      },
+      {
+        "id": "k2",
+        "name": "rsa-enc-generated",
+        "providerId": "rsa-enc-generated",
+        "config": {
+          "priority": ["90"],
+          "active": ["true"],
+          "algorithm": ["RSA-OAEP"],
+          "keyUse": ["ENC"],
+          "privateKey": ["MIIEowIBAAKCAQEAyyyyyyyyyyyyyyyyyyyyyyyyyyyy"]
+        }
+      },
+      {
+        "id": "k3",
+        "name": "hmac-generated",
+        "providerId": "hmac-generated",
+        "config": {
+          "priority": ["100"],
+          "active": ["true"],
+          "algorithm": ["HS256"],
+          "secret": ["aGVsbG8taG1hYy1zZWNyZXQtdmFsdWU"],
+          "secretSize": ["64"]
+        }
+      },
+      {
+        "id": "k4",
+        "name": "aes-generated",
+        "providerId": "aes-generated",
+        "config": {
+          "priority": ["100"],
+          "active": ["true"],
+          "secret": ["YWVzLXNlY3JldC12YWx1ZQ"],
+          "secretSize": ["16"]
+        }
+      },
+      {
+        "id": "k5",
+        "name": "corp-keystore",
+        "providerId": "java-keystore",
+        "config": {
+          "priority": ["50"],
+          "active": ["true"],
+          "algorithm": ["RS256"],
+          "keystore": ["/opt/keycloak/conf/corp.p12"],
+          "keystorePassword": ["keystore-password-value"],
+          "keyAlias": ["corp"]
+        }
+      }
+    ],
+    "org.keycloak.storage.UserStorageProvider": [
+      {
+        "id": "ldap-corp",
+        "name": "corp",
+        "providerId": "ldap",
+        "config": {
+          "enabled": ["true"],
+          "connectionUrl": ["ldaps://ldap.acme.example:636"],
+          "usersDn": ["ou=People,dc=acme,dc=example"],
+          "bindDn": ["cn=keycloak,ou=Service,dc=acme,dc=example"],
+          "bindCredential": ["ldap-bind-password"],
+          "fullSyncPeriod": ["604800"]
+        },
+        "subComponents": {
+          "org.keycloak.storage.ldap.mappers.LDAPStorageMapper": [
+            {"id": "m1", "name": "username", "providerId": "user-attribute-ldap-mapper", "config": {}},
+            {"id": "m2", "name": "first name", "providerId": "user-attribute-ldap-mapper", "config": {}},
+            {"id": "m3", "name": "groups", "providerId": "group-ldap-mapper", "config": {}}
+          ]
+        }
+      }
+    ]
+  },
+  "clients": [
+    {
+      "id": "c1", "clientId": "app-web", "name": "Acme Web", "enabled": true,
+      "protocol": "openid-connect", "publicClient": false,
+      "secret": "app-web-real-secret",
+      "clientAuthenticatorType": "client-secret",
+      "redirectUris": ["https://app.acme.example/*"],
+      "webOrigins": ["https://app.acme.example"],
+      "protocolMappers": [{"id": "pm1", "name": "groups", "protocol": "openid-connect", "protocolMapper": "oidc-group-membership-mapper", "config": {}}],
+      "defaultClientScopes": ["profile", "email"],
+      "optionalClientScopes": ["address"]
+    },
+    {
+      "id": "c2", "clientId": "app-spa", "name": "Acme SPA", "enabled": true,
+      "protocol": "openid-connect", "publicClient": true,
+      "redirectUris": ["https://spa.acme.example/*"]
+    },
+    {
+      "id": "c3", "clientId": "legacy-portal", "name": "Legacy Portal", "enabled": true,
+      "protocol": "openid-connect", "publicClient": false,
+      "secret": "**********",
+      "clientAuthenticatorType": "client-secret"
+    },
+    {
+      "id": "c4", "clientId": "backoffice-api", "name": "Backoffice API", "enabled": true,
+      "protocol": "openid-connect", "publicClient": false, "bearerOnly": false,
+      "secret": "backoffice-real-secret",
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": true,
+      "authorizationSettings": {"resources": []}
+    }
+  ],
+  "clientScopes": [
+    {"id": "cs1", "name": "profile", "protocol": "openid-connect", "protocolMappers": [{"id": "x", "name": "full name", "config": {}}]},
+    {"id": "cs2", "name": "email", "protocol": "openid-connect", "protocolMappers": []}
+  ],
+  "roles": {
+    "realm": [
+      {"id": "r1", "name": "admin", "composite": true, "composites": {"realm": ["user"]}},
+      {"id": "r2", "name": "user", "composite": false}
+    ],
+    "client": {
+      "backoffice-api": [
+        {"id": "r3", "name": "read", "composite": false, "clientRole": true},
+        {"id": "r4", "name": "write", "composite": false, "clientRole": true}
+      ]
+    }
+  },
+  "groups": [
+    {"id": "g1", "name": "Everyone", "path": "/Everyone", "realmRoles": ["user"], "subGroups": [
+      {"id": "g2", "name": "Engineering", "path": "/Everyone/Engineering", "realmRoles": [], "clientRoles": {"backoffice-api": ["read"]}, "subGroups": []}
+    ]},
+    {"id": "g3", "name": "Contractors", "path": "/Contractors", "subGroups": []}
+  ],
+  "identityProviders": [
+    {"alias": "azure-ad", "providerId": "oidc", "enabled": true, "config": {"clientId": "azure-client", "clientSecret": "azure-secret-value", "tokenUrl": "https://login.microsoftonline.com/x/oauth2/v2.0/token"}},
+    {"alias": "google", "providerId": "google", "enabled": true, "config": {"clientId": "google-client", "clientSecret": "google-secret-value"}}
+  ],
+  "identityProviderMappers": [
+    {"name": "email", "identityProviderAlias": "azure-ad", "identityProviderMapper": "oidc-user-attribute-idp-mapper", "config": {}},
+    {"name": "groups", "identityProviderAlias": "azure-ad", "identityProviderMapper": "oidc-role-idp-mapper", "config": {}}
+  ],
+  "authenticationFlows": [
+    {"id": "f1", "alias": "browser", "topLevel": true, "builtIn": true, "authenticationExecutions": [
+      {"authenticator": "auth-cookie", "requirement": "ALTERNATIVE", "priority": 10},
+      {"authenticator": "auth-otp-form", "authenticatorConfig": "step-up-otp", "requirement": "CONDITIONAL", "priority": 20}
+    ]},
+    {"id": "f2", "alias": "direct grant", "topLevel": true, "builtIn": true, "authenticationExecutions": [
+      {"authenticator": "direct-grant-validate-username", "requirement": "REQUIRED", "priority": 10}
+    ]}
+  ],
+  "authenticatorConfig": [
+    {"id": "ac1", "alias": "step-up-otp", "config": {"otpControlAttribute": "otp", "secret": "authenticator-secret-value"}}
+  ],
+  "requiredActions": [
+    {"alias": "CONFIGURE_TOTP", "name": "Configure OTP", "providerId": "CONFIGURE_TOTP", "enabled": true, "defaultAction": false, "priority": 10}
+  ],
+  "browserFlow": "browser",
+  "directGrantFlow": "direct grant"
+}

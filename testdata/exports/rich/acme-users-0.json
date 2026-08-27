@@ -1,0 +1,21 @@
+{"realm":"acme","users":[
+ {"id":"u1","username":"j.doe","email":"jane.doe@acme.example","firstName":"Jane","lastName":"Doe","enabled":true,"emailVerified":true,
+  "credentials":[
+    {"id":"cr1","type":"password","credentialData":"{\"hashIterations\":210000,\"algorithm\":\"pbkdf2-sha512\"}","secretData":"{\"value\":\"aGFzaA==\",\"salt\":\"c2FsdA==\"}"},
+    {"id":"cr2","type":"otp","credentialData":"{\"subType\":\"totp\",\"digits\":6,\"period\":30,\"algorithm\":\"HmacSHA1\"}","secretData":"{\"value\":\"T1RQU0VDUkVU\"}"},
+    {"id":"cr3","type":"webauthn","credentialData":"{\"aaguid\":\"x\",\"credentialId\":\"y\"}","secretData":"{}"}
+  ],
+  "realmRoles":["user","admin"],"groups":["/Everyone/Engineering"],"requiredActions":[]},
+ {"id":"u2","username":"m.klein","email":"m.klein@acme.example","firstName":"Marta","lastName":"Klein","enabled":true,"emailVerified":true,
+  "federationLink":"ldap-corp",
+  "credentials":[{"id":"cr4","type":"otp","credentialData":"{\"subType\":\"totp\"}","secretData":"{}"}],
+  "realmRoles":["user"],"groups":["/Everyone"]},
+ {"id":"u3","username":"r.okafor","email":"r.okafor@acme.example","firstName":"Rita","lastName":"Okafor","enabled":false,
+  "credentials":[
+    {"id":"cr5","type":"password","credentialData":"{\"hashIterations\":210000,\"algorithm\":\"pbkdf2-sha512\"}","secretData":"{}"},
+    {"id":"cr6","type":"webauthn","credentialData":"{}","secretData":"{}"},
+    {"id":"cr7","type":"webauthn-passwordless","credentialData":"{}","secretData":"{}"},
+    {"id":"cr8","type":"recovery-authn-codes","credentialData":"{}","secretData":"{}"}
+  ],
+  "realmRoles":["user"],"groups":["/Contractors"]}
+]}

@@ -14,11 +14,12 @@ definition carries.
 
 *Source: [`12-ui-information-architecture.puml`](./diagrams/12-ui-information-architecture.puml) · [SVG](./diagrams/svg/12-ui-information-architecture.svg)*
 
-## 9.1b Configuration: Environments and Storage
+## 9.1b Configuration: Environments, Storage and Keys
 
-Two configuration screens hold everything PortCloak needs to reach the outside world. Both are
-list-and-detail: a list of defined entries on the left, a form on the right, and a **Test**
-action that reports a concrete pass/fail rather than a silent save.
+Three configuration screens hold everything PortCloak needs to reach the outside world and to
+seal what it brings back. Environments and Storage are list-and-detail: a list of defined
+entries on the left, a form on the right, and a **Test** action that reports a concrete pass/fail
+rather than a silent save. Keys is a plain list, because a key has nothing to test.
 
 ### Environments — *where Keycloak runs*
 
@@ -29,8 +30,18 @@ each asking only for what that kind actually needs:
 |------|--------|
 | **Local** | **Keycloak server folder** (install root containing `bin/kc.sh`) |
 | **SSH** | Host, port, user, auth (key/agent/password), optional jump host, **Keycloak server folder** on the remote |
-| **Docker** | Docker endpoint (socket / `DOCKER_HOST` / over-SSH), **service or container** running Keycloak |
-| **Kubernetes / OpenShift** | Kubeconfig context, **namespace**, **Deployment or StatefulSet** running Keycloak |
+| **Docker** | Docker endpoint (socket / `DOCKER_HOST` / over-SSH), **service or container** running Keycloak, optional **path to `kc.sh`** inside the container |
+| **Kubernetes / OpenShift** | Kubeconfig context and optional kubeconfig file, **namespace**, **Deployment or StatefulSet** running Keycloak, container name, optional **path to `kc.sh`** inside the pod |
+
+Every kind also takes an optional **Admin API** block — base URL, user, credential, and an
+**Accept a self-signed certificate** switch for an internal server behind a private CA
+([08 §8.4](./08-security.md)). It is shown
+in full from the start rather than revealed once a base URL is typed: this form does not redraw
+per keystroke, so a field gated on another field's value is a field that cannot be filled.
+
+The `kc.sh` path is empty for the official images, where PortCloak derives it. It exists because
+deriving is guessing, and a custom-built image makes the guess wrong in a way that only surfaces
+deep inside the export ([03 §3.6](./03-capture-targets.md)).
 
 **Test** runs the same `Probe` the capture wizard uses ([03 §3.9](./03-capture-targets.md)), so
 what you see here is exactly what a capture would find: Keycloak version, `kc.sh` location, free
@@ -51,12 +62,67 @@ A storage definition is a destination for snapshot bundles. Every kind is rooted
 One storage is marked **default** for new captures. Each also carries an **encryption required**
 switch that removes the opt-out for snapshots written there ([08 §8.2](./08-security.md)).
 
+### Keys — *what seals a snapshot and opens it again*
+
+A third configuration screen, on the same terms. A key is an age keypair or a remembered
+passphrase, generated or imported in-app; the secret half goes to the OS keychain and
+`config.yaml` carries the name, the kind, the public half where there is one, and a handle.
+
+The point of the screen is what it removes elsewhere. A capture seals to keys by name instead of
+to pasted public keys, and a restore or inspection opens a snapshot with what is stored rather
+than prompting — naming the key that worked, and keeping the key field as an override for the
+snapshot sealed with something else ([08 §8.2](./08-security.md)).
+
+Deleting a key asks for its name to be typed. Nothing PortCloak can see is using it; every
+snapshot ever sealed with it is.
+
 ### Where this is persisted
 
-Both lists live in `~/.portcloak/config.yaml` — readable, diffable, hand-editable — with every
+All three lists live in `~/.portcloak/config.yaml` — readable, diffable, hand-editable — with every
 credential held in the **OS keychain** and referenced by handle
 ([02 §2.6](./02-architecture.md)). Deleting an entry that something references is warned about,
 not silently allowed.
+
+## 9.1c Settings, and why it is not the audit log
+
+A fourth configuration screen holds what PortCloak does to *itself*: where it keeps its files,
+the ephemeral clones a crashed session left behind, and the working data sitting on this disk.
+
+These three lived beside the audit log until they were moved. The screen that resulted was a
+permanent record of what had happened with four buttons in it that make things happen, which is
+two jobs and a confusing one. **Audit is a record**: read, filtered by action and time range,
+never edited and never cleared from the app. **Settings is where things change.**
+
+### Where PortCloak keeps its files
+
+`~/.portcloak/` is the default, not a constant. The folder can be moved — onto an encrypted
+volume, off a synced home directory, onto an external disk — and the resolution order is:
+
+    PORTCLOAK_HOME  →  a folder chosen in the app  →  ~/.portcloak
+
+`PORTCLOAK_HOME` is set outside the application and wins, so the screen reports the folder as
+pinned and disables the move rather than offering something it cannot deliver. A chosen folder is
+recorded in a one-line pointer in the OS's per-application settings directory — deliberately
+*outside* the tree, because a note saying where the folder went cannot live in the folder that
+went.
+
+What moves is everything PortCloak wrote: `config.yaml`, the audit log, job checkpoints, logs,
+inspection indexes and decrypted working files. What does not move is the OS keychain and every
+snapshot in storage — moving this folder moves no backup and loses no credential, and the
+confirmation says so before the folder is picked.
+
+Two properties make it safe to offer at all:
+
+- **Nothing starts until the destination has been refused for every reason it can be.** Relative,
+  identical, inside the folder being moved, a parent of it, a file, non-empty, or with no parent
+  to be created in. A move that fails halfway leaves an operator's environments, keys and
+  checkpoints across two folders with the app bound to neither.
+- **It is refused outright while a snapshot is open or a job is in flight**, because both hold
+  paths under the old root for their whole lives. That refusal names the screen to go to.
+
+The move then takes effect *without a restart*: the config store, job store, audit log, logger
+and orchestrator are rebound behind the pointers the rest of the engine holds. A setting that
+says one thing while the running application does another is worse than not offering it.
 
 ## 9.2 Capture workflow
 
@@ -140,8 +206,14 @@ Key UI affordances:
 - **Wails v3** is the target shell.
 - **Bindings:** `CaptureController`, `RestoreController`, `SnapshotController`, `InspectController`,
   `ConfigController` expose Go methods to the frontend; nothing blocks — work runs in goroutines.
-- **Events:** progress/log/ledger updates stream via `runtime.EventsEmit`; the frontend
-  subscribes and renders live.
+- **Events:** progress/log/ledger updates stream on one event, keyed by job id; the frontend
+  subscribes once in the shell and routes.
+- **The stream and the job record are two views of one truth**, and a screen needs both. Every
+  phase announcement is written onto the job record as it happens, so a screen opened after the
+  fact — or refreshed, or reopened after a crash — shows the same pipeline the live stream did.
+  A batch of realms sharing one probe and one clone fans those events out to every job in it.
+  Activity patches what the stream can reach, re-reads the list on anything structural, polls
+  slowly while work is in flight, and repaints only when the shape changed.
 - **Cancellation:** UI cancel maps to `context.Context` cancellation down the whole stack.
 - **Cancellation** must also tear down an in-flight ephemeral clone — the cancel path runs
   `Teardown`, it does not merely abandon the job.

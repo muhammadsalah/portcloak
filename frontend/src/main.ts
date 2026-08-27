@@ -1,0 +1,265 @@
+import "./styles.css";
+
+import { ConfigAPI, JobsAPI, onProgress, type ProgressEvent } from "./api";
+import { clear, h, notice } from "./dom";
+import { icon } from "./icons";
+import { mark, onDark } from "./logo";
+import { renderLibrary } from "./views/library";
+import { renderCapture } from "./views/capture";
+import { renderRestore } from "./views/restore";
+import { renderActivity } from "./views/activity";
+import { renderEnvironments } from "./views/environments";
+import { renderStorage } from "./views/storage";
+import { renderAudit } from "./views/audit";
+import { renderSettings } from "./views/settings";
+import { renderInspector } from "./views/inspector";
+import { renderKeys } from "./views/keys";
+
+export type Route =
+  | { name: "capture" }
+  | { name: "library" }
+  | { name: "restore"; snapshotId?: string }
+  | { name: "activity" }
+  | { name: "environments"; select?: string }
+  | { name: "storage"; select?: string }
+  | { name: "browse"; storage: string }
+  | { name: "keys" }
+  | { name: "audit" }
+  | { name: "settings" }
+  | { name: "inspect"; storage: string; bundleKey: string; snapshotId: string; tab?: string };
+
+/** App-wide state the shell owns: the current route and the live counters. */
+interface Shell {
+  route: Route;
+  environments: number;
+  storages: number;
+  activeJobs: number;
+  hasSnapshots: boolean;
+}
+
+const shell: Shell = {
+  route: { name: "library" },
+  environments: 0,
+  storages: 0,
+  activeJobs: 0,
+  hasSnapshots: true,
+};
+
+/**
+ * Progress events all arrive on one stream. Views subscribe through here rather
+ * than each opening its own listener, so navigating away cannot leave one
+ * behind.
+ */
+const progressListeners = new Set<(e: ProgressEvent) => void>();
+
+export function subscribeProgress(fn: (e: ProgressEvent) => void): () => void {
+  progressListeners.add(fn);
+  return () => progressListeners.delete(fn);
+}
+
+export function navigate(route: Route): void {
+  shell.route = route;
+  render();
+}
+
+export function currentRoute(): Route {
+  return shell.route;
+}
+
+const nav: { section: string; items: { label: string; route: Route; key: string }[] }[] = [
+  {
+    section: "Workspace",
+    items: [
+      { key: "capture", label: "Capture", route: { name: "capture" } },
+      { key: "library", label: "Snapshots", route: { name: "library" } },
+      { key: "restore", label: "Restore", route: { name: "restore" } },
+      { key: "activity", label: "Activity", route: { name: "activity" } },
+    ],
+  },
+  {
+    section: "Configuration",
+    items: [
+      { key: "environments", label: "Environments", route: { name: "environments" } },
+      { key: "storage", label: "Storage", route: { name: "storage" } },
+      { key: "keys", label: "Keys", route: { name: "keys" } },
+      { key: "settings", label: "Settings", route: { name: "settings" } },
+      { key: "audit", label: "Audit log", route: { name: "audit" } },
+    ],
+  },
+];
+
+function routeKey(route: Route): string {
+  switch (route.name) {
+    case "inspect":
+    case "browse":
+      return route.name === "browse" ? "storage" : "library";
+    default:
+      return route.name;
+  }
+}
+
+function renderNav(): HTMLElement {
+  const el = h("nav", { class: "nav" });
+  const active = routeKey(shell.route);
+
+  for (const group of nav) {
+    el.appendChild(h("div", { class: "nav-section" }, group.section));
+    for (const item of group.items) {
+      // Until there is an environment and a storage, a capture cannot start.
+      // The item is dimmed rather than hidden, so the shape of the tool is
+      // visible from the first launch.
+      const blocked =
+        item.key === "capture" && (shell.environments === 0 || shell.storages === 0);
+      const restoreBlocked = item.key === "restore" && !shell.hasSnapshots;
+      const disabled = blocked || restoreBlocked;
+
+      let trailing: HTMLElement | null = null;
+      if (item.key === "activity" && shell.activeJobs > 0) {
+        trailing = h("span", { class: "nav-badge" }, String(shell.activeJobs));
+      } else if (item.key === "environments") {
+        trailing = h("span", { class: "nav-count" }, String(shell.environments));
+      } else if (item.key === "storage") {
+        trailing = h("span", { class: "nav-count" }, String(shell.storages));
+      }
+
+      el.appendChild(
+        h(
+          "div",
+          {
+            class: `nav-item ${active === item.key ? "active" : ""} ${disabled ? "disabled" : ""}`,
+            onClick: () => {
+              if (!disabled) navigate(item.route);
+            },
+          },
+          h("span", { class: "nav-label" }, icon(item.key), h("span", null, item.label)),
+          trailing,
+        ),
+      );
+    }
+  }
+  return el;
+}
+
+function render(): void {
+  const root = document.getElementById("app");
+  if (!root) return;
+  clear(root);
+
+  const content = h("main", { class: "content" });
+  root.appendChild(
+    h(
+      "div",
+      { class: "masthead" },
+      mark(30, onDark),
+      // One word, two colours: the wordmark is set live rather than shipped as
+      // a picture of text, so it stays crisp at any scale and searchable to
+      // anything reading the DOM.
+      h("div", { class: "wordmark" }, "Port", h("span", { class: "wordmark-accent" }, "Cloak")),
+    ),
+  );
+  root.appendChild(h("div", { class: "body" }, renderNav(), content));
+
+  const route = shell.route;
+  switch (route.name) {
+    case "library":
+      show(content, () => renderLibrary(content));
+      break;
+    case "capture":
+      show(content, () => renderCapture(content));
+      break;
+    case "restore":
+      show(content, () => renderRestore(content, route.snapshotId));
+      break;
+    case "activity":
+      show(content, () => renderActivity(content));
+      break;
+    case "environments":
+      show(content, () => renderEnvironments(content, route.select));
+      break;
+    case "storage":
+      show(content, () => renderStorage(content, route.select));
+      break;
+    case "browse":
+      show(content, () => renderStorage(content, route.storage, true));
+      break;
+    case "keys":
+      show(content, () => renderKeys(content));
+      break;
+    case "audit":
+      show(content, () => renderAudit(content));
+      break;
+    case "settings":
+      show(content, () => renderSettings(content));
+      break;
+    case "inspect":
+      show(content, () => renderInspector(content, route));
+      break;
+  }
+}
+
+/**
+ * Every view puts a spinner up and replaces it once the engine has answered. If
+ * it throws in between, nothing replaces the spinner and the application looks
+ * hung rather than broken — which is exactly how it looked on a first launch,
+ * when the engine still answered an unconfigured PortCloak with null lists and
+ * the first `.length` threw.
+ *
+ * That cause is fixed in the engine and tested there. This is the guarantee
+ * that the next one is visible: a view that fails says so, and offers the only
+ * useful action.
+ */
+function show(content: HTMLElement, view: () => Promise<void>): void {
+  view().catch((err: unknown) => {
+    clear(content);
+    content.appendChild(
+      notice(
+        "danger",
+        "This screen could not be drawn.",
+        err instanceof Error ? err.message : String(err),
+      ),
+    );
+    content.appendChild(
+      h("button", { onClick: () => show(content, view) }, "Try again"),
+    );
+  });
+}
+
+/** Keeps the navigation counters honest without each view having to push them. */
+async function refreshCounters(): Promise<void> {
+  try {
+    const cfg = await ConfigAPI.load();
+    shell.environments = cfg.environments.length;
+    shell.storages = cfg.storage.length;
+  } catch {
+    // A configuration that will not load is reported by the library view,
+    // which has room to say which line is wrong.
+  }
+  try {
+    const activity = await JobsAPI.list();
+    shell.activeJobs = activity.running + activity.interrupted;
+  } catch {
+    shell.activeJobs = 0;
+  }
+  const navEl = document.querySelector(".nav");
+  if (navEl) navEl.replaceWith(renderNav());
+}
+
+export function setHasSnapshots(has: boolean): void {
+  shell.hasSnapshots = has;
+}
+
+function start(): void {
+  onProgress((e) => {
+    for (const fn of progressListeners) fn(e);
+    // A job reaching a terminal state changes the Activity badge.
+    if (e.kind === "jobState") void refreshCounters();
+  });
+
+  render();
+  void refreshCounters();
+  // The counters are cheap and the alternative is a stale badge, which is
+  // worse than a small poll.
+  window.setInterval(() => void refreshCounters(), 5000);
+}
+
+start();
