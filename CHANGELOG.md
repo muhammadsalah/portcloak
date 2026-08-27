@@ -11,12 +11,153 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Tags prefixed `spec-` mark the design
 record; unprefixed `v` tags mark shipped binaries.
 
-## [Unreleased]
+## [0.0.1] — 2026-08-28
 
-The first run against real Docker, and what watching it run made obvious. The faults were found
-by driving the built application against live Keycloak containers rather than by reading the
-code, and each one is written up in [`spec/notes/`](./spec/notes/README.md) with the test that
-keeps it from returning.
+The first version where the whole loop closes: capture a realm, put it somewhere, read it back,
+and restore it. All four target kinds, all four storage backends, inspection and restore.
+
+Everything below *Added* arrived after that list was written, and everything below *Fixed* came
+out of the first run against real Docker. Those faults were found by driving the built
+application against live Keycloak containers rather than by reading the code, and each one is
+written up in [`spec/notes/`](./spec/notes/README.md) with the test that keeps it from
+returning.
+
+### Capture
+- Offline `kc.sh export` on every target, with `--users different_files` by default — which is
+  what makes a very large realm survivable for the export, for a flaky link, and for the
+  inspection index.
+- Free-port allocation on local and SSH so an export cannot collide with a Keycloak already
+  serving on 8080. The unavoidable race between releasing a port and Keycloak binding it is
+  classified retryable and redone with fresh ports.
+- Ephemeral clone execution on Docker and Kubernetes: a parked copy of the serving workload,
+  started hung, exec'd into, and destroyed. The clone lifecycle is written once and both
+  platforms plug into it, so teardown is one tested implementation rather than two — asserted
+  across five exit paths including panic.
+- Every inherited label stripped. A pod carrying `app=keycloak` is picked up by the production
+  `Service` and receives real user traffic into a container that serves nothing.
+- Several realms in one run produce several independent snapshots, sharing one clone.
+
+### Snapshots
+- Deterministic tar + zstd bundles with a per-artifact integrity tree, and both sidecars written
+  beside the bundle so the library is browsable with no key at all.
+- Opt-in age encryption, passphrase or recipients, verified decryptable at capture time — a
+  bundle nobody can open should be found now, not eighteen months later during an incident.
+- The manifest enumerates every carried category and every secret by location and kind. The
+  ledger type has no value field, which is what makes it safe to read, screenshot and export.
+- `outOfScope` stays distinct from `missing`, so a healthy snapshot never reads as broken.
+
+### Storage
+- Disk, SFTP, S3-compatible and Azure Blob behind one contract, all passing the same table.
+- Resume driven by asking the destination what it already holds — `ListParts` and
+  `GetBlockList` on S3 and Azure, the file itself on disk and SFTP — so an upload survives
+  PortCloak being restarted. A checkpoint is a hint; the destination is the authority on where
+  a transfer actually got to, and it positions the source reader to match.
+- A resumed upload commits a prefix it never sent, so the checkpoint carries the rolling SHA-256
+  state alongside the offset and the finished object is verified against the digest computed
+  before the transfer — the same check a fresh upload gets. Where no usable state survives, the
+  prefix is re-read rather than trusted.
+
+### Resilience
+- Retry, backoff with full jitter and per-endpoint circuit breaking, applied by wrapping every
+  adapter rather than by retry code at call sites. An unclassified error defaults to terminal,
+  so a new failure mode surfaces instead of silently looping.
+- An unreplayable stream is never retried — resume from the checkpoint is the mechanism there,
+  because retrying one would commit a truncated object.
+- A retry starts from the last checkpoint the failed attempt reached rather than from zero.
+  Re-sending 400 MB because an upload dropped at 390 MB is what the checkpoint exists to
+  prevent.
+
+### Inspection
+- Tiered: the library needs no key, detail needs one, and the user index is built on open and
+  destroyed on close.
+- The index schema provably cannot hold a secret, asserted against a column allowlist. Small
+  realms are indexed in memory and never touch disk.
+- Audited single-secret reveal, redacted CSV/JSON export, and verification without contacting
+  any environment.
+
+### Restore
+- Verification and decryption gate the restore before the destination is contacted at all.
+- Preconditions are informative and never block; the dry run is computed for the strategy
+  actually selected; merge says which path it needs rather than quietly becoming an overwrite.
+- Nothing claims a rollback. Keycloak's import is not transactional, so a failure records what
+  may already have reached the destination.
+- Validation checks the signing key by KID rather than by count — the right number of keys with
+  the wrong ids still means every existing token stops verifying.
+
+### Testing
+- One contract table per seam, run against every implementation: `BlobStore` across disk, SFTP,
+  S3 and Azure, and `Executor` across local, SSH, Docker and Kubernetes. A divergence is a bug
+  in the newest adapter rather than a reason to fork the table.
+- Offset resume is its own table, so disk and SFTP prove the same guarantees rather than one
+  being tested and the other assumed.
+- Integration tests sit behind `-tags=integration` against real MinIO, Azurite, sshd and Docker.
+  A missing container reads as "not run", never as a silent pass, and CI fails if any ephemeral
+  clone outlives the run.
+- Every use case and requirement in the rollout matrix names the test that would fail if it
+  stopped being met, and CI checks those names still resolve.
+
+### Application
+- Wails v3 desktop shell with the eight screens from the design file. No sign-in, because there
+  is no account: configuration is plain YAML in `~/.portcloak/` and every credential lives in
+  the OS keychain, referenced by handle.
+- Redacting `slog` handler from the first commit, with its own CI stage so a failure there is
+  unmissable.
+
+### Licence
+- **Apache License 2.0.** `LICENSE` is the Apache Software Foundation's text byte-identical to
+  the canonical copy, placeholder appendix and all, so it can be diffed against the published one
+  and shown to be unaltered; the attribution is in `NOTICE`, which is where section 4 puts it.
+  Both ship inside every artifact `build/package.sh` produces — a `.app`, a `.zip` and a tarball
+  handed to someone are each a redistribution — and the terms are reachable from the About panel,
+  for the people who never see the repository.
+- Every file that can carry a comment names its terms: `SPDX-License-Identifier: Apache-2.0`. A
+  page lifted out of here says what it is without the reader having to find the root.
+
+### Added
+- The frontend is React with a styled-components design system. It replaced thirty lines of
+  `h()` standing in for a framework, which the machine did not mind and a person reading
+  `views/inspector.ts` did: one screen was one function that cleared a container and rebuilt it.
+  The screens are the same screens — every validation rule and every gate moved across unchanged.
+- **Keys** — a screen, a `keys:` section in `config.yaml`, and a place for the material to live.
+  Generate or import an age keypair, or remember a passphrase by name; the secret half goes to
+  this machine's keychain and the file carries only the name, the kind, the public half and a
+  handle. Captures seal to a key by name instead of to a pasted public key. Deleting one asks for
+  its name to be typed, because a key is in use by every snapshot ever sealed with it — in
+  backends PortCloak may not even be configured for.
+- **Restore and Inspect open a snapshot with a stored key without asking.** The attempts happen
+  while reading the envelope, which is the cheapest proof a key works: nothing first, then
+  whatever was typed, then each stored key — identities before passphrases, because an identity
+  attempt is free and scrypt deliberately is not. Whichever key worked is named on the screen and
+  in the audit log; the key field remains as an override.
+- **`kcPath` on Docker and Kubernetes environments** — where `kc.sh` actually lives inside the
+  container. PortCloak derived it from `KEYCLOAK_HOME` and otherwise assumed the official images'
+  path, which a custom build makes wrong; the failure landed deep inside the export.
+- Key lifecycle in the audit log: created, imported, revealed, deleted.
+- [`spec/notes/`](./spec/notes/README.md) — the gotchas that reached working code, each with its
+  symptom, its cause, the rule, and the guard test that fails if it comes back.
+- Real `kc.sh export --help-all` output from four Keycloak versions in `testdata/kc-help`, which
+  is what the option-support tests run against.
+- Empty states on Environments and Storage, saying what the thing is and where the file lives.
+- **Settings** — a screen for the things PortCloak does to itself. Where it keeps its files, the
+  orphaned-clone sweep and the local working-data purge moved here off the audit screen, which
+  had become a record of what happened with four buttons in it that make things happen. Audit is
+  a record again, full width, with a time range beside the action filter.
+- **The folder PortCloak keeps its files in can be moved.** `config.yaml`, the audit log, job
+  checkpoints, logs and working files go with it; this machine's keychain and every stored
+  snapshot do not. The move is refused before a byte shifts if a snapshot is open or a job is in
+  flight, and the running application follows the folder rather than asking to be restarted.
+  Resolution order is `PORTCLOAK_HOME` → the chosen folder → `~/.portcloak`, and the note
+  recording the choice lives in the OS's per-application settings folder, because a note saying
+  where the folder went cannot live in the folder that went.
+- Icons in the navigation rail, one per screen, drawn on the thing the screen acts on — a tray
+  with an arrow into it for Capture, the same tray with the arrow coming out for Restore.
+- **A logo** — [`assets/logo/`](./assets/logo/README.md). A padlock whose shackle is a restore
+  arc: sealed, and put back. Extracted verbatim from the design source in `spec/design/`, with
+  the five variants the sheet calls for and the rules around them. It is the masthead, the first
+  run's empty state and the favicon. Its two colours are brand tokens rather than interface ones,
+  because the interface stays on the Keycloak admin console palette it was built to sit beside —
+  the mark is the one place the teal appears.
+- `homeMoved` in the audit log. Every entry above it was written somewhere else.
 
 ### Fixed
 - **An empty configuration never got past its loading spinner.** Nil slices reached the frontend
@@ -138,134 +279,11 @@ keeps it from returning.
   rule is now what it should always have been — a field belongs in readiness only if `Validate`
   lets it be empty *and* the adapter has no default for it, which is true of an SSH key and an S3
   access key and of nothing on those two kinds.
-
-### Added
-- **Keys** — a screen, a `keys:` section in `config.yaml`, and a place for the material to live.
-  Generate or import an age keypair, or remember a passphrase by name; the secret half goes to
-  this machine's keychain and the file carries only the name, the kind, the public half and a
-  handle. Captures seal to a key by name instead of to a pasted public key. Deleting one asks for
-  its name to be typed, because a key is in use by every snapshot ever sealed with it — in
-  backends PortCloak may not even be configured for.
-- **Restore and Inspect open a snapshot with a stored key without asking.** The attempts happen
-  while reading the envelope, which is the cheapest proof a key works: nothing first, then
-  whatever was typed, then each stored key — identities before passphrases, because an identity
-  attempt is free and scrypt deliberately is not. Whichever key worked is named on the screen and
-  in the audit log; the key field remains as an override.
-- **`kcPath` on Docker and Kubernetes environments** — where `kc.sh` actually lives inside the
-  container. PortCloak derived it from `KEYCLOAK_HOME` and otherwise assumed the official images'
-  path, which a custom build makes wrong; the failure landed deep inside the export.
-- Key lifecycle in the audit log: created, imported, revealed, deleted.
-- [`spec/notes/`](./spec/notes/README.md) — the gotchas that reached working code, each with its
-  symptom, its cause, the rule, and the guard test that fails if it comes back.
-- Real `kc.sh export --help-all` output from four Keycloak versions in `testdata/kc-help`, which
-  is what the option-support tests run against.
-- Empty states on Environments and Storage, saying what the thing is and where the file lives.
-- **Settings** — a screen for the things PortCloak does to itself. Where it keeps its files, the
-  orphaned-clone sweep and the local working-data purge moved here off the audit screen, which
-  had become a record of what happened with four buttons in it that make things happen. Audit is
-  a record again, full width, with a time range beside the action filter.
-- **The folder PortCloak keeps its files in can be moved.** `config.yaml`, the audit log, job
-  checkpoints, logs and working files go with it; this machine's keychain and every stored
-  snapshot do not. The move is refused before a byte shifts if a snapshot is open or a job is in
-  flight, and the running application follows the folder rather than asking to be restarted.
-  Resolution order is `PORTCLOAK_HOME` → the chosen folder → `~/.portcloak`, and the note
-  recording the choice lives in the OS's per-application settings folder, because a note saying
-  where the folder went cannot live in the folder that went.
-- Icons in the navigation rail, one per screen, drawn on the thing the screen acts on — a tray
-  with an arrow into it for Capture, the same tray with the arrow coming out for Restore.
-- **A logo** — [`assets/logo/`](./assets/logo/README.md). A padlock whose shackle is a restore
-  arc: sealed, and put back. Extracted verbatim from the design source in `spec/design/`, with
-  the five variants the sheet calls for and the rules around them. It is the masthead, the first
-  run's empty state and the favicon. Its two colours are brand tokens rather than interface ones,
-  because the interface stays on the Keycloak admin console palette it was built to sit beside —
-  the mark is the one place the teal appears.
-- `homeMoved` in the audit log. Every entry above it was written somewhere else.
-
-## [0.0.1] — 2026-08-27
-
-The first version where the whole loop closes: capture a realm, put it somewhere, read it back,
-and restore it. All four target kinds, all four storage backends, inspection and restore.
-
-### Capture
-- Offline `kc.sh export` on every target, with `--users different_files` by default — which is
-  what makes a very large realm survivable for the export, for a flaky link, and for the
-  inspection index.
-- Free-port allocation on local and SSH so an export cannot collide with a Keycloak already
-  serving on 8080. The unavoidable race between releasing a port and Keycloak binding it is
-  classified retryable and redone with fresh ports.
-- Ephemeral clone execution on Docker and Kubernetes: a parked copy of the serving workload,
-  started hung, exec'd into, and destroyed. The clone lifecycle is written once and both
-  platforms plug into it, so teardown is one tested implementation rather than two — asserted
-  across five exit paths including panic.
-- Every inherited label stripped. A pod carrying `app=keycloak` is picked up by the production
-  `Service` and receives real user traffic into a container that serves nothing.
-- Several realms in one run produce several independent snapshots, sharing one clone.
-
-### Snapshots
-- Deterministic tar + zstd bundles with a per-artifact integrity tree, and both sidecars written
-  beside the bundle so the library is browsable with no key at all.
-- Opt-in age encryption, passphrase or recipients, verified decryptable at capture time — a
-  bundle nobody can open should be found now, not eighteen months later during an incident.
-- The manifest enumerates every carried category and every secret by location and kind. The
-  ledger type has no value field, which is what makes it safe to read, screenshot and export.
-- `outOfScope` stays distinct from `missing`, so a healthy snapshot never reads as broken.
-
-### Storage
-- Disk, SFTP, S3-compatible and Azure Blob behind one contract, all passing the same table.
-- Resume driven by asking the destination what it already holds — `ListParts` and
-  `GetBlockList` on S3 and Azure, the file itself on disk and SFTP — so an upload survives
-  PortCloak being restarted. A checkpoint is a hint; the destination is the authority on where
-  a transfer actually got to, and it positions the source reader to match.
-- A resumed upload commits a prefix it never sent, so the checkpoint carries the rolling SHA-256
-  state alongside the offset and the finished object is verified against the digest computed
-  before the transfer — the same check a fresh upload gets. Where no usable state survives, the
-  prefix is re-read rather than trusted.
-
-### Resilience
-- Retry, backoff with full jitter and per-endpoint circuit breaking, applied by wrapping every
-  adapter rather than by retry code at call sites. An unclassified error defaults to terminal,
-  so a new failure mode surfaces instead of silently looping.
-- An unreplayable stream is never retried — resume from the checkpoint is the mechanism there,
-  because retrying one would commit a truncated object.
-- A retry starts from the last checkpoint the failed attempt reached rather than from zero.
-  Re-sending 400 MB because an upload dropped at 390 MB is what the checkpoint exists to
-  prevent.
-
-### Inspection
-- Tiered: the library needs no key, detail needs one, and the user index is built on open and
-  destroyed on close.
-- The index schema provably cannot hold a secret, asserted against a column allowlist. Small
-  realms are indexed in memory and never touch disk.
-- Audited single-secret reveal, redacted CSV/JSON export, and verification without contacting
-  any environment.
-
-### Restore
-- Verification and decryption gate the restore before the destination is contacted at all.
-- Preconditions are informative and never block; the dry run is computed for the strategy
-  actually selected; merge says which path it needs rather than quietly becoming an overwrite.
-- Nothing claims a rollback. Keycloak's import is not transactional, so a failure records what
-  may already have reached the destination.
-- Validation checks the signing key by KID rather than by count — the right number of keys with
-  the wrong ids still means every existing token stops verifying.
-
-### Testing
-- One contract table per seam, run against every implementation: `BlobStore` across disk, SFTP,
-  S3 and Azure, and `Executor` across local, SSH, Docker and Kubernetes. A divergence is a bug
-  in the newest adapter rather than a reason to fork the table.
-- Offset resume is its own table, so disk and SFTP prove the same guarantees rather than one
-  being tested and the other assumed.
-- Integration tests sit behind `-tags=integration` against real MinIO, Azurite, sshd and Docker.
-  A missing container reads as "not run", never as a silent pass, and CI fails if any ephemeral
-  clone outlives the run.
-- Every use case and requirement in the rollout matrix names the test that would fail if it
-  stopped being met, and CI checks those names still resolve.
-
-### Application
-- Wails v3 desktop shell with the eight screens from the design file. No sign-in, because there
-  is no account: configuration is plain YAML in `~/.portcloak/` and every credential lives in
-  the OS keychain, referenced by handle.
-- Redacting `slog` handler from the first commit, with its own CI stage so a failure there is
-  unmissable.
+- **Applying a restore opened a dialog announcing that the restore had started.** It then
+  navigated to Activity, where the progress is the announcement, so the dialog put a dismissal
+  between the operator and the thing they had asked to watch. It is gone.
+- **The inspector's key prompt had a "Back to snapshots" button that went nowhere.** Declining
+  dismissed the modal and left the screen on its spinner. It goes back.
 
 ## [spec-0.0.1] — 2026-08-27
 

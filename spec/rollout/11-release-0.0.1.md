@@ -69,7 +69,7 @@ All eight phases complete, plus the cross-cutting checks below. Nothing here is 
 - [ ] `README.md` at the repository root: what it is, what it does not do, how to install.
 - [x] The spec matches the shipped behaviour — any drift resolved in favour of correcting whichever
       is wrong, not by quietly leaving both.
-- [ ] `CHANGELOG.md` opened at 0.0.1.
+- [x] `CHANGELOG.md` opened at 0.0.1.
 - [ ] A one-page "first migration" walkthrough.
 
 ---
