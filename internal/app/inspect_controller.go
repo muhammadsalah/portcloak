@@ -100,6 +100,13 @@ func (i *InspectController) Open(req OpenRequest) (res Overview) {
 		return Overview{Failure: Fail(err)}
 	}
 
+	// A key that has just opened a real bundle has proven itself, so it is not
+	// asked for again in this session — least of all by the restore wizard two
+	// clicks later. It is kept in memory only; quitting forgets it.
+	if session.UnlockedWith == "" {
+		i.eng.rememberKey(req.Passphrase, req.Identities)
+	}
+
 	i.eng.putSession(session)
 	return i.overview(session)
 }

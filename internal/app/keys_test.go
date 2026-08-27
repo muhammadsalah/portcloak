@@ -203,3 +203,79 @@ func TestKeys_RevealIsAudited(t *testing.T) {
 		t.Error("revealing a key wrote no audit entry")
 	}
 }
+
+// Unlocking a snapshot in the library and then being asked for the same key
+// again by the restore wizard two clicks later is the version of this prompt
+// that is hardest to defend: PortCloak had the key, used it, watched it work,
+// and threw it away.
+func TestKeys_AKeyThatOpenedASnapshotIsNotAskedForAgain(t *testing.T) {
+	eng := keyEngine(t)
+	keys := NewKeysController(eng)
+
+	if a := keys.Availability(); a.Candidates != 0 {
+		t.Fatalf("a fresh engine already has %d candidates", a.Candidates)
+	}
+
+	// What the inspector does after an open that the operator's own key served.
+	eng.rememberKey("correct horse battery staple", nil)
+
+	got := keys.Availability()
+	if got.Candidates != 1 || got.FromSession != 1 {
+		t.Fatalf("the key that just worked was not kept: %+v", got)
+	}
+	if !strings.Contains(got.Note, "session") {
+		t.Errorf("the note does not say where the key came from: %q", got.Note)
+	}
+
+	// It is what an open would try, under a name that says what it is rather
+	// than pretending somebody named it.
+	candidates := eng.keyCandidates()
+	if len(candidates) != 1 || candidates[0].Passphrase != "correct horse battery staple" {
+		t.Fatalf("the remembered key is not offered to an open: %+v", candidates)
+	}
+	if candidates[0].Name != sessionKeyName {
+		t.Errorf("name = %q", candidates[0].Name)
+	}
+
+	// The same key twice is one key.
+	eng.rememberKey("correct horse battery staple", nil)
+	if n := len(eng.keyCandidates()); n != 1 {
+		t.Errorf("the same key was remembered %d times", n)
+	}
+
+	// Stored keys and session keys are counted apart, because only one of them
+	// survives quitting.
+	if f := keys.SavePassphrase("nightly", "another one", ""); f != nil {
+		t.Fatal(f.Message)
+	}
+	both := keys.Availability()
+	if both.Candidates != 2 || both.FromSession != 1 {
+		t.Errorf("stored and session keys are not distinguished: %+v", both)
+	}
+
+	// And forgetting drops only the session half.
+	if n := keys.ForgetSessionKeys(); n != 1 {
+		t.Errorf("forgot %d keys, want 1", n)
+	}
+	after := keys.Availability()
+	if after.Candidates != 1 || after.FromSession != 0 {
+		t.Errorf("forgetting the session keys took a stored one with it: %+v", after)
+	}
+}
+
+// A key PortCloak found for itself is not re-remembered as one the operator
+// typed — the session list is for material that would otherwise be lost.
+func TestKeys_AStoredKeyIsNotRecordedAsASessionKey(t *testing.T) {
+	eng := keyEngine(t)
+	keys := NewKeysController(eng)
+
+	if f := keys.SavePassphrase("nightly", "correct horse battery staple", ""); f != nil {
+		t.Fatal(f.Message)
+	}
+	// Nothing was supplied, so nothing is remembered.
+	eng.rememberKey("", nil)
+
+	if got := keys.Availability(); got.FromSession != 0 {
+		t.Errorf("FromSession = %d after an open that needed no key", got.FromSession)
+	}
+}

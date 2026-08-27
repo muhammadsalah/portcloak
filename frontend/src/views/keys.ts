@@ -1,4 +1,4 @@
-import { KeysAPI, type KeysView, type StoredKey } from "../api";
+import { KeysAPI, type KeyAvailability, type KeysView, type StoredKey } from "../api";
 import {
   badge,
   clear,
@@ -34,20 +34,24 @@ export async function renderKeys(root: HTMLElement): Promise<void> {
 
   const draw = async (): Promise<void> => {
     let view: KeysView;
+    let availability: KeyAvailability | null;
     try {
-      view = await KeysAPI.list();
+      [view, availability] = await Promise.all([
+        KeysAPI.list(),
+        KeysAPI.availability().catch(() => null),
+      ]);
     } catch (err) {
       clear(root);
       root.appendChild(notice("danger", "The keys could not be read.", String(err)));
       return;
     }
     clear(root);
-    root.appendChild(page(view, () => void draw()));
+    root.appendChild(page(view, availability, () => void draw()));
   };
   await draw();
 }
 
-function page(view: KeysView, reload: () => void): HTMLElement {
+function page(view: KeysView, availability: KeyAvailability | null, reload: () => void): HTMLElement {
   const head = h(
     "div",
     { class: "page-head" },
@@ -70,6 +74,10 @@ function page(view: KeysView, reload: () => void): HTMLElement {
     container.appendChild(notice("danger", "Not read", view.failure.message));
   }
 
+  if (availability && availability.fromSession > 0) {
+    container.appendChild(sessionKeysCard(availability, reload));
+  }
+
   if (view.keys.length === 0) {
     container.appendChild(emptyState(reload));
     return container;
@@ -87,6 +95,46 @@ function page(view: KeysView, reload: () => void): HTMLElement {
     ),
   );
   return container;
+}
+
+/**
+ * Keys typed on a screen during this run.
+ *
+ * They are held in memory so that unlocking a snapshot in the library and then
+ * restoring it does not ask for the same key twice. They are not stored, and
+ * saying so here is the point of the card: quitting forgets them, and the way
+ * to keep one is to create it above.
+ */
+function sessionKeysCard(availability: KeyAvailability, reload: () => void): HTMLElement {
+  return h(
+    "div",
+    { class: "card" },
+    h(
+      "div",
+      { class: "card-head" },
+      h(
+        "div",
+        { class: "row" },
+        h("span", { class: "card-title" }, "Used in this session"),
+        badge(String(availability.fromSession), "info"),
+      ),
+      h(
+        "button",
+        {
+          onClick: async () => {
+            await KeysAPI.forgetSessionKeys();
+            reload();
+          },
+        },
+        "Forget them",
+      ),
+    ),
+    h(
+      "div",
+      { class: "card-body muted small" },
+      `${availability.fromSession} key(s) you entered while opening or restoring a snapshot are held in memory for the rest of this run, so you are not asked for them again. They are not stored anywhere: quitting PortCloak forgets them.`,
+    ),
+  );
 }
 
 function emptyState(reload: () => void): HTMLElement {

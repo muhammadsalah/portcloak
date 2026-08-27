@@ -40,6 +40,8 @@ interface State {
    * override.
    */
   storedKeys: number;
+  /** What the engine says it has to try, in the operator's words. */
+  keyNote: string;
   /** The stored key that actually opened this snapshot, once one has. */
   unlockedWith: string;
   opened: boolean;
@@ -62,7 +64,7 @@ export async function renderRestore(root: HTMLElement, snapshotId?: string): Pro
     RestoreAPI.destinations(),
     RestoreAPI.strategies(),
     RestoreAPI.outOfScopeNote(),
-    KeysAPI.list().catch(() => null),
+    KeysAPI.availability().catch(() => null),
   ]);
 
   const state: State = {
@@ -71,7 +73,8 @@ export async function renderRestore(root: HTMLElement, snapshotId?: string): Pro
     destinations,
     strategies,
     key: noKey(),
-    storedKeys: keys?.unlockable ?? 0,
+    storedKeys: keys?.candidates ?? 0,
+    keyNote: keys?.note ?? "",
     unlockedWith: "",
     opened: false,
     environment: destinations[0]?.name ?? "",
@@ -428,8 +431,8 @@ function keyStep(state: State, draw: () => void): HTMLElement {
         )
       : notice(
           "info",
-          `PortCloak will try the ${state.storedKeys} key(s) stored on this machine`,
-          "No key is needed here if one of them opens this snapshot. Whichever one does is named before anything is written to a destination.",
+          "No key is needed here if one PortCloak already holds opens this snapshot",
+          `${state.keyNote} Whichever one does is named before anything is written to a destination.`,
         ),
     h(
       "a",

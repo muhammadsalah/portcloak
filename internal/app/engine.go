@@ -52,6 +52,9 @@ type Engine struct {
 	mu       sync.RWMutex
 	sink     obs.Sink
 	sessions map[string]*inspect.Session
+	// unlocked holds the keys that have opened a snapshot during this run of
+	// the application, in memory and nowhere else. See rememberKey.
+	unlocked []inspect.KeyCandidate
 	breakers *resil.Registry
 }
 

@@ -886,8 +886,16 @@ export interface KeyRecipient {
   openable: boolean;
 }
 
+export interface KeyAvailability {
+  candidates: number;
+  fromSession: number;
+  note: string;
+}
+
 export const KeysAPI = {
   list: () => call<KeysView>("KeysController", "List"),
+  availability: () => call<KeyAvailability>("KeysController", "Availability"),
+  forgetSessionKeys: () => call<number>("KeysController", "ForgetSessionKeys"),
   recipients: () => call<KeyRecipient[]>("KeysController", "Recipients"),
   generate: (name: string, note: string) =>
     call<GeneratedKey>("KeysController", "Generate", name, note),

@@ -319,7 +319,9 @@ func (k *KeysController) Recipients() (res []Recipient) {
 	return out
 }
 
-// keyCandidates resolves every stored key into material an open can try.
+// keyCandidates is everything an open may try without being asked: the keys
+// stored in this machine's keychain, and the keys that have already opened a
+// snapshot during this run of the application.
 //
 // A key PortCloak generated, stored and can read is a key the operator has
 // already decided to trust it with. Asking for it again at every restore is a
@@ -341,6 +343,100 @@ func (e *Engine) keyCandidates() []inspect.KeyCandidate {
 		case config.KeyPassphrase:
 			out = append(out, inspect.KeyCandidate{Name: key.Name, Passphrase: secret})
 		}
+	}
+	return append(out, e.sessionKeys()...)
+}
+
+// sessionKeyName is what a key typed on a screen is called afterwards. It is
+// deliberately a description rather than a name: nobody named this key, and
+// claiming otherwise on the restore screen would be worse than saying plainly
+// where it came from.
+const sessionKeyName = "the key you entered earlier in this session"
+
+// sessionKeys returns the keys that have opened a snapshot during this run.
+func (e *Engine) sessionKeys() []inspect.KeyCandidate {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	out := make([]inspect.KeyCandidate, len(e.unlocked))
+	copy(out, e.unlocked)
+	return out
+}
+
+// rememberKey keeps a key that has just proven itself against a real bundle.
+//
+// Unlocking a snapshot in the library and then being asked for the same key
+// again by the restore wizard two clicks later is the version of this prompt
+// that is hardest to defend: PortCloak had the key, used it, watched it work,
+// and threw it away. It keeps it now — in memory, for the life of the process,
+// written nowhere. Quitting forgets it, which is the difference between this
+// and a stored key, and is why the Keys screen still exists.
+//
+// It is not scoped to the snapshot it opened. A passphrase that opened last
+// night's capture of one realm is overwhelmingly likely to open last night's
+// capture of the next, and the material is already in this process either way.
+func (e *Engine) rememberKey(passphrase string, identities []string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	add := func(c inspect.KeyCandidate) {
+		for _, existing := range e.unlocked {
+			if existing.Passphrase == c.Passphrase && existing.Identity == c.Identity {
+				return
+			}
+		}
+		e.unlocked = append(e.unlocked, c)
+	}
+	if passphrase != "" {
+		add(inspect.KeyCandidate{Name: sessionKeyName, Passphrase: passphrase})
+	}
+	for _, id := range identities {
+		if strings.TrimSpace(id) != "" {
+			add(inspect.KeyCandidate{Name: sessionKeyName, Identity: strings.TrimSpace(id)})
+		}
+	}
+}
+
+// ForgetSessionKeys drops the keys typed during this run, without touching
+// anything stored. It is what "lock this again" means.
+func (k *KeysController) ForgetSessionKeys() int {
+	k.eng.mu.Lock()
+	defer k.eng.mu.Unlock()
+	n := len(k.eng.unlocked)
+	k.eng.unlocked = nil
+	return n
+}
+
+// Availability says whether a snapshot can be opened without asking for
+// anything, and on the strength of what.
+//
+// The restore wizard gates its Next button on this. It cannot derive the answer
+// itself: which keys exist is the engine's business, and whether one of them
+// fits is not knowable until a bundle is actually read.
+type Availability struct {
+	// Candidates is how many keys would be tried.
+	Candidates int `json:"candidates"`
+	// FromSession is how many of those were typed during this run rather than
+	// stored, which is worth distinguishing because quitting forgets them.
+	FromSession int    `json:"fromSession"`
+	Note        string `json:"note"`
+}
+
+// Availability reports what an open would have to work with.
+func (k *KeysController) Availability() Availability {
+	session := len(k.eng.sessionKeys())
+	total := len(k.eng.keyCandidates())
+
+	out := Availability{Candidates: total, FromSession: session}
+	switch {
+	case total == 0:
+		out.Note = "There are no keys on this machine, so an encrypted snapshot needs the key it was sealed with."
+	case session == total:
+		out.Note = fmt.Sprintf("PortCloak will try the %d key(s) you have already used in this session. Quitting forgets them — save one under Keys to keep it.", session)
+	case session == 0:
+		out.Note = fmt.Sprintf("PortCloak will try the %d key(s) stored on this machine.", total)
+	default:
+		out.Note = fmt.Sprintf("PortCloak will try %d key(s): %d stored on this machine and %d you have already used in this session.",
+			total, total-session, session)
 	}
 	return out
 }

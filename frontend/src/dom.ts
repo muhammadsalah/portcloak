@@ -200,6 +200,15 @@ export interface ModalOptions {
   confirmTone?: "primary" | "danger-solid";
   cancelLabel?: string;
   onConfirm?: () => void | Promise<void>;
+  /**
+   * Runs when the modal is dismissed without confirming — the cancel button,
+   * the backdrop, or being replaced by another modal.
+   *
+   * A confirmation that asks "are you sure you want to turn this off" needs
+   * this: declining leaves the setting mid-way otherwise, off in the state but
+   * unconfirmed, which is neither of the two answers the question offered.
+   */
+  onCancel?: () => void;
   confirmDisabled?: boolean;
 }
 
@@ -208,6 +217,19 @@ let openModal: HTMLElement | null = null;
 export function modal(opts: ModalOptions): void {
   closeModal();
 
+  // Dismissal is per-element rather than "whatever is open now", because
+  // confirming is allowed to open the next modal — showing a key that was just
+  // generated, reporting a failure — and a global close would take that one
+  // down again the moment it appeared.
+  let cancelled = opts.onCancel;
+  const dismiss = (): void => {
+    const run = cancelled;
+    cancelled = undefined;
+    backdrop.remove();
+    if (openModal === backdrop) openModal = null;
+    run?.();
+  };
+
   const confirm = opts.onConfirm
     ? h(
         "button",
@@ -215,8 +237,10 @@ export function modal(opts: ModalOptions): void {
           class: opts.confirmTone ?? "primary",
           disabled: opts.confirmDisabled,
           onClick: async () => {
+            // Confirming is not dismissing, whatever the handler goes on to do.
+            cancelled = undefined;
             await opts.onConfirm?.();
-            closeModal();
+            dismiss();
           },
         },
         opts.confirmLabel ?? "Confirm",
@@ -228,7 +252,7 @@ export function modal(opts: ModalOptions): void {
     {
       class: "modal-backdrop",
       onClick: (e: MouseEvent) => {
-        if (e.target === backdrop) closeModal();
+        if (e.target === backdrop) dismiss();
       },
     },
     h(
@@ -239,20 +263,23 @@ export function modal(opts: ModalOptions): void {
       h(
         "div",
         { class: "modal-foot" },
-        h("button", { class: "plain", onClick: closeModal }, opts.cancelLabel ?? "Cancel"),
+        h("button", { class: "plain", onClick: () => dismiss() }, opts.cancelLabel ?? "Cancel"),
         confirm,
       ),
     ),
   );
   document.body.appendChild(backdrop);
   openModal = backdrop;
+  modalDismiss = dismiss;
 }
 
+/** Dismisses whatever modal is currently open, running its cancel handler. */
+let modalDismiss: (() => void) | null = null;
+
 export function closeModal(): void {
-  if (openModal) {
-    openModal.remove();
-    openModal = null;
-  }
+  const dismiss = modalDismiss;
+  modalDismiss = null;
+  dismiss?.();
 }
 
 /** Sets a modal's confirm button state after the body has changed. */

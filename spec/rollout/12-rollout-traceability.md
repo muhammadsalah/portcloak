@@ -63,7 +63,7 @@ backend itself (SFTP in P3, S3 and Azure in P5).*
 | UC-C7 | Isolate the export with free ports | P2 | `TestAllocate_ReturnsThreeDistinctFreePorts`; `TestCapture_UsesOfflineExportWithTheOptionsKcAccepts`; `TestAllocate_DoesNotLeakFileDescriptors` |
 | UC-C8 | Verify exported secrets are unmasked | P8 | `TestSecretVerification_DetectsMask`; `TestSecretVerification_MaskedKeyMaterialIsFlagged`; `TestSecretVerification_AdminAPIMaskingIsNotAFinding` |
 | UC-C9 | Detect external dependencies | P8 | `TestDependencyScan_FindsWhatTheRealmActuallyReferences`; `TestDependencyScan_NoFalsePositives` |
-| UC-C10 | Encrypt a snapshot (opt-in) | P5 | `TestCrypto_RoundTrip_Recipients`; `TestCapture_EncryptionRequiredStorageRejectsPlaintext`; `TestKeys_GeneratedKeyIsStoredAndUsable`; `TestKeys_ImportDerivesThePublicHalf` |
+| UC-C10 | Encrypt a snapshot (opt-in) | P5 | `TestCrypto_RoundTrip_Recipients`; `TestCapture_EncryptionRequiredStorageRejectsPlaintext`; `TestKeys_GeneratedKeyIsStoredAndUsable`; `TestKeys_ImportDerivesThePublicHalf`; `TestCaptureWizard_DecliningToDeclineTurnsEncryptionBackOn` |
 | UC-C11 | Destroy the ephemeral clone | P3 | `TestCapture_CloneIsDestroyedBeforePackaging`; `TestTeardown_AllExitPaths`; `TestCapture_FailedTeardownIsRaisedNotSwallowed` |
 | UC-C12 | Reap orphaned clones | P3 | `TestOrphans_AreListedOldestFirstAndRemovedOnRequest` |
 
@@ -72,7 +72,7 @@ backend itself (SFTP in P3, S3 and Azure in P5).*
 | UC | Title | Phase | Evidence |
 |----|-------|:-----:|----------|
 | UC-I1 | Browse the snapshot library | P6 | `TestLibrary_AllBackendsNoKey`; `TestLibrary_UnencryptedBundleIsLabelled` |
-| UC-I2 | Open a snapshot and view its details | P6 | `TestOpen_Tier1_ReadsFullDetail`; `TestOpen_EncryptedRoundTripAndWrongKey`; `TestOpen_UsesAStoredIdentityWithoutBeingAsked`; `TestOpen_UsesAStoredPassphraseWithoutBeingAsked`; `TestOpen_SaysWhatItTried` |
+| UC-I2 | Open a snapshot and view its details | P6 | `TestOpen_Tier1_ReadsFullDetail`; `TestOpen_EncryptedRoundTripAndWrongKey`; `TestOpen_UsesAStoredIdentityWithoutBeingAsked`; `TestOpen_UsesAStoredPassphraseWithoutBeingAsked`; `TestOpen_SaysWhatItTried`; `TestKeys_AKeyThatOpenedASnapshotIsNotAskedForAgain` |
 | UC-I3 | Build the inspection index | P6 | `TestIndexSchemaHasNoSecretColumns`; `TestIndex_HoldsNoSecretMaterial` |
 | UC-I4 | Search users within a snapshot | P6 | `TestIndex_SearchPageAndFacets` |
 | UC-I5 | Filter and facet users | P6 | `TestIndex_FacetsIntersectWithSearch` |
@@ -89,7 +89,7 @@ backend itself (SFTP in P3, S3 and Azure in P5).*
 
 | UC | Title | Phase | Evidence |
 |----|-------|:-----:|----------|
-| UC-R1 | Restore a snapshot into an environment | P7 | `TestRestore_AppliesAndValidates`; `TestRestoreWizard_NeverHardcodesAnEmptyKey`; `TestOpen_ASuppliedKeyIsNotAttributedToAStoredOne` |
+| UC-R1 | Restore a snapshot into an environment | P7 | `TestRestore_AppliesAndValidates`; `TestRestoreWizard_NeverHardcodesAnEmptyKey`; `TestRestoreWizard_AsksTheEngineWhatItCanTry`; `TestOpen_ASuppliedKeyIsNotAttributedToAStoredOne` |
 | UC-R2 | Review restore preconditions | P7 | `TestPreconditions_NeverBlocks`; `TestPreconditions_NotCheckedIsNotNone` |
 | UC-R3 | Preview changes with a dry run | P7 | `TestDryRun_ReflectsStrategy`; `TestDryRun_NotesTheThingsThatBreakLogins`; `TestDryRun_UnreadableTargetIsSaidNotHidden` |
 | UC-R4 | Choose an import strategy | P7 | `TestBuildImport_Strategies`; `TestStrategyExplanation_IsAboutResourcesNotFlags` |

@@ -676,14 +676,16 @@ function confirmDecline(state: State, draw: () => void): void {
       state.acknowledgedUnencrypted = true;
       draw();
     },
-  });
-  // Cancelling leaves encryption on, which is what the toggle should show.
-  window.setTimeout(() => {
-    if (!state.acknowledgedUnencrypted && !document.querySelector(".modal-backdrop")) {
+    // "Keep encryption on" is an answer, not a way out of the question. It
+    // turns the toggle back on rather than leaving the wizard in the state
+    // neither button offered — encryption off, unconfirmed, and blocked on
+    // "Confirm that this snapshot may be written unencrypted."
+    onCancel: () => {
       state.encrypt = true;
+      state.acknowledgedUnencrypted = false;
       draw();
-    }
-  }, 0);
+    },
+  });
 }
 
 function storageStep(state: State, draw: () => void): HTMLElement {

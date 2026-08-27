@@ -141,6 +141,11 @@ type ApplyResult struct {
 
 // Apply runs the restore.
 func (r *RestoreController) Apply(req ApplyRequest) ApplyResult {
+	// The wizard proved this key against the bundle on the way into
+	// preconditions. Keeping it means the next restore in this session does not
+	// ask for it again.
+	r.eng.rememberKey(req.Passphrase, req.Identities)
+
 	res, err := r.eng.Orch.Restore(context.Background(), orchestrator.RestoreRequest{
 		Environment:  req.Environment,
 		Storage:      req.Storage,

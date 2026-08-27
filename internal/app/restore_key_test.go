@@ -65,3 +65,36 @@ func readView(t *testing.T, name string) string {
 	}
 	return string(b)
 }
+
+// The restore wizard gates its Next button on whether a key is needed, and it
+// cannot work that out for itself: which keys exist is the engine's business.
+// It asked the Keys list and counted the ones stored on this machine, which is
+// the wrong number — it misses the key the operator typed into the inspector a
+// moment earlier, which is exactly the case that made the prompt indefensible.
+func TestRestoreWizard_AsksTheEngineWhatItCanTry(t *testing.T) {
+	src := readView(t, "restore.ts")
+
+	if !strings.Contains(src, "KeysAPI.availability(") {
+		t.Error("the restore wizard does not ask what an open would have to work with")
+	}
+	if strings.Contains(src, "KeysAPI.list(") {
+		t.Error("the restore wizard counts stored keys itself; that number misses the keys typed this session")
+	}
+}
+
+// "Keep encryption on" is an answer to the question the dialog asked, not a way
+// out of it. Cancelling used to leave the wizard in the state neither button
+// offered — encryption off, unconfirmed, and blocked on a confirmation the
+// operator had just declined to give.
+func TestCaptureWizard_DecliningToDeclineTurnsEncryptionBackOn(t *testing.T) {
+	src := readView(t, "capture.ts")
+
+	if !strings.Contains(src, "onCancel:") {
+		t.Fatal("the decline dialog has no cancel handler, so dismissing it decides nothing")
+	}
+	// The old attempt: a zero-delay timer that ran while the modal it was
+	// checking for was still on screen, so it never fired.
+	if strings.Contains(src, "document.querySelector(\".modal-backdrop\")") {
+		t.Error("the wizard infers the dialog's outcome from the DOM; the modal reports it")
+	}
+}
