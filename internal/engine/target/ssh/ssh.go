@@ -161,13 +161,28 @@ func (e *Executor) Probe(ctx context.Context) (target.TargetFacts, error) {
 // The same release-then-bind race exists here as locally, and is handled the
 // same way: a bind conflict is retryable and the whole allocation is redone.
 func (e *Executor) allocateRemotePorts(ctx context.Context, conn *sshx.Conn) (target.PortSet, error) {
+	// The fallback runs one awk rather than three.
+	//
+	// It used to call `awk 'BEGIN{srand();...}'` once per port. srand() with no
+	// argument seeds from the clock in whole seconds, so three calls inside the
+	// same second draw the same number and the host reported one port three
+	// times — which is what an Alpine image with no python3 did on every run,
+	// and what the contract means by "three distinct values".
+	//
+	// One process is seeded once and asked for three values, so they come from
+	// a sequence rather than three identical draws, and a set rejects a repeat.
+	// The seed comes from /dev/urandom rather than the clock so that a retried
+	// allocation — the documented answer to a bind conflict — proposes
+	// different ports instead of the same ones a second later.
 	const script = `python3 - <<'PY' 2>/dev/null || ` +
-		`for i in 1 2 3; do ` +
-		`  p=$(awk 'BEGIN{srand();print int(20000+rand()*20000)}'); ` +
-		`  while (command -v ss >/dev/null && ss -ltn 2>/dev/null | grep -q ":$p ") || ` +
-		`        (command -v netstat >/dev/null && netstat -ltn 2>/dev/null | grep -q ":$p "); do ` +
-		`    p=$(awk 'BEGIN{srand();print int(20000+rand()*20000)}'); ` +
-		`  done; echo $p; done
+		`{ s=$(od -An -N4 -tu4 /dev/urandom 2>/dev/null | tr -dc 0-9); ` +
+		`  awk -v s="$s" 'BEGIN{if(s=="")srand();else srand(s);n=0;` +
+		`while(n<3){p=int(20000+rand()*20000);if(!(p in seen)){seen[p]=1;print p;n++}}}' | ` +
+		`  while read p; do ` +
+		`    (command -v ss >/dev/null && ss -ltn 2>/dev/null | grep -q ":$p ") || ` +
+		`    (command -v netstat >/dev/null && netstat -ltn 2>/dev/null | grep -q ":$p ") || ` +
+		`    echo $p; ` +
+		`  done; }
 import socket
 ports = []
 socks = []
