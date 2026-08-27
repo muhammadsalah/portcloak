@@ -6,6 +6,45 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Tags prefixed `spec-` mark the design
 record; unprefixed `v` tags mark shipped binaries.
 
+## [Unreleased]
+
+The first run against real Docker. Every fault below was found by driving the built application
+against live Keycloak containers rather than by reading the code, and each one is written up in
+[`spec/notes/`](./spec/notes/README.md) with the test that keeps it from returning.
+
+### Fixed
+- **An empty configuration never got past its loading spinner.** Nil slices reached the frontend
+  as `null`, and the first `.length` threw after the spinner went up and before anything replaced
+  it. Lists now cross the bridge as `[]` and maps as `{}`, enforced once at the boundary rather
+  than at each construction site.
+- **Every configuration field arrived under its Go name.** `config.Environment`, `Storage` and
+  `Preferences` were tagged for YAML only, so the environments list rendered the right number of
+  rows with every field blank. Inbound worked, which is what hid it.
+- **`kc.sh export` was passed options it does not have.** `--http-port` and `--https-port` are
+  options of neither `export` nor `import` on any Keycloak measured, and `--http-management-port`
+  exists only between 25.0 and 26.3. The invocation is now built from what the binary reports,
+  because that answer changed twice in three minor releases.
+- **The restore wizard asked for no decryption key.** It sent an empty one to both the pre-flight
+  open and the apply. The key is collected on the step that promises decryption runs first, and
+  carried to the import — which opens the bundle again on its own.
+- **A push into an ephemeral clone landed unreadable, when it landed at all.** The clone path
+  created no parent directory where local and SSH always had, and wrote the realm as `root:root`
+  into an image that runs as `keycloak`. Both are fixed; the mode stays 0600, because the answer
+  is the right owner rather than a looser file.
+- **A restore could leak an ephemeral clone.** Its teardown `defer` was registered after
+  `Prepare`'s error check, so a `Prepare` that failed after creating the clone abandoned one
+  holding the serving instance's database credentials. The capture path was fixed for this;
+  restore was not.
+- A view that threw left its spinner on screen forever. Views are now invoked through a guard
+  that puts the failure on the pane instead.
+
+### Added
+- [`spec/notes/`](./spec/notes/README.md) — the gotchas that reached working code, each with its
+  symptom, its cause, the rule, and the guard test that fails if it comes back.
+- Real `kc.sh export --help-all` output from four Keycloak versions in `testdata/kc-help`, which
+  is what the option-support tests run against.
+- Empty states on Environments and Storage, saying what the thing is and where the file lives.
+
 ## [0.0.1] — 2026-08-27
 
 The first version where the whole loop closes: capture a realm, put it somewhere, read it back,
