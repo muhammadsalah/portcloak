@@ -447,6 +447,20 @@ func (s *Store) putMultipart(ctx context.Context, key string, r io.Reader, opts 
 		}
 	}
 
+	// A stream that turned out to be empty cannot be completed as a multipart
+	// upload: S3 and MinIO both reject CompleteMultipartUpload without at
+	// least one part, and the caller gets a bare 400.
+	//
+	// This path is reached whenever the size was not known in advance, because
+	// Put routes on `opts.Size > 0` and cannot tell "empty" from "unknown".
+	// The objects that arrive this way are real — an empty realm's user file,
+	// or a sidecar an interrupted job never filled in — so the object is
+	// written as a single zero-byte Put instead. The deferred abort disposes
+	// of the upload this function opened.
+	if len(parts) == 0 {
+		return s.putSingle(ctx, key, strings.NewReader(""), opts)
+	}
+
 	digest := hex.EncodeToString(h.Sum(nil))
 	if opts.Digest != "" && opts.Offset == 0 && opts.Digest != digest {
 		return store.PutResult{}, resil.Fatal("verify the upload",
