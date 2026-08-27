@@ -655,11 +655,16 @@ func (p *Platform) CopyOut(ctx context.Context, ref, dir string, sink target.Art
 }
 
 // CopyIn writes a file into the clone, for the restore path.
-func (p *Platform) CopyIn(ctx context.Context, ref, dest string, size int64, r io.Reader) error {
+func (p *Platform) CopyIn(ctx context.Context, ref, dest string, size int64, owner clone.FileOwner, r io.Reader) error {
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
+	// `tar` runs as the pod's own user here and cannot chown, so it lands the
+	// file as that user whatever the header says. The ids are written anyway:
+	// they are correct, and a pod that does run as root would otherwise get
+	// Docker's failure mode.
 	if err := tw.WriteHeader(&tar.Header{
 		Typeflag: tar.TypeReg, Name: path.Base(dest), Size: size, Mode: 0o600,
+		Uid: owner.UID, Gid: owner.GID,
 	}); err != nil {
 		return err
 	}

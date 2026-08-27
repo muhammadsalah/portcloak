@@ -291,6 +291,39 @@ func RunContract(t *testing.T, newExecutor Factory) {
 		}
 	})
 
+	// The restore pushes into <workdir>/import/, which Prepare does not create:
+	// it is the caller's directory, named by the caller. Local and SSH created
+	// the parent on the way past and the clone path did not, so a restore onto
+	// Docker or Kubernetes failed on the first file with "could not write into
+	// the clone" — five times, since a missing directory reads as a transport
+	// error and was classified retryable.
+	t.Run("pushfile creates the directory it was given", func(t *testing.T) {
+		e := newExecutor(t)
+		defer e.Close()                        //nolint:errcheck
+		defer e.Teardown(context.Background()) //nolint:errcheck
+		ec := prepare(t, e)
+
+		body := []byte(`{"realm":"acme"}`)
+		remote := ec.WorkDir + "/import/nested/acme-realm.json"
+		if err := e.PushFile(context.Background(), remote, int64(len(body)), bytes.NewReader(body)); err != nil {
+			if errors.Is(err, target.ErrNotImplemented) {
+				t.Skip("this target does not implement PushFile yet")
+			}
+			t.Fatalf("pushing into a directory that does not exist yet failed: %v", err)
+		}
+
+		var out []string
+		if _, err := e.Run(context.Background(), target.Command{
+			Path: "/bin/sh", Args: []string{"-c", "cat " + shellQuote(remote)},
+			OnStdout: func(l string) { out = append(out, strings.TrimSpace(l)) },
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if len(out) == 0 || out[0] != string(body) {
+			t.Errorf("the pushed file reads %q, want %q", out, body)
+		}
+	})
+
 	// Teardown is called on every terminal path, including paths where Prepare
 	// never ran and paths that already tore down. Both have to be silent.
 	t.Run("teardown is idempotent and safe with nothing prepared", func(t *testing.T) {

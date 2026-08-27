@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"portcloak/internal/engine/resil"
 	"portcloak/internal/engine/target"
 	"portcloak/internal/engine/target/clone"
 )
@@ -265,5 +266,123 @@ func TestExecutor_RefusesToUseATornDownClone(t *testing.T) {
 	}
 	if err := e.FetchDir(context.Background(), "/tmp", target.SinkFunc(nil)); err == nil {
 		t.Fatal("a fetch ran against a destroyed clone")
+	}
+}
+
+// A restore pushes into <workdir>/import/, a directory Prepare does not create
+// because it is named by the caller. Local and SSH have always made the parent
+// on the way past; the clone path did not, so a restore onto Docker or
+// Kubernetes failed on its first file — five times over, because a missing
+// directory is indistinguishable at that layer from a dropped connection.
+func TestPushFile_CreatesTheDirectoryAndOwnsTheFile(t *testing.T) {
+	p := clone.NewFakePlatform()
+
+	var execs []string
+	p.ExecFunc = func(_ context.Context, _ string, cmd target.Command) (target.ExecResult, error) {
+		script := strings.Join(cmd.Args, " ")
+		execs = append(execs, script)
+		if strings.Contains(script, "id -u") && cmd.OnStdout != nil {
+			// The clone runs as an unprivileged user, as every Keycloak image does.
+			cmd.OnStdout("1000")
+			cmd.OnStdout("1001")
+		}
+		return target.ExecResult{ExitCode: 0}, nil
+	}
+
+	e := clone.NewExecutor(p)
+	ec, err := e.Prepare(context.Background(), target.PrepareOptions{JobID: "01HPUSH"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer e.Teardown(context.Background()) //nolint:errcheck
+
+	dir := ec.WorkDir + "/import"
+	for _, name := range []string{"acme-realm.json", "acme-users-0.json", "acme-users-1.json"} {
+		if err := e.PushFile(context.Background(), dir+"/"+name, 4, strings.NewReader("body")); err != nil {
+			t.Fatalf("pushing %s failed: %v", name, err)
+		}
+	}
+
+	var made int
+	for _, script := range execs {
+		if strings.Contains(script, "mkdir -p") && strings.Contains(script, dir) {
+			made++
+		}
+	}
+	if made == 0 {
+		t.Fatalf("the import directory was never created: %q", execs)
+	}
+	// Three files into one directory is one round trip, not three.
+	if made > 1 {
+		t.Errorf("the same directory was created %d times", made)
+	}
+
+	if len(p.CopiedIn) != 3 {
+		t.Fatalf("%d files were copied in, want 3", len(p.CopiedIn))
+	}
+	for _, f := range p.CopiedIn {
+		// Docker's CopyToContainer unpacks as root and honours the tar entry's
+		// ids, so zeroes here land the realm as root:root and kc.sh — running as
+		// the image's own user — cannot read what it was asked to import.
+		if f.Owner.UID != 1000 || f.Owner.GID != 1001 {
+			t.Errorf("%s was written for %d:%d, want the clone's own 1000:1001", f.Path, f.Owner.UID, f.Owner.GID)
+		}
+	}
+}
+
+// An image with no `id` is not a reason to fail the restore: root is what the
+// header carried before, and it is correct for a clone that does run as root.
+func TestPushFile_FallsBackToRootWhenTheCloneCannotSayWhoItIs(t *testing.T) {
+	p := clone.NewFakePlatform()
+	p.ExecFunc = func(_ context.Context, _ string, cmd target.Command) (target.ExecResult, error) {
+		if strings.Contains(strings.Join(cmd.Args, " "), "id -u") {
+			return target.ExecResult{ExitCode: 127}, nil
+		}
+		return target.ExecResult{ExitCode: 0}, nil
+	}
+
+	e := clone.NewExecutor(p)
+	ec, err := e.Prepare(context.Background(), target.PrepareOptions{JobID: "01HPUSH2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer e.Teardown(context.Background()) //nolint:errcheck
+
+	if err := e.PushFile(context.Background(), ec.WorkDir+"/import/a.json", 4, strings.NewReader("body")); err != nil {
+		t.Fatalf("a clone that cannot report its user should still take a file: %v", err)
+	}
+	if len(p.CopiedIn) != 1 || p.CopiedIn[0].Owner != (clone.FileOwner{}) {
+		t.Errorf("expected a root-owned fallback, got %+v", p.CopiedIn)
+	}
+}
+
+// A directory that cannot be created is the same failure every time. Reported,
+// not retried five times against a clone that will never accept the file.
+func TestPushFile_ADirectoryThatCannotBeMadeIsFatal(t *testing.T) {
+	p := clone.NewFakePlatform()
+	p.ExecFunc = func(_ context.Context, _ string, cmd target.Command) (target.ExecResult, error) {
+		script := strings.Join(cmd.Args, " ")
+		if strings.Contains(script, "mkdir -p") && strings.Contains(script, "/import") {
+			return target.ExecResult{ExitCode: 1}, nil
+		}
+		return target.ExecResult{ExitCode: 0}, nil
+	}
+
+	e := clone.NewExecutor(p)
+	ec, err := e.Prepare(context.Background(), target.PrepareOptions{JobID: "01HPUSH3"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer e.Teardown(context.Background()) //nolint:errcheck
+
+	err = e.PushFile(context.Background(), ec.WorkDir+"/import/a.json", 4, strings.NewReader("body"))
+	if err == nil {
+		t.Fatal("a directory that could not be created was swallowed")
+	}
+	if resil.IsRetryable(err) {
+		t.Errorf("a missing directory is deterministic; retrying it is a loop: %v", err)
+	}
+	if len(p.CopiedIn) != 0 {
+		t.Error("a file was copied into a directory that does not exist")
 	}
 }

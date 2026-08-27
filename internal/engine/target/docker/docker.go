@@ -414,11 +414,16 @@ func (p *Platform) CopyOut(ctx context.Context, ref, dir string, sink target.Art
 }
 
 // CopyIn writes a file into the clone, for the restore path.
-func (p *Platform) CopyIn(ctx context.Context, ref, dest string, size int64, r io.Reader) error {
+func (p *Platform) CopyIn(ctx context.Context, ref, dest string, size int64, owner clone.FileOwner, r io.Reader) error {
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
+	// The uid and gid are the clone's own. CopyToContainer unpacks as root and
+	// honours them, so the default zeroes would land the realm as root:root
+	// 0600 — arriving successfully and then unreadable by the kc.sh that has to
+	// import it. 0600 is kept: the file holds unmasked secrets.
 	if err := tw.WriteHeader(&tar.Header{
 		Typeflag: tar.TypeReg, Name: path.Base(dest), Size: size, Mode: 0o600,
+		Uid: owner.UID, Gid: owner.GID,
 	}); err != nil {
 		return err
 	}

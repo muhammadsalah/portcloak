@@ -18,7 +18,9 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"path"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -167,8 +169,9 @@ type Platform interface {
 	Exec(ctx context.Context, ref string, cmd target.Command) (target.ExecResult, error)
 	// CopyOut streams a directory out of the clone.
 	CopyOut(ctx context.Context, ref, path string, sink target.ArtifactSink) error
-	// CopyIn writes a file into the clone, for the restore path.
-	CopyIn(ctx context.Context, ref, path string, size int64, r io.Reader) error
+	// CopyIn writes a file into the clone, for the restore path. The file must
+	// end up readable by the process that will read it — see FileOwner.
+	CopyIn(ctx context.Context, ref, path string, size int64, owner FileOwner, r io.Reader) error
 	// Destroy removes the clone. It must succeed when the clone is already gone.
 	Destroy(ctx context.Context, ref string) error
 	// Probe reads facts without creating anything.
@@ -177,6 +180,23 @@ type Platform interface {
 	FindOrphans(ctx context.Context) ([]target.Orphan, error)
 	// Close releases the client.
 	Close() error
+}
+
+// FileOwner is the identity a file pushed into a clone must belong to.
+//
+// It is asked of the clone rather than assumed, because who the export runs as
+// is a property of the image. Docker's CopyToContainer applies the tar entry's
+// uid and gid as root, so a file written with the default zeroes lands as
+// root:root — and kc.sh, running as the image's own unprivileged user, cannot
+// read the realm it was asked to import. The file arrives, the copy reports
+// success, and the import fails on "permission denied" one step later.
+//
+// Kubernetes unpacks with `tar` as that same unprivileged user, which cannot
+// chown and so lands the file correctly by accident. One adapter out of the
+// four differing quietly, again.
+type FileOwner struct {
+	UID int
+	GID int
 }
 
 // Executor is the target.Executor built on a Platform. Docker and Kubernetes
@@ -189,6 +209,12 @@ type Executor struct {
 	spec     Spec
 	created  bool
 	tornDown bool
+	// madeDirs remembers the directories already created inside this clone, so
+	// pushing a realm file and its user files costs one round trip rather than
+	// one per file.
+	madeDirs map[string]bool
+	// owner is who this clone runs as, asked once. Nil until asked.
+	owner *FileOwner
 }
 
 // NewExecutor wraps a platform.
@@ -223,6 +249,8 @@ func (e *Executor) Prepare(ctx context.Context, opts target.PrepareOptions) (tar
 	// The reference is recorded before waiting, so a clone that never became
 	// ready is still torn down.
 	e.ref, e.spec, e.created = ref, spec, true
+	e.madeDirs = map[string]bool{}
+	e.owner = nil
 
 	if err := e.platform.WaitRunning(ctx, ref); err != nil {
 		return target.ExecContext{}, err
@@ -244,6 +272,7 @@ func (e *Executor) Prepare(ctx context.Context, opts target.PrepareOptions) (tar
 			fmt.Sprintf("PortCloak could not create %s inside %s.", spec.WorkDir, ref), nil).
 			WithAdvice("The clone's image may have no writable /tmp, or no shell to create it with.")
 	}
+	e.madeDirs[spec.WorkDir] = true
 
 	// The port flags are passed even here, where the clone's own network
 	// namespace makes a collision impossible. It costs nothing and keeps one
@@ -277,12 +306,102 @@ func (e *Executor) FetchDir(ctx context.Context, remote string, sink target.Arti
 }
 
 // PushFile writes a file into the clone, for the restore path.
+//
+// The directory is created first. Both clone platforms unpack a tar into the
+// destination's parent and neither creates it, while local and SSH have always
+// made the parent on the way past — so a restore, which pushes into
+// <workdir>/import/, failed on its first file with "could not write into the
+// clone", five times over, because a missing directory is indistinguishable at
+// that layer from a dropped connection and was classified retryable.
 func (e *Executor) PushFile(ctx context.Context, remote string, size int64, r io.Reader) error {
 	ref, ok := e.currentRef()
 	if !ok {
 		return resil.Fatal("send the snapshot", "There is no ephemeral clone to write to.", nil)
 	}
-	return e.platform.CopyIn(ctx, ref, remote, size, r)
+	if err := e.ensureDir(ctx, ref, path.Dir(remote)); err != nil {
+		return err
+	}
+	owner, err := e.runtimeOwner(ctx, ref)
+	if err != nil {
+		return err
+	}
+	return e.platform.CopyIn(ctx, ref, remote, size, owner, r)
+}
+
+// runtimeOwner asks the clone who it runs as, once.
+//
+// A clone's identity cannot change while it is alive, and a restore pushes a
+// realm file and every user file into it, so the answer is cached alongside the
+// directories. An image with no `id` falls back to root, which is what the
+// header carried before and is correct for a clone that does run as root.
+func (e *Executor) runtimeOwner(ctx context.Context, ref string) (FileOwner, error) {
+	e.mu.Lock()
+	if e.owner != nil {
+		owner := *e.owner
+		e.mu.Unlock()
+		return owner, nil
+	}
+	e.mu.Unlock()
+
+	var line string
+	res, err := e.platform.Exec(ctx, ref, target.Command{
+		Path:     "/bin/sh",
+		Args:     []string{"-c", "id -u; id -g"},
+		OnStdout: func(l string) { line += strings.TrimSpace(l) + " " },
+	})
+	owner := FileOwner{}
+	if err == nil && res.ExitCode == 0 {
+		if fields := strings.Fields(line); len(fields) >= 2 {
+			uid, uerr := strconv.Atoi(fields[0])
+			gid, gerr := strconv.Atoi(fields[1])
+			if uerr == nil && gerr == nil {
+				owner = FileOwner{UID: uid, GID: gid}
+			}
+		}
+	}
+
+	e.mu.Lock()
+	e.owner = &owner
+	e.mu.Unlock()
+	return owner, nil
+}
+
+// ensureDir creates a directory inside the clone, once per directory.
+//
+// A restore pushes a realm file and every user file into the same directory,
+// and an exec per file would be one round trip per file for an answer that
+// cannot change while the clone is alive.
+func (e *Executor) ensureDir(ctx context.Context, ref, dir string) error {
+	if dir == "" || dir == "." || dir == "/" {
+		return nil
+	}
+	e.mu.Lock()
+	if e.madeDirs[dir] {
+		e.mu.Unlock()
+		return nil
+	}
+	e.mu.Unlock()
+
+	res, err := e.platform.Exec(ctx, ref, target.Command{
+		Path: "/bin/sh",
+		Args: []string{"-c", "mkdir -p " + shellQuote(dir) + " && chmod 700 " + shellQuote(dir)},
+	})
+	if err != nil {
+		return err
+	}
+	if res.ExitCode != 0 {
+		return resil.Fatal("send the snapshot",
+			fmt.Sprintf("PortCloak could not create %s inside %s to write the snapshot into.", dir, ref), nil).
+			WithAdvice("The clone's image may have no writable /tmp, or no shell to create it with.")
+	}
+
+	e.mu.Lock()
+	if e.madeDirs == nil {
+		e.madeDirs = map[string]bool{}
+	}
+	e.madeDirs[dir] = true
+	e.mu.Unlock()
+	return nil
 }
 
 // Teardown destroys the clone. It is idempotent and safe when Prepare never

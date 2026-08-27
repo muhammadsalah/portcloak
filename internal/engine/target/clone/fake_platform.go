@@ -34,6 +34,10 @@ type FakePlatform struct {
 	// CopyOutFunc supplies the artifacts a fetch streams back.
 	CopyOutFunc func(ctx context.Context, ref, path string, sink target.ArtifactSink) error
 
+	// CopiedIn records every file pushed in, with the ownership it was given —
+	// which is the half of a push that decides whether kc.sh can read it.
+	CopiedIn []CopiedFile
+
 	// Live is the set of clones that currently exist. A test asserts it is
 	// empty at the end, whichever way the job finished.
 	Live         map[string]Spec
@@ -116,7 +120,16 @@ func (f *FakePlatform) CopyOut(ctx context.Context, ref, path string, sink targe
 	return f.CopyErr
 }
 
-func (f *FakePlatform) CopyIn(ctx context.Context, ref, path string, size int64, r io.Reader) error {
+// CopiedFile is one push, as the fake saw it.
+type CopiedFile struct {
+	Path  string
+	Owner FileOwner
+}
+
+func (f *FakePlatform) CopyIn(ctx context.Context, ref, path string, size int64, owner FileOwner, r io.Reader) error {
+	f.mu.Lock()
+	f.CopiedIn = append(f.CopiedIn, CopiedFile{Path: path, Owner: owner})
+	f.mu.Unlock()
 	if f.CopyErr != nil {
 		return f.CopyErr
 	}

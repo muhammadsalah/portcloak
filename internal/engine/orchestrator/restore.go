@@ -520,6 +520,15 @@ func (o *Orchestrator) applyImport(ctx context.Context, env config.Environment, 
 	execCtx, err := exec.Prepare(ctx, target.PrepareOptions{
 		JobID: j.ID, Realms: []string{s.Realm}, Purpose: "restore",
 	})
+
+	// The defer is registered before the error is checked, for the reason
+	// capture.go gives at the same point: Prepare can fail *after* the clone
+	// was created — waiting for it to come up, or setting up its work directory
+	// — and a clone left running carries the same database credentials as the
+	// serving instance. The executor tears down whatever it recorded rather
+	// than whatever Prepare managed to return.
+	defer o.teardown(ctx, exec, execCtx, rep, []*config.Job{j})
+
 	if err != nil {
 		return applied, err
 	}
@@ -529,7 +538,6 @@ func (o *Orchestrator) applyImport(ctx context.Context, env config.Environment, 
 		j.Provenance.ExecutionMode = string(execCtx.Mode)
 		o.saveJob(j)
 	}
-	defer o.teardown(ctx, exec, execCtx, rep, []*config.Job{j})
 
 	// The realm's artifacts are pushed into the execution context so kc.sh
 	// import can read them where it runs.
