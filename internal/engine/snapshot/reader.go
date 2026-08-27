@@ -16,6 +16,10 @@ import (
 	"github.com/klauspost/compress/zstd"
 )
 
+// decoderConcurrency bounds decompression memory the same way
+// encoderConcurrency bounds compression memory.
+const decoderConcurrency = 2
+
 // ErrEncrypted is returned when a bundle needs a key that was not supplied.
 var ErrEncrypted = errors.New("this snapshot is encrypted")
 
@@ -91,7 +95,7 @@ func Open(ctx context.Context, r io.Reader, opts OpenOptions) (*Opened, error) {
 		}
 	}
 
-	zr, err := zstd.NewReader(body)
+	zr, err := zstd.NewReader(body, zstd.WithDecoderConcurrency(decoderConcurrency))
 	if err != nil {
 		return nil, fmt.Errorf("this file is not a PortCloak snapshot, or it is encrypted and no key was supplied: %w", err)
 	}
@@ -215,7 +219,7 @@ func ReadEnvelopeOnly(ctx context.Context, r io.Reader, opener Opener) (Envelope
 			return Envelope{}, err
 		}
 	}
-	zr, err := zstd.NewReader(body)
+	zr, err := zstd.NewReader(body, zstd.WithDecoderConcurrency(decoderConcurrency))
 	if err != nil {
 		return Envelope{}, fmt.Errorf("this file is not a readable PortCloak snapshot: %w", err)
 	}

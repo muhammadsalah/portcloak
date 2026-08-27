@@ -38,6 +38,15 @@ type Opener interface {
 // between two builds of PortCloak.
 const compressionLevel = zstd.SpeedBetterCompression
 
+// encoderConcurrency bounds the compressor's worker count.
+//
+// Left to its default the encoder scales with GOMAXPROCS and allocates a window
+// per worker, so the memory a capture needs would depend on how many cores the
+// operator's machine happens to have — which turns a bounded-memory promise
+// into a machine-dependent one. Two workers keep the pipeline fed; sealing is
+// I/O bound long before it is CPU bound.
+const encoderConcurrency = 2
+
 // Builder stages the artifacts of one snapshot and then seals them.
 //
 // Staging to disk rather than holding the export in memory is what keeps a
@@ -202,7 +211,9 @@ func (b *Builder) Seal(ctx context.Context, w io.Writer, sealer Sealer) (SealRes
 		sink = encCloser
 	}
 
-	zw, err := zstd.NewWriter(sink, zstd.WithEncoderLevel(compressionLevel))
+	zw, err := zstd.NewWriter(sink,
+		zstd.WithEncoderLevel(compressionLevel),
+		zstd.WithEncoderConcurrency(encoderConcurrency))
 	if err != nil {
 		return res, fmt.Errorf("starting compression: %w", err)
 	}
