@@ -114,7 +114,14 @@ a:hover {
   gap: 12px;
   /* Room for the macOS traffic lights, which sit over an inset title bar. */
   padding-left: 88px;
-  -webkit-app-region: drag;
+  /* Wails v3 reads this custom property, not -webkit-app-region: its runtime
+     calls getComputedStyle(target) and compares --wails-draggable to "drag".
+     -webkit-app-region is an Electron convention and is inert in WKWebView,
+     which is why the window could not be dragged by its masthead at all. */
+  --wails-draggable: drag;
+  /* The masthead is a title bar, so a drag across it must not paint a text
+     selection over the wordmark. */
+  user-select: none;
 }
 
 .masthead svg {
@@ -122,6 +129,17 @@ a:hover {
   /* The traffic lights and the drag region are above; the mark is not a
      control and must not swallow a drag on the title bar. */
   pointer-events: none;
+}
+
+/* --wails-draggable inherits, so anything interactive placed in the masthead
+   has to opt out or the first press would start dragging the window instead
+   of arming the control. */
+.masthead button,
+.masthead a,
+.masthead input,
+.masthead select,
+.masthead [role="button"] {
+  --wails-draggable: no-drag;
 }
 
 .masthead .wordmark {
