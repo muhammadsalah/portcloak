@@ -1,6 +1,8 @@
-# Build output
+# Build output.
+# NOT /build/ — spec/rollout/00 §0.1 designates build/ for packaging, icons and
+# notarisation scripts, which are source and must be committed.
 /bin/
-/build/
+/build/bin/
 /dist/
 portcloak
 *.exe
@@ -30,10 +32,15 @@ Thumbs.db
 *.sqlite-journal
 *.sqlite-wal
 
-# Snapshot bundles and any exported realm material (may contain secrets)
-*.pcsnap
-*.pcsnap.age
+# Snapshot bundles and any exported realm material.
+# An unencrypted .pck holds unmasked client secrets and private signing keys,
+# so the extension here must match spec/06 §6.1 exactly.
+*.pck
+*.pck.age
+*.manifest.json
+*.sha256
 /testdata/snapshots/
+/testdata/kc-output/*.dump
 
 # Lunacy autosave / lock files
 *.sketch.lock
