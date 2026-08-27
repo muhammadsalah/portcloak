@@ -33,38 +33,45 @@ content column with 24px padding.
 
 ## Screens
 
-### Built
-
 | # | Screen | Purpose | Covers |
 |---|--------|---------|--------|
 | 00 | Design tokens | Palette, type scale and control reference | — |
 | 01 | Snapshots library | Snapshots across every storage backend, no key held | UC-I1 |
-| 02 | Capture wizard | Environment → realms → storage → options → review | UC-C1…C7, UC-C10 |
+| 02 | Capture wizard | Environment → realms → storage → options → review | UC-C1…UC-C5, UC-C6, UC-C7, UC-C10 |
 | 03 | Inspector — Overview | Realm settings, key providers, completeness report | UC-I2, UC-I3 |
-| 04 | Inspector — Users | Paged table, search, facets, user detail | UC-I4, UC-I5, UC-I6 |
-| 05 | Restore — preconditions | External dependencies, informative only, never blocks | UC-R2, FR-D2 |
+| 04 | Inspector — Users | Paged table, search, facets, single-user detail | UC-I4, UC-I5, UC-I6 |
+| 05 | Restore — preconditions | External dependencies, informative only, never blocks | UC-R2 |
 | 06 | Activity — jobs & resume | Running and interrupted jobs, throughput, retry state | UC-O1…UC-O4 |
-| 07 | Environments (config) | List and detail, per-kind fields, probe results | UC-E5, UC-E9 |
+| 07 | Environments (config) | List and detail, probe results, staleness | UC-E5, UC-E9 |
 | 08 | Storage (config) | List and detail, folder rooting, default flag | UC-S5, UC-S7 |
-| 09 | Environment editor — Kubernetes | Kind tabs, kind-specific fields, keychain handle, full probe fact panel | UC-E1…E4, UC-E6…E8 |
-| 10 | Storage editor — S3 | Kind tabs, endpoint/bucket/prefix, default and encryption-required toggles | UC-S1…S4, UC-S6 |
-| 13 | Inspector — Secret ledger & reveal | Secrets by location and kind, one revealed under audit, one masked at source | UC-I8, UC-I9, UC-I12 |
-| 15 | Restore — dry run & strategy | Overwrite / skip / merge, and a diff against the live target computed for the selected strategy | UC-R3, UC-R4 |
-| 16 | Restore — result & validation | What was applied, post-restore validation, authentication continuity, what the destination still needs | UC-R1, UC-R5, UC-R6 |
-| 17 | Job outcome — failure & cancellation | Stage timeline, plain-language cause, retry ledger, checkpoint, and what a cancelled restore had already written | UC-O5, UC-O6, UC-R8 |
-| 18 | Audit log & maintenance | Audit entries, config file location, orphaned clones, local working data and purge | UC-O7, UC-O8, UC-O10, UC-C12 |
+| 09 | Environment editor — Kubernetes | Kind tabs, kind-specific fields, keychain handle, probe fact panel | UC-E1…UC-E4, UC-E6, UC-E7, UC-E8 |
+| 10 | Storage editor — S3 | Kind tabs, endpoint/bucket/prefix, default and encryption-required toggles | UC-S1…UC-S4, UC-S6 |
+| 11 | Storage browser | What a storage really holds, unrecognised objects included | UC-S8 |
+| 12 | Inspector — Clients, keys & federations | Every non-user entity type; key providers with KIDs | UC-I7, UC-C8 |
+| 13 | Inspector — Secret ledger & reveal | Secrets by location and kind; one revealed under audit, one masked at source | UC-I8, UC-I9, UC-C8 |
+| 14 | Inspector — Verify, export & close | Per-artifact integrity, redacted export, index destruction | UC-I11, UC-I12, UC-I13 |
+| 15 | Restore — dry run & strategy | Overwrite / skip / merge, diff computed for the selected strategy | UC-R3, UC-R4, UC-R7 |
+| 16 | Restore — result & validation | What was applied, validation, authentication continuity, what the destination still needs | UC-R1, UC-R5, UC-R6, UC-C11 |
+| 17 | Job outcome — failure & cancellation | Stage timeline, plain-language cause, retry ledger, checkpoint, partial restore | UC-O5, UC-O6, UC-R8 |
+| 18 | Audit log & maintenance | Audit entries, config file, orphaned clones, working data and purge | UC-O7, UC-O8, UC-O10, UC-C12 |
+| 19 | Inspector — External dependencies | Themes, provider JARs and keystores with the consequence of each being absent | UC-C9, UC-I10 |
+| 20 | First run | Empty state naming the two things needed before a capture | UC-O9 |
 
-### Planned
+All 60 use cases appear at least once. Three are covered as variants rather than as their own
+screen, which is deliberate:
 
-| # | Screen | Purpose | Covers |
-|---|--------|---------|--------|
-| 11 | Storage browser | What a storage actually holds, unrecognised objects included | UC-S8 |
-| 12 | Inspector — Clients, keys & federations | Every non-user entity type | UC-I7 |
-| 14 | Inspector — Verify, export & close | Integrity check, redacted export, index destruction | UC-I11, UC-I12, UC-I13 |
+- **UC-R7 (restore into a freshly provisioned Keycloak)** is screen 15 against an empty target —
+  every row reads *create*, nothing is overwritten. Drawing it separately would only show the
+  same screen with different numbers.
+- **UC-C8 (verify secrets are unmasked)** has no screen of its own because it is not a place you
+  go; it is a fact that shows up where the secret does. Screens 12 and 13 both carry it, and
+  screen 13 deliberately shows the failing case.
+- **UC-C11 (destroy the ephemeral clone)** is a guarantee, not an interaction. It is asserted on
+  screen 16 and shown as a completed stage on screen 17 — including on the failure path, which
+  is the only place it matters.
 
-Screen 09 sits behind 07 and screen 10 behind 08 — they are the same route with the detail
-pane focused, drawn separately so the per-kind field sets and the probe fact panel can be
-reviewed at full size.
+Screen 09 sits behind 07 and screen 10 behind 08 — the same route with the detail pane focused,
+drawn separately so the per-kind field sets and the probe fact panel can be reviewed at full size.
 
 ## A Lunacy authoring note
 
