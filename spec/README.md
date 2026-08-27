@@ -52,6 +52,7 @@ for throwaway snapshot indexes.
 | 11 | [`11-traceability.md`](./11-traceability.md) | Requirement → module traceability matrix |
 | 12 | [`12-decisions.md`](./12-decisions.md) | **Decision record** — the nine confirmed design decisions, with rationale and cost |
 | — | [`usecases/`](./usecases/README.md) | **Use cases** — the complete behavioural model (60 use cases across 6 packages) with its own traceability matrix |
+| — | [`rollout/`](./rollout/README.md) | **Rollout plan** — the nine phases that build this, with coding tasks, tests, verification evidence and the 0.0.1 release gate |
 
 ## Diagrams
 
@@ -99,3 +100,6 @@ in each file matches its filename, so output names stay stable.
 6. **[`usecases/`](./usecases/README.md)** is the behavioural view: every interaction, with its
    alternate flows and failure paths. Read it when you want *what the tool actually does*
    rather than how it is built.
+7. **[`rollout/`](./rollout/README.md)** is the build view: the order everything above comes into
+   existence, what code gets written in each phase, and how each requirement is proved before
+   the next phase starts. Read it when you are ready to start writing code.

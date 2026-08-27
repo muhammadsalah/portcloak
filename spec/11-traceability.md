@@ -84,6 +84,7 @@ orphaned, and no module exists without a requirement.
 | NFR-8 | Idempotence / convergent resume | Orchestrator, Resilience | [02 §2.7](./02-architecture.md), [05](./05-resilience.md) |
 | NFR-9 | Inspection responsiveness (bounded memory, fast paging) | Index Store (SQLite), Snapshot Inspector | [10 §10.3](./10-snapshot-inspection.md) |
 | NFR-10 | No inspection residue (index destroyed on close) | Index Store | [10 §10.3](./10-snapshot-inspection.md), [12 D9](./12-decisions.md) |
+| NFR-11 | Transparent, file-based configuration (SQLite only for throwaway indexes) | Config Store, Index Store | [02 §2.6](./02-architecture.md), [12 D7](./12-decisions.md) |
 
 ## 11.6 Decisions
 
@@ -104,3 +105,10 @@ rationale and consequences, in **[12 — Design Decisions](./12-decisions.md)**:
 
 Nothing remains blocking. Three items to revisit once there is running code are listed in
 [12 — Decisions still open](./12-decisions.md#decisions-still-open).
+
+## 11.7 From requirement to running code
+
+This matrix answers *which module satisfies this requirement*. The companion question — *when is
+it built, and what proves it* — is answered by
+**[rollout/12 — Rollout traceability](./rollout/12-rollout-traceability.md)**, which maps the same
+requirements onto the nine build phases and names the test or artifact that verifies each one.

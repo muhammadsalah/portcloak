@@ -1,0 +1,43 @@
+@startmindmap r-03-test-taxonomy
+title Test taxonomy — what each layer is actually for
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Helvetica"
+skinparam shadowing false
+
+* Tests
+** Unit  (-short)
+*** No network, no Docker, no Keycloak
+*** Every remote seam has a hostile fake
+*** Runs in seconds, on save
+** Contract  (-short)
+*** One table per interface
+*** Run against every implementation
+*** Executor  local · ssh · docker · k8s
+*** BlobStore  disk · sftp · s3 · azure
+*** Catches "works on disk, differs on S3"
+** Integration  (-tags=integration)
+*** Keycloak fixture matrix
+**** minimal · rich · federated
+**** large (120k users) · legacy · themed
+*** MinIO · Azurite · sshd · kind
+*** The only place fidelity is provable
+** Fault injection
+*** Proxy that drops, stalls, truncates, corrupts
+*** Resume across an app restart
+*** Never produce a bundle that looks valid
+** Do no harm
+*** Serving workload untouched
+*** The label trap
+*** Teardown on all five exit paths
+*** End-of-run leak sweep
+** Redaction  (own CI stage)
+*** Property test over the whole pipeline
+*** Logs · audit · events · exports · sidecars
+*** Over-redaction is a bug too
+** Manual
+*** Per phase, scripted, recorded
+*** "Does this error help me?"
+*** "Is it obvious this bundle is unencrypted?"
+
+@endmindmap

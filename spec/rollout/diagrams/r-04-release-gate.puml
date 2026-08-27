@@ -1,0 +1,68 @@
+@startuml r-04-release-gate
+title Release gate — 0.0.1
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Helvetica"
+skinparam shadowing false
+skinparam activity {
+  BackgroundColor #FFFFFF
+  BorderColor #8A8D90
+  FontColor #151515
+  DiamondBackgroundColor #F0F0F0
+  DiamondBorderColor #8A8D90
+}
+skinparam ArrowColor #0066CC
+
+start
+:All eight phases meet their exit criteria;
+:Cut  release/0.0.1  from main;
+
+fork
+  :**Correctness**
+  round trip on rich and federated
+  auth continuity: password, OTP, token signature
+  capture parity across all four targets
+  BlobStore contract green on four backends;
+fork again
+  :**Do no harm**
+  serving workload untouched
+  label trap · teardown on five paths
+  leak sweep clean;
+fork again
+  :**Secrets**
+  redaction stage green
+  index schema holds no secret
+  unencrypted bundle labelled in three places
+  reveal audited, never logged;
+fork again
+  :**Resilience**
+  fault-injection matrix green
+  resume across restart converges
+  breaker opens, reports, recovers;
+end fork
+
+:Full matrix run
+including nightly-only and manual-only targets;
+:Manual walkthrough on three platforms
+empty config to completed round trip, recorded;
+
+if (every gate item has evidence?) then (no)
+  :Blocked. Fix on the release branch.;
+  detach
+else (yes)
+endif
+
+:Sign and notarise four artifacts
+publish SHA256SUMS;
+:Tag  v0.0.1  signed;
+:Merge back to main with ~--no-ff;
+stop
+
+note right
+  "Ship it and fix in 0.0.2"
+  is not available on any of
+  these items. Each one guards
+  against losing credentials.
+end note
+
+@enduml

@@ -1,0 +1,60 @@
+@startuml r-01-phase-map
+title PortCloak — Rollout phase map
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Helvetica"
+skinparam shadowing false
+skinparam rectangle {
+  BorderColor #8A8D90
+  BackgroundColor #FFFFFF
+  FontColor #151515
+}
+skinparam ArrowColor #0066CC
+
+rectangle "**P0 — Shell & foundations**\nWails shell · ~/.portcloak · keychain\nredacting logger" as P0 #E7F1FA
+rectangle "**P1 — Configuration**\nEnvironments · Storage · Probe\na Test that tells you the truth" as P1 #E7F1FA
+rectangle "**P2 — Local capture**\nkc.sh export · manifest · packager\ndisk store · first vertical slice" as P2 #DEF3D9
+rectangle "**P3 — Remote targets**\nSSH · Docker · Kubernetes\nephemeral clones · SFTP" as P3 #FDF2CF
+rectangle "**P4 — Resilience**\nretry · breaker · checkpoints\nresume across restarts" as P4 #FDF2CF
+rectangle "**P5 — Storage & encryption**\nS3 · Azure Blob\nopt-in age encryption" as P5 #DEF3D9
+rectangle "**P6 — Inspection**\ntiered open · SQLite index\nsearch · ledger · audited reveal" as P6 #DEF3D9
+rectangle "**P7 — Restore**\npreconditions · dry run · strategies\nimport · validation" as P7 #DEF3D9
+rectangle "**P8 — Verification & deps**\nunmasked-secret proof\nthemes and provider JARs" as P8 #E7F1FA
+rectangle "**Release 0.0.1**\ngate · signed artifacts · tag" as R #F0F0F0
+
+P0 --> P1
+P1 --> P2
+P2 --> P3
+P3 --> P4
+P4 --> P5
+P5 --> P6
+P6 --> P7
+P7 --> P8
+P8 --> R
+
+note right of P2
+  First point at which the tool
+  produces something real:
+  a sealed, verifiable bundle.
+end note
+
+note right of P3
+  Highest risk in the plan.
+  Teardown and label stripping are
+  built **before** anything can
+  create a clone.
+end note
+
+note right of P4
+  A deliberate retrofit. The Doer
+  seam only has the right shape once
+  real call sites exist to wrap.
+end note
+
+note right of P7
+  The loop closes. Fidelity stops
+  being a claim about a file and
+  becomes a realm people log in to.
+end note
+
+@enduml

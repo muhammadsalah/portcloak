@@ -1,0 +1,56 @@
+@startuml r-02-phase-anatomy
+title How one phase is executed
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Helvetica"
+skinparam shadowing false
+skinparam activity {
+  BackgroundColor #FFFFFF
+  BorderColor #8A8D90
+  FontColor #151515
+  DiamondBackgroundColor #F0F0F0
+  DiamondBorderColor #8A8D90
+}
+skinparam ArrowColor #0066CC
+
+start
+:Read the phase document\nGoal, Covers, Depends on;
+:Cut branch  phase/pN-slug;
+
+partition "Per task  T-Pn.k" {
+  :Write the failing test first\nwhere the risk is highest\n(teardown, redaction, determinism);
+  :Define the interface\nand its hostile fake;
+  :Implement;
+  repeat
+    :go vet · lint · unit tests · redaction stage;
+  repeat while (green?) is (no)
+  ->yes;
+  :Commit  one reviewable idea\nsubject says what, body says why;
+}
+
+:Run the contract suites\nevery implementation, one table;
+:Run integration against\nthe Keycloak fixture matrix;
+
+if (phase touches remote I/O?) then (yes)
+  :Run the fault-injection matrix;
+else (no)
+endif
+
+if (phase creates clones?) then (yes)
+  :Do-no-harm suite\nlabel trap · workload untouched\nteardown on 5 exit paths;
+  :End-of-run leak sweep;
+else (no)
+endif
+
+:Manual walkthrough\n"would an operator understand this?";
+:Record evidence into\n12-rollout-traceability;
+
+if (every exit criterion met?) then (yes)
+  :Merge to main with ~--no-ff;
+  stop
+else (no)
+  :Fix. The phase is not done.;
+  detach
+endif
+
+@enduml
