@@ -1,5 +1,5 @@
 import { AuditAPI, type AuditEntry, type AuditView } from "../api";
-import { clear, failureNotice, h, select, spinner, time, when } from "../dom";
+import { clear, failureNotice, h, select, spinner, stamp } from "../dom";
 
 /**
  * The audit log, and nothing else.
@@ -76,7 +76,10 @@ function auditPanel(
       h(
         "div",
         { class: "audit-row" },
-        h("div", { class: "muted small audit-time" }, time(e.at)),
+        // The full stamp leads the row: an audit entry is read to answer "when
+        // exactly, and in which zone", and that answer should not be split
+        // across two columns at opposite ends of the line.
+        h("div", { class: "muted small audit-time" }, stamp(e.at)),
         h("span", { class: `dot ${toneFor(e.action, e.outcome)}` }),
         h(
           "div",
@@ -89,7 +92,6 @@ function auditPanel(
           ),
           e.reason ? h("div", { class: "muted small" }, `Reason: ${e.reason}`) : null,
         ),
-        h("div", { class: "muted small audit-date" }, when(e.at).slice(0, 10)),
       ),
     );
   }

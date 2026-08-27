@@ -34,7 +34,7 @@
   --radius: 3px;
   --radius-pill: 10px;
 
-  --masthead-height: 76px;
+  --masthead-height: 88px;
   --nav-width: 260px;
   --content-padding: 24px;
 
@@ -109,11 +109,22 @@ a:hover {
   background: var(--masthead);
   color: #fff;
   display: flex;
-  align-items: center;
-  padding: 0 24px;
-  gap: 12px;
-  /* Room for the macOS traffic lights, which sit over an inset title bar. */
-  padding-left: 88px;
+  /*
+   * The brand sits at the BOTTOM left of the masthead rather than indented on
+   * its centre line.
+   *
+   * It used to be pushed 88px right to clear the macOS traffic lights, which
+   * left it floating in the middle of the navigation rail's width, aligned to
+   * nothing. Going down instead of across buys the same clearance and puts the
+   * mark's left edge on the same 16px line as every navigation icon below it,
+   * so the rail reads as one column from the logo down.
+   *
+   * The masthead is 88px for exactly this reason: the traffic lights occupy
+   * roughly the top 38px of an inset title bar, and the 30px mark needs to
+   * start below them.
+   */
+  align-items: flex-end;
+  padding: 0 24px 16px 16px;
   /* Wails v3 reads this custom property, not -webkit-app-region: its runtime
      calls getComputedStyle(target) and compares --wails-draggable to "drag".
      -webkit-app-region is an Electron convention and is inert in WKWebView,
@@ -122,6 +133,13 @@ a:hover {
   /* The masthead is a title bar, so a drag across it must not paint a text
      selection over the wordmark. */
   user-select: none;
+}
+
+/* Mark and wordmark centred on each other, and moved as one block. */
+.masthead .brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .masthead svg {
@@ -720,19 +738,6 @@ label {
   min-width: 0;
 }
 
-.wizard-foot {
-  border-top: 1px solid var(--border);
-  background: var(--surface-subtle);
-  padding: 12px 16px;
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.wizard-foot .spacer {
-  flex: 1;
-}
-
 /* ── Inspector ─────────────────────────────────────────────────────────── */
 
 .breadcrumb {
@@ -829,16 +834,19 @@ label {
 }
 
 .audit-time {
-  width: 64px;
+  /* Wide enough for the longest form Intl produces for a full stamp — a
+     four-digit year, seconds, and a named zone like "GMT+3". Fixed rather
+     than content-sized so every row's action text starts on the same line. */
+  width: 210px;
   flex: none;
+  /* Digits of equal width, so the column reads as a column and the eye can
+     scan down it for a time without the figures shifting under it. */
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .audit-row .dot {
   margin-top: 6px;
-}
-
-.audit-date {
-  flex: none;
 }
 
 .kv {

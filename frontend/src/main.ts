@@ -150,11 +150,18 @@ function render(): void {
     h(
       "div",
       { class: "masthead" },
-      mark(30, onDark),
-      // One word, two colours: the wordmark is set live rather than shipped as
-      // a picture of text, so it stays crisp at any scale and searchable to
-      // anything reading the DOM.
-      h("div", { class: "wordmark" }, "Port", h("span", { class: "wordmark-accent" }, "Cloak")),
+      // The mark and the wordmark are one unit, so the masthead can align the
+      // pair as a block against the navigation below it while the two stay
+      // centred on each other inside it.
+      h(
+        "div",
+        { class: "brand" },
+        mark(30, onDark),
+        // One word, two colours: the wordmark is set live rather than shipped
+        // as a picture of text, so it stays crisp at any scale and searchable
+        // to anything reading the DOM.
+        h("div", { class: "wordmark" }, "Port", h("span", { class: "wordmark-accent" }, "Cloak")),
+      ),
     ),
   );
   root.appendChild(h("div", { class: "body" }, renderNav(), content));

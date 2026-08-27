@@ -1,8 +1,35 @@
-import { defineConfig } from "vite";
+import { writeFileSync } from "node:fs";
+import { defineConfig, type Plugin } from "vite";
+
+/**
+ * Puts dist/.gitkeep back after every build.
+ *
+ * emptyOutDir clears dist/ on each run, which deletes the committed
+ * placeholder that frontend/embed.go depends on: `//go:embed all:dist` fails
+ * the Go build outright when the directory holds no files, so a developer who
+ * ran `npm run build` and then `git status` would find the placeholder deleted
+ * and, sooner or later, commit its removal — breaking `go build ./...` and
+ * `go test ./internal/...` for anyone who has never run npm.
+ *
+ * Writing it back at closeBundle costs nothing and makes that impossible.
+ */
+function keepEmbedPlaceholder(): Plugin {
+  return {
+    name: "portcloak-keep-embed-placeholder",
+    closeBundle() {
+      writeFileSync(
+        "dist/.gitkeep",
+        "This file is the placeholder frontend/embed.go depends on; see that file.\n" +
+          "Vite rewrites it after every build (see keepEmbedPlaceholder in vite.config.ts).\n",
+      );
+    },
+  };
+}
 
 // The build output is embedded into the Go binary, so it has to be
 // self-contained: relative asset paths, no code splitting, no external CDN.
 export default defineConfig({
+  plugins: [keepEmbedPlaceholder()],
   base: "./",
   // The logo lives at the repository root, not under frontend/, because the
   // README and packaging need it too. Pointing Vite's public directory at it

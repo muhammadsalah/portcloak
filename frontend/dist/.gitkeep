@@ -1,15 +1,2 @@
-This file is the placeholder frontend/embed.go depends on.
-
-`//go:embed all:dist` fails the build outright when dist/ holds no files, so
-without something committed here neither `go build ./...` nor
-`go test ./internal/...` works on a clone that has never run npm — and
-internal/app imports this package, so that is most of the test suite.
-
-Keeping this one file here means the binary compiles and serves an empty asset
-tree instead: a broken UI, but a correct build, which is what lets the engine
-be tested with no Node toolchain present. frontend.Built() reports false when
-index.html is absent, and the app says so at startup rather than opening a
-blank window.
-
-`npm run build` fills this directory; .gitignore ignores everything in it
-except this file.
+This file is the placeholder frontend/embed.go depends on; see that file.
+Vite rewrites it after every build (see keepEmbedPlaceholder in vite.config.ts).

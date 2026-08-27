@@ -186,25 +186,13 @@ function wizard(state: State, draw: () => void): HTMLElement {
   const canAdvance = advanceable(state);
   const isLast = state.step === "review";
 
+  // Back on the left, the action that advances on the far right, exactly as
+  // the restore wizard and both editor screens already do it. This footer used
+  // to lead with the primary button and end with Cancel, so Capture was the one
+  // screen in the app where the eye had to travel left to go forwards.
   const foot = h(
     "div",
-    { class: "wizard-foot" },
-    h(
-      "button",
-      {
-        class: "primary",
-        disabled: !canAdvance.ok || state.starting,
-        onClick: () => {
-          if (isLast) {
-            void start(state, draw);
-          } else {
-            state.step = steps[currentIndex + 1].key;
-            draw();
-          }
-        },
-      },
-      isLast ? "Start capture" : "Next",
-    ),
+    { class: "card-foot" },
     currentIndex > 0
       ? h(
           "button",
@@ -216,12 +204,31 @@ function wizard(state: State, draw: () => void): HTMLElement {
           },
           "Back",
         )
-      : null,
-    !canAdvance.ok && canAdvance.reason
-      ? h("span", { class: "muted small" }, canAdvance.reason)
-      : null,
-    h("span", { class: "spacer" }),
-    h("a", { onClick: () => navigate({ name: "library" }) }, "Cancel"),
+      : h("span"),
+    h(
+      "div",
+      { class: "row" },
+      !canAdvance.ok && canAdvance.reason
+        ? h("span", { class: "muted small" }, canAdvance.reason)
+        : null,
+      h("button", { onClick: () => navigate({ name: "library" }) }, "Cancel"),
+      h(
+        "button",
+        {
+          class: "primary",
+          disabled: !canAdvance.ok || state.starting,
+          onClick: () => {
+            if (isLast) {
+              void start(state, draw);
+            } else {
+              state.step = steps[currentIndex + 1].key;
+              draw();
+            }
+          },
+        },
+        isLast ? "Start capture" : "Next",
+      ),
+    ),
   );
 
   return h(

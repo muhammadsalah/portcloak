@@ -91,6 +91,36 @@ export function time(iso: string | undefined): string {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+/**
+ * A full timestamp, to the second, naming the zone it is in.
+ *
+ * The audit log is evidence, and the other two formatters are not good enough
+ * for that. `when` drops the zone, so a record read on a laptop that has since
+ * crossed a border cannot be lined up against a Keycloak server log without
+ * someone guessing the offset. `time` drops the date and the seconds, so a row
+ * cannot be ordered against its neighbours inside the same minute — and a
+ * capture and the deletion that followed it can share a minute.
+ *
+ * The zone is the reader's own, not UTC: an operator reconciling what happened
+ * is working in local time, and naming the zone is what keeps that unambiguous
+ * without forcing a conversion in their head.
+ */
+export function stamp(iso: string | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return new Intl.DateTimeFormat(undefined, {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+    timeZoneName: "short",
+  }).format(d);
+}
+
 /* ── Common pieces ─────────────────────────────────────────────────────── */
 
 export function badge(text: string, tone: "ok" | "warn" | "danger" | "neutral" | "info"): HTMLElement {
