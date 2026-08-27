@@ -1,7 +1,7 @@
 import "./styles.css";
 
 import { ConfigAPI, JobsAPI, onProgress, type ProgressEvent } from "./api";
-import { clear, h } from "./dom";
+import { clear, h, notice } from "./dom";
 import { renderLibrary } from "./views/library";
 import { renderCapture } from "./views/capture";
 import { renderRestore } from "./views/restore";
@@ -151,33 +151,60 @@ function render(): void {
   const route = shell.route;
   switch (route.name) {
     case "library":
-      void renderLibrary(content);
+      show(content, () => renderLibrary(content));
       break;
     case "capture":
-      void renderCapture(content);
+      show(content, () => renderCapture(content));
       break;
     case "restore":
-      void renderRestore(content, route.snapshotId);
+      show(content, () => renderRestore(content, route.snapshotId));
       break;
     case "activity":
-      void renderActivity(content);
+      show(content, () => renderActivity(content));
       break;
     case "environments":
-      void renderEnvironments(content, route.select);
+      show(content, () => renderEnvironments(content, route.select));
       break;
     case "storage":
-      void renderStorage(content, route.select);
+      show(content, () => renderStorage(content, route.select));
       break;
     case "browse":
-      void renderStorage(content, route.storage, true);
+      show(content, () => renderStorage(content, route.storage, true));
       break;
     case "maintenance":
-      void renderMaintenance(content);
+      show(content, () => renderMaintenance(content));
       break;
     case "inspect":
-      void renderInspector(content, route);
+      show(content, () => renderInspector(content, route));
       break;
   }
+}
+
+/**
+ * Every view puts a spinner up and replaces it once the engine has answered. If
+ * it throws in between, nothing replaces the spinner and the application looks
+ * hung rather than broken — which is exactly how it looked on a first launch,
+ * when the engine still answered an unconfigured PortCloak with null lists and
+ * the first `.length` threw.
+ *
+ * That cause is fixed in the engine and tested there. This is the guarantee
+ * that the next one is visible: a view that fails says so, and offers the only
+ * useful action.
+ */
+function show(content: HTMLElement, view: () => Promise<void>): void {
+  view().catch((err: unknown) => {
+    clear(content);
+    content.appendChild(
+      notice(
+        "danger",
+        "This screen could not be drawn.",
+        err instanceof Error ? err.message : String(err),
+      ),
+    );
+    content.appendChild(
+      h("button", { onClick: () => show(content, view) }, "Try again"),
+    );
+  });
 }
 
 /** Keeps the navigation counters honest without each view having to push them. */

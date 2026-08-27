@@ -44,9 +44,14 @@ export async function renderEnvironments(root: HTMLElement, select_?: string): P
     probing: false,
     saving: false,
   };
-  if (state.selected) {
-    state.draft = { ...snapshot.environments.find((e) => e.name === state.selected)! };
-    state.originalName = state.selected;
+  const chosen = snapshot.environments.find((e) => e.name === state.selected);
+  if (chosen) {
+    state.draft = { ...chosen };
+    state.originalName = chosen.name;
+  } else {
+    // A name that is no longer there — a deleted environment still in a route —
+    // is nobody's selection rather than an editor full of undefined.
+    state.selected = undefined;
   }
 
   const draw = () => {
@@ -96,10 +101,43 @@ function page(state: State, draw: () => void, root: HTMLElement): HTMLElement {
     container.appendChild(configProblems(snapshot, root));
   }
 
+  if (snapshot.environments.length === 0 && !state.draft) {
+    container.appendChild(nothingYet(snapshot));
+    return container;
+  }
+
   container.appendChild(
     h("div", { class: "split" }, list(state, draw), state.draft ? editor(state, draw, root) : placeholder()),
   );
   return container;
+}
+
+/**
+ * The first launch. An empty list under a heading says nothing about what an
+ * environment is or why the tool needs one, so the empty state says both — and
+ * says the part operators ask about first, which is what PortCloak does to a
+ * running Keycloak.
+ */
+function nothingYet(snapshot: ConfigSnapshot): HTMLElement {
+  return h(
+    "div",
+    { class: "card" },
+    h(
+      "div",
+      { class: "card-body" },
+      h("div", { class: "card-title" }, "No environments yet"),
+      h(
+        "p",
+        null,
+        "An environment is one place a Keycloak server runs — on this machine, on a host you reach over SSH, in a Docker container, or in a Kubernetes namespace. PortCloak reads from it. It never restarts or reconfigures the instance serving your logins.",
+      ),
+      h(
+        "p",
+        { class: "muted small" },
+        `Add one with the button above, or write it into ${snapshot.configFile} by hand — the file is the same one this screen edits. Credentials never go in it: each secret goes to this machine's keychain and only a handle is written to the file.`,
+      ),
+    ),
+  );
 }
 
 /** A malformed config is shown with its line numbers rather than swallowed. */
@@ -176,7 +214,11 @@ function list(state: State, draw: () => void): HTMLElement {
   return h(
     "div",
     { class: "card" },
-    h("div", { class: "card-head" }, h("span", { class: "muted small" }, `${envs.length} environments`)),
+    h(
+      "div",
+      { class: "card-head" },
+      h("span", { class: "muted small" }, `${envs.length} environment${envs.length === 1 ? "" : "s"}`),
+    ),
     items,
   );
 }

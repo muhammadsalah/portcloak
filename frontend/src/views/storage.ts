@@ -64,9 +64,14 @@ export async function renderStorage(
     saving: false,
     browsing: openBrowser,
   };
-  if (state.selected) {
-    state.draft = { ...snapshot.storage.find((s) => s.name === state.selected)! };
-    state.originalName = state.selected;
+  const chosen = snapshot.storage.find((s) => s.name === state.selected);
+  if (chosen) {
+    state.draft = { ...chosen };
+    state.originalName = chosen.name;
+  } else {
+    // A name that is no longer there — a deleted storage still in a route — is
+    // nobody's selection rather than an editor full of undefined.
+    state.selected = undefined;
   }
 
   const draw = () => {
@@ -119,11 +124,42 @@ function page(state: State, draw: () => void, root: HTMLElement): HTMLElement {
   if (state.browsing) {
     return h("div", null, head, browser(state));
   }
+  if (state.snapshot!.storage.length === 0 && !state.draft) {
+    return h("div", null, head, nothingYet(state.snapshot!));
+  }
   return h(
     "div",
     null,
     head,
     h("div", { class: "split" }, list(state, draw), state.draft ? editor(state, draw, root) : placeholder()),
+  );
+}
+
+/**
+ * The first launch. What a storage is, and the one property of it that decides
+ * everything else: PortCloak roots every kind at a folder or prefix, so a
+ * bucket can hold several independent trees and deleting a definition here
+ * never touches what is already stored in it.
+ */
+function nothingYet(snapshot: ConfigSnapshot): HTMLElement {
+  return h(
+    "div",
+    { class: "card" },
+    h(
+      "div",
+      { class: "card-body" },
+      h("div", { class: "card-title" }, "No storage yet"),
+      h(
+        "p",
+        null,
+        "A storage is where snapshots are written — a folder on disk, a folder on a host over SSH, an S3 bucket, or an Azure Blob container. Mark one as requiring encryption and nothing plaintext will ever be written to it.",
+      ),
+      h(
+        "p",
+        { class: "muted small" },
+        `Add one with the button above, or write it into ${snapshot.configFile} by hand — the file is the same one this screen edits. Credentials never go in it: each secret goes to this machine's keychain and only a handle is written to the file.`,
+      ),
+    ),
   );
 }
 
@@ -171,7 +207,15 @@ function list(state: State, draw: () => void): HTMLElement {
   return h(
     "div",
     { class: "card" },
-    h("div", { class: "card-head" }, h("span", { class: "muted small" }, `${stores.length} storage definitions`)),
+    h(
+      "div",
+      { class: "card-head" },
+      h(
+        "span",
+        { class: "muted small" },
+        `${stores.length} storage definition${stores.length === 1 ? "" : "s"}`,
+      ),
+    ),
     items,
   );
 }
