@@ -25,7 +25,7 @@ import (
 // reached only the pre-flight check would fail at the point of no return, with
 // the clone already created.
 func TestRestoreWizard_NeverHardcodesAnEmptyKey(t *testing.T) {
-	src := readView(t, "restore.ts")
+	src := readView(t, "restore", "RestorePage.tsx")
 
 	// `passphrase: ""` and `identities: []`, however they are spaced.
 	empty := regexp.MustCompile(`(?m)\b(passphrase|identities)\s*:\s*(""|''|\[\s*\])`)
@@ -34,34 +34,43 @@ func TestRestoreWizard_NeverHardcodesAnEmptyKey(t *testing.T) {
 			"both into the pre-flight open and into apply", m)
 	}
 
-	// And the field has to exist, or there is nothing to carry.
-	if !strings.Contains(src, "keyFields(") {
+	// And the field has to exist, or there is nothing to carry. It lives on the
+	// Destination step, beside the notice promising decryption runs first.
+	step := readView(t, "restore", "DestinationStep.tsx")
+	if !strings.Contains(step, "<SnapshotKeyFields") {
 		t.Error("the restore flow renders no key input; an encrypted snapshot cannot be restored without one")
 	}
 }
 
 // Both screens that open a snapshot ask for the key the same way, through
-// views/key.ts. They ask in different containers — a modal on the way into the
-// inspector, a field on the restore step that promises decryption runs first —
-// and the container is allowed to differ. The question is not: an operator who
-// learns it on one screen should recognise it on the other.
+// components/SnapshotKeyFields.tsx. They ask in different containers — a modal
+// on the way into the inspector, a field on the restore step that promises
+// decryption runs first — and the container is allowed to differ. The question
+// is not: an operator who learns it on one screen should recognise it on the
+// other.
 func TestSnapshotKey_IsAskedForInOnePlace(t *testing.T) {
-	for _, view := range []string{"restore.ts", "inspector.ts"} {
-		src := readView(t, view)
-		if !strings.Contains(src, `from "./key"`) {
-			t.Errorf("%s does not use the shared key fields", view)
+	asks := map[string][2]string{
+		"the restore wizard": {"restore", "DestinationStep.tsx"},
+		"the inspector":      {"inspector", "KeyPrompt.tsx"},
+	}
+	for screen, where := range asks {
+		src := readView(t, where[0], where[1])
+		if !strings.Contains(src, `from "../../components/SnapshotKeyFields"`) {
+			t.Errorf("%s does not use the shared key fields", screen)
 		}
 		if strings.Contains(src, "AGE-SECRET-KEY-1") {
-			t.Errorf("%s spells out the key inputs itself; views/key.ts is where that lives", view)
+			t.Errorf("%s spells out the key inputs itself; "+
+				"components/SnapshotKeyFields.tsx is where that lives", screen)
 		}
 	}
 }
 
-func readView(t *testing.T, name string) string {
+// readView reads one file out of a page folder under frontend/src/pages.
+func readView(t *testing.T, page, name string) string {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join("..", "..", "frontend", "src", "views", name))
+	b, err := os.ReadFile(filepath.Join("..", "..", "frontend", "src", "pages", page, name))
 	if err != nil {
-		t.Fatalf("the %s view could not be read: %v", name, err)
+		t.Fatalf("the %s/%s view could not be read: %v", page, name, err)
 	}
 	return string(b)
 }
@@ -72,7 +81,7 @@ func readView(t *testing.T, name string) string {
 // the wrong number — it misses the key the operator typed into the inspector a
 // moment earlier, which is exactly the case that made the prompt indefensible.
 func TestRestoreWizard_AsksTheEngineWhatItCanTry(t *testing.T) {
-	src := readView(t, "restore.ts")
+	src := readView(t, "restore", "RestorePage.tsx")
 
 	if !strings.Contains(src, "KeysAPI.availability(") {
 		t.Error("the restore wizard does not ask what an open would have to work with")
@@ -87,7 +96,7 @@ func TestRestoreWizard_AsksTheEngineWhatItCanTry(t *testing.T) {
 // offered — encryption off, unconfirmed, and blocked on a confirmation the
 // operator had just declined to give.
 func TestCaptureWizard_DecliningToDeclineTurnsEncryptionBackOn(t *testing.T) {
-	src := readView(t, "capture.ts")
+	src := readView(t, "capture", "OptionsStep.tsx")
 
 	if !strings.Contains(src, "onCancel:") {
 		t.Fatal("the decline dialog has no cancel handler, so dismissing it decides nothing")

@@ -1,4 +1,5 @@
 import { writeFileSync } from "node:fs";
+import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
 
 /**
@@ -29,7 +30,19 @@ function keepEmbedPlaceholder(): Plugin {
 // The build output is embedded into the Go binary, so it has to be
 // self-contained: relative asset paths, no code splitting, no external CDN.
 export default defineConfig({
-  plugins: [keepEmbedPlaceholder()],
+  plugins: [
+    // The styled-components Babel transform is not cosmetic here: without it
+    // every rule lands under a hashed class name, and the one thing a developer
+    // does in front of this UI — open the inspector and find the component a
+    // box came from — stops working. `displayName` puts the component's name in
+    // the class; `pure` lets Rollup drop styles nothing renders.
+    react({
+      babel: {
+        plugins: [["babel-plugin-styled-components", { displayName: true, pure: true }]],
+      },
+    }),
+    keepEmbedPlaceholder(),
+  ],
   base: "./",
   // The logo lives at the repository root, not under frontend/, because the
   // README and packaging need it too. Pointing Vite's public directory at it

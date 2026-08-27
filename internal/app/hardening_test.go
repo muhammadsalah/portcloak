@@ -97,7 +97,7 @@ func TestWindow_GatesDevToolsOnTheBuildTag(t *testing.T) {
 // --wails-draggable; -webkit-app-region is an Electron convention and is inert
 // in WKWebView, so the Electron spelling looks right and does nothing.
 func TestMasthead_UsesTheWailsDragProperty(t *testing.T) {
-	css := readRepoFile(t, filepath.Join("frontend", "src", "styles.css"))
+	css := readRepoFile(t, filepath.Join("frontend", "src", "app", "Masthead.tsx"))
 
 	if !strings.Contains(css, "--wails-draggable: drag") {
 		t.Error("the masthead must set --wails-draggable: drag, or the window cannot be " +
@@ -107,12 +107,13 @@ func TestMasthead_UsesTheWailsDragProperty(t *testing.T) {
 	// window, and the comment above it explains why the Electron spelling was
 	// wrong — naming it there must not fail the test that forbids using it.
 	if strings.Contains(stripCSSComments(css), "-webkit-app-region") {
-		t.Error("styles.css still declares -webkit-app-region, which Wails does not read")
+		t.Error("Masthead.tsx still declares -webkit-app-region, which Wails does not read")
 	}
 }
 
 // stripCSSComments removes /* … */ blocks so a check can look at declarations
-// alone.
+// alone. The masthead's styling is a styled-components template rather than a
+// stylesheet now, and both spell a comment the same way.
 func stripCSSComments(css string) string {
 	var b strings.Builder
 	for {
