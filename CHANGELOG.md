@@ -37,8 +37,14 @@ and restore it. All four target kinds, all four storage backends, inspection and
 
 ### Storage
 - Disk, SFTP, S3-compatible and Azure Blob behind one contract, all passing the same table.
-- Resume driven by asking the server what it already holds — `ListParts` and `GetBlockList` —
-  so an upload survives PortCloak itself being restarted.
+- Resume driven by asking the destination what it already holds — `ListParts` and
+  `GetBlockList` on S3 and Azure, the file itself on disk and SFTP — so an upload survives
+  PortCloak being restarted. A checkpoint is a hint; the destination is the authority on where
+  a transfer actually got to, and it positions the source reader to match.
+- A resumed upload commits a prefix it never sent, so the checkpoint carries the rolling SHA-256
+  state alongside the offset and the finished object is verified against the digest computed
+  before the transfer — the same check a fresh upload gets. Where no usable state survives, the
+  prefix is re-read rather than trusted.
 
 ### Resilience
 - Retry, backoff with full jitter and per-endpoint circuit breaking, applied by wrapping every
@@ -46,6 +52,9 @@ and restore it. All four target kinds, all four storage backends, inspection and
   so a new failure mode surfaces instead of silently looping.
 - An unreplayable stream is never retried — resume from the checkpoint is the mechanism there,
   because retrying one would commit a truncated object.
+- A retry starts from the last checkpoint the failed attempt reached rather than from zero.
+  Re-sending 400 MB because an upload dropped at 390 MB is what the checkpoint exists to
+  prevent.
 
 ### Inspection
 - Tiered: the library needs no key, detail needs one, and the user index is built on open and
@@ -63,6 +72,18 @@ and restore it. All four target kinds, all four storage backends, inspection and
   may already have reached the destination.
 - Validation checks the signing key by KID rather than by count — the right number of keys with
   the wrong ids still means every existing token stops verifying.
+
+### Testing
+- One contract table per seam, run against every implementation: `BlobStore` across disk, SFTP,
+  S3 and Azure, and `Executor` across local, SSH, Docker and Kubernetes. A divergence is a bug
+  in the newest adapter rather than a reason to fork the table.
+- Offset resume is its own table, so disk and SFTP prove the same guarantees rather than one
+  being tested and the other assumed.
+- Integration tests sit behind `-tags=integration` against real MinIO, Azurite, sshd and Docker.
+  A missing container reads as "not run", never as a silent pass, and CI fails if any ephemeral
+  clone outlives the run.
+- Every use case and requirement in the rollout matrix names the test that would fail if it
+  stopped being met, and CI checks those names still resolve.
 
 ### Application
 - Wails v3 desktop shell with the eight screens from the design file. No sign-in, because there
