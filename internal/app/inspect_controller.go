@@ -68,7 +68,8 @@ type Overview struct {
 }
 
 // Open fetches, decrypts, verifies and reads a snapshot.
-func (i *InspectController) Open(req OpenRequest) Overview {
+func (i *InspectController) Open(req OpenRequest) (res Overview) {
+	defer func() { res = lists(res) }()
 	cfg := i.eng.Config.Config()
 	st, ok := cfg.StorageByName(req.Storage)
 	if !ok {
@@ -127,7 +128,8 @@ func (i *InspectController) overview(s *inspect.Session) Overview {
 }
 
 // Reopen returns the overview for a snapshot that is already open.
-func (i *InspectController) Reopen(snapshotID string) Overview {
+func (i *InspectController) Reopen(snapshotID string) (res Overview) {
+	defer func() { res = lists(res) }()
 	s, err := i.eng.Session(snapshotID)
 	if err != nil {
 		return Overview{Failure: Fail(err)}
@@ -183,7 +185,8 @@ type UsersResult struct {
 }
 
 // Users returns a page of the users table.
-func (i *InspectController) Users(q UsersQuery) UsersResult {
+func (i *InspectController) Users(q UsersQuery) (res UsersResult) {
+	defer func() { res = lists(res) }()
 	s, err := i.eng.Session(q.SnapshotID)
 	if err != nil {
 		return UsersResult{Failure: Fail(err)}
@@ -273,7 +276,8 @@ func join(parts []string, sep string) string {
 }
 
 // User returns one account's full detail.
-func (i *InspectController) User(snapshotID, userID string) (inspect.UserDetail, *Failure) {
+func (i *InspectController) User(snapshotID, userID string) (res inspect.UserDetail, fail *Failure) {
+	defer func() { res = lists(res) }()
 	s, err := i.eng.Session(snapshotID)
 	if err != nil {
 		return inspect.UserDetail{}, Fail(err)
@@ -306,7 +310,8 @@ type Entities struct {
 }
 
 // Entities returns everything except users.
-func (i *InspectController) Entities(snapshotID string) Entities {
+func (i *InspectController) Entities(snapshotID string) (res Entities) {
+	defer func() { res = lists(res) }()
 	s, err := i.eng.Session(snapshotID)
 	if err != nil {
 		return Entities{Failure: Fail(err)}
@@ -342,7 +347,8 @@ type LedgerView struct {
 }
 
 // Ledger returns the secret ledger.
-func (i *InspectController) Ledger(snapshotID string) LedgerView {
+func (i *InspectController) Ledger(snapshotID string) (res LedgerView) {
+	defer func() { res = lists(res) }()
 	s, err := i.eng.Session(snapshotID)
 	if err != nil {
 		return LedgerView{Failure: Fail(err)}
@@ -383,7 +389,8 @@ func (i *InspectController) Reveal(snapshotID, location, reason string) RevealRe
 }
 
 // Verify recomputes the integrity tree without touching any environment.
-func (i *InspectController) Verify(snapshotID string) (inspect.VerifyReport, *Failure) {
+func (i *InspectController) Verify(snapshotID string) (res inspect.VerifyReport, fail *Failure) {
+	defer func() { res = lists(res) }()
 	s, err := i.eng.Session(snapshotID)
 	if err != nil {
 		return inspect.VerifyReport{}, Fail(err)

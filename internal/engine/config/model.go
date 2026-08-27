@@ -47,41 +47,41 @@ const (
 // so a file written by a newer PortCloak and opened by an older one does not
 // quietly lose entries (UC-O7 E2).
 type Config struct {
-	Version      int            `yaml:"version"`
-	Preferences  Preferences    `yaml:"preferences"`
-	Environments []Environment  `yaml:"environments"`
-	Storage      []Storage      `yaml:"storage"`
-	Extra        map[string]any `yaml:",inline"`
+	Version      int            `yaml:"version" json:"version"`
+	Preferences  Preferences    `yaml:"preferences" json:"preferences"`
+	Environments []Environment  `yaml:"environments" json:"environments"`
+	Storage      []Storage      `yaml:"storage" json:"storage"`
+	Extra        map[string]any `yaml:",inline" json:"-"`
 }
 
 // Preferences are the tool-wide settings.
 type Preferences struct {
 	// UsersMode is the kc.sh export users mode; different_files is the default
 	// because it is what makes a very large realm survivable.
-	UsersMode string `yaml:"usersMode,omitempty"`
+	UsersMode string `yaml:"usersMode,omitempty" json:"usersMode,omitempty"`
 	// UsersPerFile bounds each user file.
-	UsersPerFile int `yaml:"usersPerFile,omitempty"`
+	UsersPerFile int `yaml:"usersPerFile,omitempty" json:"usersPerFile,omitempty"`
 	// VerifyByDefault turns on the optional Admin API pass for new captures.
-	VerifyByDefault *bool `yaml:"verifyByDefault,omitempty"`
+	VerifyByDefault *bool `yaml:"verifyByDefault,omitempty" json:"verifyByDefault,omitempty"`
 	// EncryptByDefault presents the capture wizard's encryption toggle as on.
 	// Encryption is opt-in (D8) — this governs the presented default, and
 	// declining it always remains a deliberate, respected choice.
-	EncryptByDefault *bool `yaml:"encryptByDefault,omitempty"`
+	EncryptByDefault *bool `yaml:"encryptByDefault,omitempty" json:"encryptByDefault,omitempty"`
 	// AllowSecretReveal lets an operator rule out secret extraction entirely
 	// while keeping inspection available (UC-I9 A1).
-	AllowSecretReveal *bool `yaml:"allowSecretReveal,omitempty"`
+	AllowSecretReveal *bool `yaml:"allowSecretReveal,omitempty" json:"allowSecretReveal,omitempty"`
 	// ProbeStaleAfter is how long a probe result stays believable. A cached
 	// "reachable" from three weeks ago is worse than no information.
-	ProbeStaleAfter time.Duration `yaml:"probeStaleAfter,omitempty"`
+	ProbeStaleAfter time.Duration `yaml:"probeStaleAfter,omitempty" json:"probeStaleAfter,omitempty"`
 	// RetryMaxAttempts and RetryBaseDelay tune the resilience layer.
-	RetryMaxAttempts int           `yaml:"retryMaxAttempts,omitempty"`
-	RetryBaseDelay   time.Duration `yaml:"retryBaseDelay,omitempty"`
-	RetryMaxDelay    time.Duration `yaml:"retryMaxDelay,omitempty"`
+	RetryMaxAttempts int           `yaml:"retryMaxAttempts,omitempty" json:"retryMaxAttempts,omitempty"`
+	RetryBaseDelay   time.Duration `yaml:"retryBaseDelay,omitempty" json:"retryBaseDelay,omitempty"`
+	RetryMaxDelay    time.Duration `yaml:"retryMaxDelay,omitempty" json:"retryMaxDelay,omitempty"`
 	// BreakerThreshold is how many consecutive failures open a circuit.
-	BreakerThreshold int           `yaml:"breakerThreshold,omitempty"`
-	BreakerCooldown  time.Duration `yaml:"breakerCooldown,omitempty"`
+	BreakerThreshold int           `yaml:"breakerThreshold,omitempty" json:"breakerThreshold,omitempty"`
+	BreakerCooldown  time.Duration `yaml:"breakerCooldown,omitempty" json:"breakerCooldown,omitempty"`
 
-	Extra map[string]any `yaml:",inline"`
+	Extra map[string]any `yaml:",inline" json:"-"`
 }
 
 // DefaultPreferences are the values used where the file says nothing. They live
@@ -146,34 +146,34 @@ func (p Preferences) Resolved() Preferences {
 
 // SSHHop is a jump/bastion host in the connection chain.
 type SSHHop struct {
-	Host          string  `yaml:"host"`
-	Port          int     `yaml:"port,omitempty"`
-	User          string  `yaml:"user,omitempty"`
-	Auth          SSHAuth `yaml:"auth,omitempty"`
-	CredentialRef string  `yaml:"credentialRef,omitempty"`
+	Host          string  `yaml:"host" json:"host"`
+	Port          int     `yaml:"port,omitempty" json:"port,omitempty"`
+	User          string  `yaml:"user,omitempty" json:"user,omitempty"`
+	Auth          SSHAuth `yaml:"auth,omitempty" json:"auth,omitempty"`
+	CredentialRef string  `yaml:"credentialRef,omitempty" json:"credentialRef,omitempty"`
 
-	Extra map[string]any `yaml:",inline"`
+	Extra map[string]any `yaml:",inline" json:"-"`
 }
 
 // ResourcePreset overrides what an ephemeral clone requests, instead of
 // inheriting the serving workload's own requests (UC-E4 A4).
 type ResourcePreset struct {
-	CPU    string `yaml:"cpu,omitempty"`
-	Memory string `yaml:"memory,omitempty"`
+	CPU    string `yaml:"cpu,omitempty" json:"cpu,omitempty"`
+	Memory string `yaml:"memory,omitempty" json:"memory,omitempty"`
 }
 
 // ProbeStamp records the last Test result so the list can show whether an
 // environment is usable, and how long ago that was established.
 type ProbeStamp struct {
-	At              time.Time `yaml:"at"`
-	OK              bool      `yaml:"ok"`
-	Summary         string    `yaml:"summary,omitempty"`
-	KeycloakVersion string    `yaml:"keycloakVersion,omitempty"`
-	CloneCapable    bool      `yaml:"cloneCapable,omitempty"`
+	At              time.Time `yaml:"at" json:"at"`
+	OK              bool      `yaml:"ok" json:"ok"`
+	Summary         string    `yaml:"summary,omitempty" json:"summary,omitempty"`
+	KeycloakVersion string    `yaml:"keycloakVersion,omitempty" json:"keycloakVersion,omitempty"`
+	CloneCapable    bool      `yaml:"cloneCapable,omitempty" json:"cloneCapable,omitempty"`
 	// Writable distinguishes "reachable, read-only" from "reachable and
 	// writable" for a storage probe. Read-only is a legitimate configuration
 	// for browsing, not a failure.
-	Writable *bool `yaml:"writable,omitempty"`
+	Writable *bool `yaml:"writable,omitempty" json:"writable,omitempty"`
 }
 
 // Stale reports whether the stamp is old enough that believing it would be
@@ -187,48 +187,48 @@ func (p *ProbeStamp) Stale(after time.Duration, now time.Time) bool {
 
 // Environment is one place a Keycloak server runs.
 type Environment struct {
-	Name string          `yaml:"name"`
-	Kind EnvironmentKind `yaml:"kind"`
+	Name string          `yaml:"name" json:"name"`
+	Kind EnvironmentKind `yaml:"kind" json:"kind"`
 
 	// Local and SSH: the install root containing bin/kc.sh.
-	ServerFolder string `yaml:"serverFolder,omitempty"`
-	JavaHome     string `yaml:"javaHome,omitempty"`
+	ServerFolder string `yaml:"serverFolder,omitempty" json:"serverFolder,omitempty"`
+	JavaHome     string `yaml:"javaHome,omitempty" json:"javaHome,omitempty"`
 
 	// SSH.
-	Host     string  `yaml:"host,omitempty"`
-	Port     int     `yaml:"port,omitempty"`
-	User     string  `yaml:"user,omitempty"`
-	Auth     SSHAuth `yaml:"auth,omitempty"`
-	JumpHost *SSHHop `yaml:"jumpHost,omitempty"`
-	Sudo     bool    `yaml:"sudo,omitempty"`
+	Host     string  `yaml:"host,omitempty" json:"host,omitempty"`
+	Port     int     `yaml:"port,omitempty" json:"port,omitempty"`
+	User     string  `yaml:"user,omitempty" json:"user,omitempty"`
+	Auth     SSHAuth `yaml:"auth,omitempty" json:"auth,omitempty"`
+	JumpHost *SSHHop `yaml:"jumpHost,omitempty" json:"jumpHost,omitempty"`
+	Sudo     bool    `yaml:"sudo,omitempty" json:"sudo,omitempty"`
 
 	// Docker.
-	DockerEndpoint string `yaml:"dockerEndpoint,omitempty"`
-	Container      string `yaml:"container,omitempty"`
-	Runtime        string `yaml:"runtime,omitempty"`
-	Network        string `yaml:"network,omitempty"`
+	DockerEndpoint string `yaml:"dockerEndpoint,omitempty" json:"dockerEndpoint,omitempty"`
+	Container      string `yaml:"container,omitempty" json:"container,omitempty"`
+	Runtime        string `yaml:"runtime,omitempty" json:"runtime,omitempty"`
+	Network        string `yaml:"network,omitempty" json:"network,omitempty"`
 
 	// Kubernetes / OpenShift.
-	Context        string          `yaml:"context,omitempty"`
-	Kubeconfig     string          `yaml:"kubeconfig,omitempty"`
-	Namespace      string          `yaml:"namespace,omitempty"`
-	Workload       string          `yaml:"workload,omitempty"`
-	ContainerName  string          `yaml:"containerName,omitempty"`
-	ResourcePreset *ResourcePreset `yaml:"resourcePreset,omitempty"`
+	Context        string          `yaml:"context,omitempty" json:"context,omitempty"`
+	Kubeconfig     string          `yaml:"kubeconfig,omitempty" json:"kubeconfig,omitempty"`
+	Namespace      string          `yaml:"namespace,omitempty" json:"namespace,omitempty"`
+	Workload       string          `yaml:"workload,omitempty" json:"workload,omitempty"`
+	ContainerName  string          `yaml:"containerName,omitempty" json:"containerName,omitempty"`
+	ResourcePreset *ResourcePreset `yaml:"resourcePreset,omitempty" json:"resourcePreset,omitempty"`
 
 	// Admin REST API — optional, and only ever used to verify what the export
 	// produced and to detect external dependencies.
-	AdminBaseURL       string `yaml:"adminBaseUrl,omitempty"`
-	AdminRealm         string `yaml:"adminRealm,omitempty"`
-	AdminUser          string `yaml:"adminUser,omitempty"`
-	AdminClientID      string `yaml:"adminClientId,omitempty"`
-	AdminCredentialRef string `yaml:"adminCredentialRef,omitempty"`
-	AdminInsecureTLS   bool   `yaml:"adminInsecureTls,omitempty"`
+	AdminBaseURL       string `yaml:"adminBaseUrl,omitempty" json:"adminBaseUrl,omitempty"`
+	AdminRealm         string `yaml:"adminRealm,omitempty" json:"adminRealm,omitempty"`
+	AdminUser          string `yaml:"adminUser,omitempty" json:"adminUser,omitempty"`
+	AdminClientID      string `yaml:"adminClientId,omitempty" json:"adminClientId,omitempty"`
+	AdminCredentialRef string `yaml:"adminCredentialRef,omitempty" json:"adminCredentialRef,omitempty"`
+	AdminInsecureTLS   bool   `yaml:"adminInsecureTls,omitempty" json:"adminInsecureTls,omitempty"`
 
-	CredentialRef string      `yaml:"credentialRef,omitempty"`
-	LastProbe     *ProbeStamp `yaml:"lastProbe,omitempty"`
+	CredentialRef string      `yaml:"credentialRef,omitempty" json:"credentialRef,omitempty"`
+	LastProbe     *ProbeStamp `yaml:"lastProbe,omitempty" json:"lastProbe,omitempty"`
 
-	Extra map[string]any `yaml:",inline"`
+	Extra map[string]any `yaml:",inline" json:"-"`
 }
 
 // Target renders what this environment points at, for the one-line summary in
@@ -250,45 +250,45 @@ func (e Environment) Target() string {
 
 // Storage is one place snapshot bundles live.
 type Storage struct {
-	Name    string      `yaml:"name"`
-	Kind    StorageKind `yaml:"kind"`
-	Default bool        `yaml:"default,omitempty"`
+	Name    string      `yaml:"name" json:"name"`
+	Kind    StorageKind `yaml:"kind" json:"kind"`
+	Default bool        `yaml:"default,omitempty" json:"default,omitempty"`
 	// EncryptionRequired removes the opt-out for anything written here.
-	EncryptionRequired bool `yaml:"encryptionRequired,omitempty"`
+	EncryptionRequired bool `yaml:"encryptionRequired,omitempty" json:"encryptionRequired,omitempty"`
 
 	// Disk and SSH: the folder everything is rooted at.
-	Folder string `yaml:"folder,omitempty"`
+	Folder string `yaml:"folder,omitempty" json:"folder,omitempty"`
 
 	// SSH.
-	Host     string  `yaml:"host,omitempty"`
-	Port     int     `yaml:"port,omitempty"`
-	User     string  `yaml:"user,omitempty"`
-	Auth     SSHAuth `yaml:"auth,omitempty"`
-	JumpHost *SSHHop `yaml:"jumpHost,omitempty"`
+	Host     string  `yaml:"host,omitempty" json:"host,omitempty"`
+	Port     int     `yaml:"port,omitempty" json:"port,omitempty"`
+	User     string  `yaml:"user,omitempty" json:"user,omitempty"`
+	Auth     SSHAuth `yaml:"auth,omitempty" json:"auth,omitempty"`
+	JumpHost *SSHHop `yaml:"jumpHost,omitempty" json:"jumpHost,omitempty"`
 
 	// S3-compatible.
-	Endpoint      string `yaml:"endpoint,omitempty"`
-	Region        string `yaml:"region,omitempty"`
-	Bucket        string `yaml:"bucket,omitempty"`
-	PathStyle     bool   `yaml:"pathStyle,omitempty"`
-	PartSizeMB    int    `yaml:"partSizeMb,omitempty"`
-	StorageClass  string `yaml:"storageClass,omitempty"`
-	ServerSideEnc string `yaml:"serverSideEncryption,omitempty"`
+	Endpoint      string `yaml:"endpoint,omitempty" json:"endpoint,omitempty"`
+	Region        string `yaml:"region,omitempty" json:"region,omitempty"`
+	Bucket        string `yaml:"bucket,omitempty" json:"bucket,omitempty"`
+	PathStyle     bool   `yaml:"pathStyle,omitempty" json:"pathStyle,omitempty"`
+	PartSizeMB    int    `yaml:"partSizeMb,omitempty" json:"partSizeMb,omitempty"`
+	StorageClass  string `yaml:"storageClass,omitempty" json:"storageClass,omitempty"`
+	ServerSideEnc string `yaml:"serverSideEncryption,omitempty" json:"serverSideEncryption,omitempty"`
 
 	// Azure Blob / Azurite.
-	Account     string `yaml:"account,omitempty"`
-	Container   string `yaml:"container,omitempty"`
-	BlockSizeMB int    `yaml:"blockSizeMb,omitempty"`
-	AccessTier  string `yaml:"accessTier,omitempty"`
+	Account     string `yaml:"account,omitempty" json:"account,omitempty"`
+	Container   string `yaml:"container,omitempty" json:"container,omitempty"`
+	BlockSizeMB int    `yaml:"blockSizeMb,omitempty" json:"blockSizeMb,omitempty"`
+	AccessTier  string `yaml:"accessTier,omitempty" json:"accessTier,omitempty"`
 
 	// Prefix is the folder within a bucket or container, so one backend can
 	// hold several independent snapshot trees.
-	Prefix string `yaml:"prefix,omitempty"`
+	Prefix string `yaml:"prefix,omitempty" json:"prefix,omitempty"`
 
-	CredentialRef string      `yaml:"credentialRef,omitempty"`
-	LastProbe     *ProbeStamp `yaml:"lastProbe,omitempty"`
+	CredentialRef string      `yaml:"credentialRef,omitempty" json:"credentialRef,omitempty"`
+	LastProbe     *ProbeStamp `yaml:"lastProbe,omitempty" json:"lastProbe,omitempty"`
 
-	Extra map[string]any `yaml:",inline"`
+	Extra map[string]any `yaml:",inline" json:"-"`
 }
 
 // Root renders what this storage points at, for the storage list.

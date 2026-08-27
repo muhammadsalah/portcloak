@@ -38,7 +38,8 @@ type AuditView struct {
 }
 
 // Audit returns the audit log, newest first.
-func (m *MaintenanceController) Audit(action string, sinceDays int) AuditView {
+func (m *MaintenanceController) Audit(action string, sinceDays int) (res AuditView) {
+	defer func() { res = lists(res) }()
 	filter := obs.AuditFilter{Action: obs.Action(action)}
 	if sinceDays > 0 {
 		filter.Since = time.Now().AddDate(0, 0, -sinceDays)
@@ -64,7 +65,8 @@ type ConfigFileView struct {
 }
 
 // ConfigFile describes where configuration lives and what is in it.
-func (m *MaintenanceController) ConfigFile() ConfigFileView {
+func (m *MaintenanceController) ConfigFile() (res ConfigFileView) {
+	defer func() { res = lists(res) }()
 	return ConfigFileView{
 		Path:        m.eng.Home.ConfigFile(),
 		Note:        "Plain YAML — read it, diff it, commit it, hand-edit a hostname. PortCloak re-reads it on launch. No credential is ever written here; only keychain handles.",
@@ -98,7 +100,8 @@ type UncheckedEnvironment struct {
 //
 // Removal is offered, never automatic — the operator's cluster is not ours to
 // garbage-collect without asking.
-func (m *MaintenanceController) Orphans() OrphanReport {
+func (m *MaintenanceController) Orphans() (res OrphanReport) {
+	defer func() { res = lists(res) }()
 	cfg := m.eng.Config.Config()
 	report := OrphanReport{}
 	now := time.Now()
@@ -205,7 +208,8 @@ type WorkingData struct {
 }
 
 // WorkingData reports what a purge would remove and what it would leave.
-func (m *MaintenanceController) WorkingData() WorkingData {
+func (m *MaintenanceController) WorkingData() (res WorkingData) {
+	defer func() { res = lists(res) }()
 	out := WorkingData{
 		Keeps: []string{
 			"config.yaml — your environments, storage definitions and preferences",
@@ -282,7 +286,8 @@ type PurgeResult struct {
 // local working data must never be a way to accidentally destroy a backup.
 // Interrupted jobs are kept too, because discarding one is job control rather
 // than housekeeping.
-func (m *MaintenanceController) Purge() PurgeResult {
+func (m *MaintenanceController) Purge() (res PurgeResult) {
+	defer func() { res = lists(res) }()
 	out := PurgeResult{}
 
 	open := m.eng.OpenSessionIDs()

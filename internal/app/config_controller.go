@@ -66,7 +66,8 @@ type ConfigSnapshot struct {
 }
 
 // Load returns everything the configuration screens render.
-func (c *ConfigController) Load() ConfigSnapshot {
+func (c *ConfigController) Load() (res ConfigSnapshot) {
+	defer func() { res = lists(res) }()
 	cfg := c.eng.Config.Config()
 	now := time.Now()
 	stale := c.eng.staleAfter()
@@ -299,7 +300,8 @@ type ProbeResult struct {
 // Sharing the code is a promise: what an operator sees here is exactly what a
 // capture would find. A Test that ran something different is how the two drift
 // into reporting different things.
-func (c *ConfigController) TestEnvironment(name string) ProbeResult {
+func (c *ConfigController) TestEnvironment(name string) (res ProbeResult) {
+	defer func() { res = lists(res) }()
 	cfg := c.eng.Config.Config()
 	env, ok := cfg.Environment(name)
 	if !ok {
@@ -359,7 +361,8 @@ type StorageProbeResult struct {
 
 // TestStorage performs the round trip: list, write a probe, verify it, remove
 // it — and cleans up even when a step fails.
-func (c *ConfigController) TestStorage(name string) StorageProbeResult {
+func (c *ConfigController) TestStorage(name string) (res StorageProbeResult) {
+	defer func() { res = lists(res) }()
 	cfg := c.eng.Config.Config()
 	st, ok := cfg.StorageByName(name)
 	if !ok {

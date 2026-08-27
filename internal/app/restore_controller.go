@@ -80,7 +80,8 @@ type Plan struct {
 }
 
 // Plan computes the preview.
-func (r *RestoreController) Plan(req PlanRequest) Plan {
+func (r *RestoreController) Plan(req PlanRequest) (res Plan) {
+	defer func() { res = lists(res) }()
 	s, err := r.eng.Session(req.SnapshotID)
 	if err != nil {
 		return Plan{Failure: Fail(err)}

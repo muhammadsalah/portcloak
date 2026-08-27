@@ -71,7 +71,8 @@ type ActivityView struct {
 }
 
 // List returns every job, newest first.
-func (j *JobsController) List() ActivityView {
+func (j *JobsController) List() (res ActivityView) {
+	defer func() { res = lists(res) }()
 	jobs, err := j.eng.Jobs.List()
 	if err != nil {
 		return ActivityView{Failure: Fail(err)}
@@ -266,7 +267,8 @@ func (j *JobsController) Discard(jobID string) DiscardResult {
 // rather than assumed: a capture whose bundle is already sealed resumes as an
 // upload, and anything earlier runs the export again. Implying a fine-grained
 // resume that does not exist would be worse than saying so.
-func (j *JobsController) Resume(jobID string) StartResult {
+func (j *JobsController) Resume(jobID string) (res StartResult) {
+	defer func() { res = lists(res) }()
 	job, err := j.eng.Jobs.Load(jobID)
 	if err != nil {
 		return StartResult{Failure: Fail(err)}

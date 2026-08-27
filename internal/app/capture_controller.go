@@ -31,7 +31,8 @@ type WizardDefaults struct {
 }
 
 // Defaults returns what the wizard needs to open.
-func (c *CaptureController) Defaults() WizardDefaults {
+func (c *CaptureController) Defaults() (res WizardDefaults) {
+	defer func() { res = lists(res) }()
 	cfg := c.eng.Config.Config()
 	snapshot := (&ConfigController{eng: c.eng}).Load()
 
@@ -67,7 +68,8 @@ type RealmsResult struct {
 }
 
 // Realms enumerates the realms on an environment.
-func (c *CaptureController) Realms(environment string) RealmsResult {
+func (c *CaptureController) Realms(environment string) (res RealmsResult) {
+	defer func() { res = lists(res) }()
 	cfg := c.eng.Config.Config()
 	env, ok := cfg.Environment(environment)
 	if !ok {
@@ -123,7 +125,8 @@ type StartResult struct {
 }
 
 // Start runs the capture.
-func (c *CaptureController) Start(opts CaptureOptions) StartResult {
+func (c *CaptureController) Start(opts CaptureOptions) (res StartResult) {
+	defer func() { res = lists(res) }()
 	if !opts.Encrypt && !opts.AcknowledgedUnencrypted {
 		return StartResult{Failure: &Failure{
 			Message: "Writing this snapshot unencrypted has not been confirmed.",

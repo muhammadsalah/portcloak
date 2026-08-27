@@ -46,7 +46,8 @@ type FirstRun struct {
 }
 
 // Library lists every snapshot across every configured storage, with no key.
-func (s *SnapshotController) Library() LibraryView {
+func (s *SnapshotController) Library() (res LibraryView) {
+	defer func() { res = lists(res) }()
 	cfg := s.eng.Config.Config()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -99,7 +100,8 @@ type BrowseResult struct {
 }
 
 // Browse lists one storage's contents.
-func (s *SnapshotController) Browse(name string) BrowseResult {
+func (s *SnapshotController) Browse(name string) (res BrowseResult) {
+	defer func() { res = lists(res) }()
 	cfg := s.eng.Config.Config()
 	st, ok := cfg.StorageByName(name)
 	if !ok {
@@ -142,7 +144,8 @@ type DeleteResult struct {
 
 // Delete removes a snapshot's bundle and both sidecars as one operation, and
 // reports what it actually removed rather than assuming.
-func (s *SnapshotController) Delete(storageName, bundleKey string) DeleteResult {
+func (s *SnapshotController) Delete(storageName, bundleKey string) (res DeleteResult) {
+	defer func() { res = lists(res) }()
 	cfg := s.eng.Config.Config()
 	st, ok := cfg.StorageByName(storageName)
 	if !ok {
