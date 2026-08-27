@@ -142,11 +142,11 @@ const (
 
 // ImportRequest is everything the driver needs to build an import invocation.
 type ImportRequest struct {
-	KcPath   string
-	Dir      string
-	File     string
-	Strategy ImportStrategy
-	Ports    Ports
+	KcPath    string
+	Dir       string
+	File      string
+	Strategy  ImportStrategy
+	Ports     Ports
 	Optimized bool
 	ExtraArgs []string
 }

@@ -267,12 +267,12 @@ type Storage struct {
 	JumpHost *SSHHop `yaml:"jumpHost,omitempty"`
 
 	// S3-compatible.
-	Endpoint     string `yaml:"endpoint,omitempty"`
-	Region       string `yaml:"region,omitempty"`
-	Bucket       string `yaml:"bucket,omitempty"`
-	PathStyle    bool   `yaml:"pathStyle,omitempty"`
-	PartSizeMB   int    `yaml:"partSizeMb,omitempty"`
-	StorageClass string `yaml:"storageClass,omitempty"`
+	Endpoint      string `yaml:"endpoint,omitempty"`
+	Region        string `yaml:"region,omitempty"`
+	Bucket        string `yaml:"bucket,omitempty"`
+	PathStyle     bool   `yaml:"pathStyle,omitempty"`
+	PartSizeMB    int    `yaml:"partSizeMb,omitempty"`
+	StorageClass  string `yaml:"storageClass,omitempty"`
 	ServerSideEnc string `yaml:"serverSideEncryption,omitempty"`
 
 	// Azure Blob / Azurite.

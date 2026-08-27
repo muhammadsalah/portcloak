@@ -76,11 +76,11 @@ func TestBuildImport_Strategies(t *testing.T) {
 
 func TestParseVersion_AcrossBannerShapes(t *testing.T) {
 	cases := map[string]string{
-		"Keycloak 25.0.2\n":                                "25.0.2",
-		"26.0.7\n":                                         "26.0.7",
-		"Keycloak - Version 22.0.5\nJVM: 17.0.9\n":         "22.0.5",
-		"WARN  [io.quarkus] Keycloak 24.0.1 on JVM":        "24.0.1",
-		"nothing useful here":                              "",
+		"Keycloak 25.0.2\n": "25.0.2",
+		"26.0.7\n":          "26.0.7",
+		"Keycloak - Version 22.0.5\nJVM: 17.0.9\n":  "22.0.5",
+		"WARN  [io.quarkus] Keycloak 24.0.1 on JVM": "24.0.1",
+		"nothing useful here":                       "",
 	}
 	for in, want := range cases {
 		if got := ParseVersion(in); got != want {
