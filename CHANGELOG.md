@@ -8,9 +8,10 @@ record; unprefixed `v` tags mark shipped binaries.
 
 ## [Unreleased]
 
-The first run against real Docker. Every fault below was found by driving the built application
-against live Keycloak containers rather than by reading the code, and each one is written up in
-[`spec/notes/`](./spec/notes/README.md) with the test that keeps it from returning.
+The first run against real Docker, and what watching it run made obvious. The faults were found
+by driving the built application against live Keycloak containers rather than by reading the
+code, and each one is written up in [`spec/notes/`](./spec/notes/README.md) with the test that
+keeps it from returning.
 
 ### Fixed
 - **An empty configuration never got past its loading spinner.** Nil slices reached the frontend
@@ -35,10 +36,37 @@ against live Keycloak containers rather than by reading the code, and each one i
   `Prepare`'s error check, so a `Prepare` that failed after creating the clone abandoned one
   holding the serving instance's database credentials. The capture path was fixed for this;
   restore was not.
+- **A run that was happening did not look like one.** Phases were announced to the event stream
+  and nowhere else, so the job record never learned which phase it was in and anything re-reading
+  it drew a pipeline with no live step. A batch of realms reported its shared probe and clone
+  under the first realm's job id alone, leaving every other card blank through the slowest part
+  of the run. The clone phase was started and never completed — on a local target, which creates
+  no clone, permanently. And the Activity screen drew itself once and patched three elements, so
+  a finished capture still looked stuck until the screen was left and reopened.
+- **The Admin API user and credential were invisible while being filled in.** They appeared only
+  once a base URL had been typed, and nothing on that form redraws while you type, so they turned
+  up only after leaving the screen and coming back.
+- A second Name field on the Kubernetes tab bound to the same value as the one above it. It is
+  now the kubeconfig path, which the model has carried all along with nowhere to enter it.
 - A view that threw left its spinner on screen forever. Views are now invoked through a guard
   that puts the failure on the pane instead.
 
 ### Added
+- **Keys** — a screen, a `keys:` section in `config.yaml`, and a place for the material to live.
+  Generate or import an age keypair, or remember a passphrase by name; the secret half goes to
+  this machine's keychain and the file carries only the name, the kind, the public half and a
+  handle. Captures seal to a key by name instead of to a pasted public key. Deleting one asks for
+  its name to be typed, because a key is in use by every snapshot ever sealed with it — in
+  backends PortCloak may not even be configured for.
+- **Restore and Inspect open a snapshot with a stored key without asking.** The attempts happen
+  while reading the envelope, which is the cheapest proof a key works: nothing first, then
+  whatever was typed, then each stored key — identities before passphrases, because an identity
+  attempt is free and scrypt deliberately is not. Whichever key worked is named on the screen and
+  in the audit log; the key field remains as an override.
+- **`kcPath` on Docker and Kubernetes environments** — where `kc.sh` actually lives inside the
+  container. PortCloak derived it from `KEYCLOAK_HOME` and otherwise assumed the official images'
+  path, which a custom build makes wrong; the failure landed deep inside the export.
+- Key lifecycle in the audit log: created, imported, revealed, deleted.
 - [`spec/notes/`](./spec/notes/README.md) — the gotchas that reached working code, each with its
   symptom, its cause, the rule, and the guard test that fails if it comes back.
 - Real `kc.sh export --help-all` output from four Keycloak versions in `testdata/kc-help`, which

@@ -148,6 +148,11 @@ database. Large-realm exports are therefore still best scheduled off-peak.
   but with **no network aliases** inherited — see the label trap above.
 - **Remote Docker:** `DOCKER_HOST` over TLS and Docker-over-SSH work identically and ride the
   same resilience layer.
+- **Where `kc.sh` is:** read from `KEYCLOAK_HOME` on the image, falling back to
+  `/opt/keycloak/bin/kc.sh`. Both are guesses that are right for the official images and wrong
+  for a custom build, so the environment carries a `kcPath` override that wins outright. The
+  probe reports which path it will use and says when the answer came from the environment rather
+  than from the image — a wrong path is then visible before a capture rather than during one.
 - **Edge cases:** distroless images lacking `tar` (the API copy streams its own tar, so this is
   survivable); read-only root filesystem (export into a `tmpfs` mount PortCloak adds to the
   clone); image pulled from a registry that is no longer reachable (probe verifies the image is
@@ -170,6 +175,10 @@ database. Large-realm exports are therefore still best scheduled off-peak.
   clone is correct regardless of how many replicas serve traffic — and it no longer matters which
   pod you picked, which was a real source of confusion in the cluster case. Sessions, which *were*
   the cluster-specific complication, are out of scope (N5).
+- **Where `kc.sh` is:** as on Docker — `KEYCLOAK_HOME` on the container spec, then
+  `/opt/keycloak/bin/kc.sh`, then the environment's `kcPath` override ahead of both. A vendor
+  rebuild that installs Keycloak elsewhere is ordinary, and the failure it caused arrived deep
+  inside the export.
 - **Edge cases:** `ResourceQuota` exhaustion (probe reports before starting); `PodSecurity`
   admission rejecting the clone (surfaced with the exact policy violation); no schedulable node
   matching inherited `nodeSelector`; exec disabled by policy (surfaced clearly, with the

@@ -234,3 +234,75 @@ which also pin that three files into one directory cost one round trip rather th
 error, the exact defect entry 2 records being fixed in the capture path. Restore never got the
 same treatment, so a `Prepare` that failed after creating the clone leaked it. Fixed, with the
 comment that says why the order matters.
+
+---
+
+## 11. A derived path is a guess, and a guess needs an override
+
+**Symptom** — A capture from a custom-built Keycloak image fails partway through, in the export,
+against a path nobody chose:
+
+```
+/opt/keycloak/bin/kc.sh: no such file or directory
+```
+
+The probe passed. The clone was created. The failure arrives after the expensive part.
+
+**Cause** — Docker and Kubernetes derived `kc.sh` from `KEYCLOAK_HOME` in the container's
+environment and otherwise fell back to `/opt/keycloak/bin/kc.sh`. Both are good guesses for the
+official images and neither is a fact. An image built from a distroless base, or one that
+installs Keycloak under `/app`, or a vendor's rebuild that leaves `KEYCLOAK_HOME` unset — all of
+these are ordinary, and PortCloak had nowhere to be told.
+
+Local and SSH never had this problem, because they ask for the install root and derive the path
+from an answer the operator gave.
+
+**Rule** — Where a path is derived rather than stated, the derivation is a default and the
+environment carries an override. `Environment.KcPath` wins outright over both guesses on Docker
+and Kubernetes; the probe reports which path it will use and says when the answer came from the
+environment rather than from the image, so a wrong one is visible before a capture rather than
+during one. A relative path is rejected when the config is read — the export runs from a work
+directory that is not the install root, so a relative path has no meaning inside the container.
+
+**Guard** — Config validation rejects a non-absolute `kcPath`
+(`internal/engine/config/validate.go`, covered by the config validation tests), and both
+platforms route the decision through a single `kcPathIn(configured, …)` that takes the override
+first.
+
+---
+
+## 12. A secret the tool refuses to keep is a feature the operator turns off
+
+**Symptom** — Nothing fails. Encryption simply stops being used. A passphrase typed at capture
+has to be typed again at every restore, at every inspection, on every machine; a generated age
+keypair was shown once and stored nowhere, so the operator became the key management system. The
+observable outcome is a library of unencrypted snapshots and an operator who has a good reason
+for each one.
+
+**Cause** — PortCloak held every other secret it needed — SSH keys, S3 credentials, Admin API
+passwords — in the OS keychain behind a handle, and made exactly one exception: the material that
+protects the file holding unmasked client secrets and private signing keys. The exception was
+deliberate and it was wrong. "We never store your key" reads as rigour and behaves as friction,
+and friction is what decides whether encryption is on.
+
+**Rule** — A key is a named, stored thing on the same terms as every other secret: value in the
+keychain, name and handle in `config.yaml`, portable configuration and non-portable secrets. An
+open tries what is stored before it asks for anything, and the trying happens while reading the
+envelope — the first document in the archive, so a wrong key fails there rather than after a
+multi-gigabyte extraction.
+
+Order matters twice. Identities are tried before passphrases, because matching an age recipient
+costs nothing and every scrypt attempt pays a deliberate second. And a key the operator typed is
+tried before any stored one, so an explicit override stays an override.
+
+Silent is not the same as invisible. The key that opened a snapshot is named on the screen and
+recorded in the audit log, along with every creation, import, reveal and deletion — because the
+thing that replaced a prompt has to leave more evidence than the prompt did, not less.
+
+**Guard** — `TestOpen_UsesAStoredIdentityWithoutBeingAsked`,
+`TestOpen_UsesAStoredPassphraseWithoutBeingAsked`,
+`TestOpen_ASuppliedKeyIsNotAttributedToAStoredOne` and `TestOpen_SaysWhatItTried`
+(`internal/engine/inspect/unlock_test.go`) seal real bundles and open them with nothing but a
+stored key. `TestKeys_*` (`internal/app/keys_test.go`) covers the store itself: generated keys
+are usable, imports derive their own public half, deletion takes the secret with it, and a reveal
+is audited without recording what was revealed.

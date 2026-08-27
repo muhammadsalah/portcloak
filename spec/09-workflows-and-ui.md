@@ -14,11 +14,12 @@ definition carries.
 
 *Source: [`12-ui-information-architecture.puml`](./diagrams/12-ui-information-architecture.puml) · [SVG](./diagrams/svg/12-ui-information-architecture.svg)*
 
-## 9.1b Configuration: Environments and Storage
+## 9.1b Configuration: Environments, Storage and Keys
 
-Two configuration screens hold everything PortCloak needs to reach the outside world. Both are
-list-and-detail: a list of defined entries on the left, a form on the right, and a **Test**
-action that reports a concrete pass/fail rather than a silent save.
+Three configuration screens hold everything PortCloak needs to reach the outside world and to
+seal what it brings back. Environments and Storage are list-and-detail: a list of defined
+entries on the left, a form on the right, and a **Test** action that reports a concrete pass/fail
+rather than a silent save. Keys is a plain list, because a key has nothing to test.
 
 ### Environments — *where Keycloak runs*
 
@@ -29,8 +30,16 @@ each asking only for what that kind actually needs:
 |------|--------|
 | **Local** | **Keycloak server folder** (install root containing `bin/kc.sh`) |
 | **SSH** | Host, port, user, auth (key/agent/password), optional jump host, **Keycloak server folder** on the remote |
-| **Docker** | Docker endpoint (socket / `DOCKER_HOST` / over-SSH), **service or container** running Keycloak |
-| **Kubernetes / OpenShift** | Kubeconfig context, **namespace**, **Deployment or StatefulSet** running Keycloak |
+| **Docker** | Docker endpoint (socket / `DOCKER_HOST` / over-SSH), **service or container** running Keycloak, optional **path to `kc.sh`** inside the container |
+| **Kubernetes / OpenShift** | Kubeconfig context and optional kubeconfig file, **namespace**, **Deployment or StatefulSet** running Keycloak, container name, optional **path to `kc.sh`** inside the pod |
+
+Every kind also takes an optional **Admin API** block — base URL, user, credential. It is shown
+in full from the start rather than revealed once a base URL is typed: this form does not redraw
+per keystroke, so a field gated on another field's value is a field that cannot be filled.
+
+The `kc.sh` path is empty for the official images, where PortCloak derives it. It exists because
+deriving is guessing, and a custom-built image makes the guess wrong in a way that only surfaces
+deep inside the export ([03 §3.6](./03-capture-targets.md)).
 
 **Test** runs the same `Probe` the capture wizard uses ([03 §3.9](./03-capture-targets.md)), so
 what you see here is exactly what a capture would find: Keycloak version, `kc.sh` location, free
@@ -51,9 +60,23 @@ A storage definition is a destination for snapshot bundles. Every kind is rooted
 One storage is marked **default** for new captures. Each also carries an **encryption required**
 switch that removes the opt-out for snapshots written there ([08 §8.2](./08-security.md)).
 
+### Keys — *what seals a snapshot and opens it again*
+
+A third configuration screen, on the same terms. A key is an age keypair or a remembered
+passphrase, generated or imported in-app; the secret half goes to the OS keychain and
+`config.yaml` carries the name, the kind, the public half where there is one, and a handle.
+
+The point of the screen is what it removes elsewhere. A capture seals to keys by name instead of
+to pasted public keys, and a restore or inspection opens a snapshot with what is stored rather
+than prompting — naming the key that worked, and keeping the key field as an override for the
+snapshot sealed with something else ([08 §8.2](./08-security.md)).
+
+Deleting a key asks for its name to be typed. Nothing PortCloak can see is using it; every
+snapshot ever sealed with it is.
+
 ### Where this is persisted
 
-Both lists live in `~/.portcloak/config.yaml` — readable, diffable, hand-editable — with every
+All three lists live in `~/.portcloak/config.yaml` — readable, diffable, hand-editable — with every
 credential held in the **OS keychain** and referenced by handle
 ([02 §2.6](./02-architecture.md)). Deleting an entry that something references is warned about,
 not silently allowed.
@@ -140,8 +163,14 @@ Key UI affordances:
 - **Wails v3** is the target shell.
 - **Bindings:** `CaptureController`, `RestoreController`, `SnapshotController`, `InspectController`,
   `ConfigController` expose Go methods to the frontend; nothing blocks — work runs in goroutines.
-- **Events:** progress/log/ledger updates stream via `runtime.EventsEmit`; the frontend
-  subscribes and renders live.
+- **Events:** progress/log/ledger updates stream on one event, keyed by job id; the frontend
+  subscribes once in the shell and routes.
+- **The stream and the job record are two views of one truth**, and a screen needs both. Every
+  phase announcement is written onto the job record as it happens, so a screen opened after the
+  fact — or refreshed, or reopened after a crash — shows the same pipeline the live stream did.
+  A batch of realms sharing one probe and one clone fans those events out to every job in it.
+  Activity patches what the stream can reach, re-reads the list on anything structural, polls
+  slowly while work is in flight, and repaints only when the shape changed.
 - **Cancellation:** UI cancel maps to `context.Context` cancellation down the whole stack.
 - **Cancellation** must also tear down an in-flight ephemeral clone — the cancel path runs
   `Teardown`, it does not merely abandon the job.

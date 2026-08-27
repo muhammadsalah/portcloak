@@ -32,6 +32,36 @@ design requirement (NFR-3), not a bolt-on.
 - **What is not encrypted:** `envelope.json` and the sidecar `*.manifest.json` — deliberately
   secret-free (counts, categories, completeness) so listing works without keys.
 
+### Where the keys live
+
+Encryption material is held on exactly the same terms as every other secret PortCloak needs, and
+for the same reason: a secret the tool refuses to keep is a feature the operator turns off. A
+passphrase typed at capture and typed again at every restore, on every machine, is friction — and
+friction is what decides whether encryption is on at all.
+
+- **A key is named.** `config.yaml` carries a `keys:` list of entries with a name, a kind
+  (`identity` or `passphrase`), the age public key where there is one, and a credential handle.
+  The secret half is in the OS keychain, never in the file — so configuration stays portable
+  between machines and the secrets deliberately do not, exactly as in §8.4.
+- **PortCloak can create one.** An age keypair is generated in-app, its private half stored, its
+  public half recorded and shown. It is also shown once as a copy to keep elsewhere, because a
+  key that exists only in one machine's keychain is a key that a lost machine takes with it.
+- **A capture seals to a key by name.** Recipient mode lists stored keys rather than asking for a
+  public key to be pasted, which is what made it something operators read about and skipped. A
+  pasted recipient is still accepted: a colleague's key is legitimate and PortCloak will never
+  hold its private half.
+- **An open tries what is held before asking.** Restore and inspection attempt the stored keys
+  while reading the envelope — the first document in the archive, so a wrong key fails there
+  rather than after a full extraction. Order is: nothing, then whatever the operator supplied,
+  then each stored key with identities before passphrases (an identity attempt is free; scrypt
+  deliberately is not).
+- **Silent is not invisible.** The key that opened a snapshot is named on the screen, and every
+  creation, import, reveal and deletion is in the audit log. What replaces a prompt has to leave
+  more evidence than the prompt did, not less.
+- **Deletion is irreversible and is presented as such.** A key is not in use by anything PortCloak
+  can see; it is in use by every snapshot ever sealed with it, in backends that may not be
+  configured here. Deleting one requires typing its name.
+
 ### When encryption is declined
 
 This is a supported choice, and it is worth being precise about what it means rather than

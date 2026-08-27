@@ -198,3 +198,71 @@ the inspector deliberately tries without one first, so that a snapshot needing n
 interrogated for one. Only the caller knows which case it is in, and only the restore flow knows
 it from the library listing before either call. That is why the invariant is asserted against
 the source rather than in a controller.
+
+---
+
+## 8. A progress event is not a record, and a screen needs both
+
+**Symptom** — A capture is running. The Activity screen shows the log streaming, and everything
+else on the card is frozen: the pipeline never ticks a step, the badge stays *Running* after the
+job has finished, the elapsed time is stuck at whatever it was when the screen opened. Leaving
+the screen and coming back shows the truth. It looks like the run is stalled, and there is no way
+from inside the screen to tell that it is not.
+
+**Cause** — Three, stacked, which is why it reads as one big one.
+
+The engine announced phases to the event stream and nowhere else. `job.Phase` and
+`job.CompletedPhases` were written at a handful of call sites and not at the others, so the job
+record — the thing every refresh, every relaunch and the whole Activity list is built from —
+never learned which phase the job was in. Anything reading it cold drew a pipeline with no live
+step in it.
+
+A batch of realms shares one probe and one clone, and the batch reporter carried `jobs[0].ID`.
+Every other realm's card was blank through the slowest part of the run.
+
+And the screen subscribed to the stream once, at render, holding direct references to three
+elements. Nothing else on the card had a path from an event to the DOM, so nothing else could
+change without a re-render that never came. Its unsubscribe was wired to a `MutationObserver`
+that fired while the *spinner* was still in the pane, so it never fired at all and each reload
+left another listener writing into detached nodes.
+
+**Rule** — The stream and the record are two views of one truth and are written together. In the
+orchestrator that means one constructor — `reporterFor(jobs...)` — which stamps the event, writes
+the phase onto every job it covers, persists it, and fans out to each job's id. Nothing else
+constructs a reporter.
+
+On the screen: patch what the stream can reach for immediacy, ask the engine again for anything
+structural, poll slowly while work is in flight so a missed event costs a second rather than the
+rest of the run, and repaint only when the shape actually changed so a ticking clock does not
+rebuild the page under the operator. Tear the previous render's listener down on the way in
+rather than trusting an observer to notice the pane is gone.
+
+And close every phase that is opened. `PhaseClone` was started and never completed, so on a local
+target — which creates no clone at all — the step stayed open for the rest of the run. "Nothing
+happened here" is a completion with a sentence, not an absence.
+
+**Guard** — `TestCapture_PhasesAreWrittenOntoTheJobRecord` and
+`TestCapture_SharedPhasesReachEveryRealmInTheBatch`
+(`internal/engine/orchestrator/liveness_test.go`) run a real capture and assert every phase of
+the pipeline reached the record, and that the shared phases reached every realm in the batch on
+both the record and the stream.
+
+---
+
+## 9. A field that appears only once another is filled cannot be filled
+
+**Symptom** — The Admin API user and password are not on the environment form. Typing a base URL
+does not make them appear. Leaving the screen and coming back does.
+
+**Cause** — The fields were rendered under `if (env.adminBaseUrl)`, and this form redraws on tab
+changes and saves — not on input. So the condition was evaluated once, against the draft as it
+stood when the editor was built, and the two fields that complete the block were absent at
+exactly the moment they were being filled in.
+
+**Rule** — On a form that does not redraw per keystroke, do not gate one field's *existence* on
+another field's value. Show the whole block; let the empty value mean what it means. Progressive
+disclosure needs a redraw to be progressive, and a redraw per keystroke costs the cursor.
+
+The same class of bug, one field over: the Kubernetes tab rendered a second **Name** input bound
+to `env.name`, duplicating the one at the top of the form. Two controls over one value, neither
+redrawing, so typing in either left the other showing the old text.
