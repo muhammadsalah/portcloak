@@ -49,6 +49,10 @@ content column with 24px padding.
 | 09 | Environment editor — Kubernetes | Kind tabs, kind-specific fields, keychain handle, full probe fact panel | UC-E1…E4, UC-E6…E8 |
 | 10 | Storage editor — S3 | Kind tabs, endpoint/bucket/prefix, default and encryption-required toggles | UC-S1…S4, UC-S6 |
 | 13 | Inspector — Secret ledger & reveal | Secrets by location and kind, one revealed under audit, one masked at source | UC-I8, UC-I9, UC-I12 |
+| 15 | Restore — dry run & strategy | Overwrite / skip / merge, and a diff against the live target computed for the selected strategy | UC-R3, UC-R4 |
+| 16 | Restore — result & validation | What was applied, post-restore validation, authentication continuity, what the destination still needs | UC-R1, UC-R5, UC-R6 |
+| 17 | Job outcome — failure & cancellation | Stage timeline, plain-language cause, retry ledger, checkpoint, and what a cancelled restore had already written | UC-O5, UC-O6, UC-R8 |
+| 18 | Audit log & maintenance | Audit entries, config file location, orphaned clones, local working data and purge | UC-O7, UC-O8, UC-O10, UC-C12 |
 
 ### Planned
 
@@ -57,10 +61,6 @@ content column with 24px padding.
 | 11 | Storage browser | What a storage actually holds, unrecognised objects included | UC-S8 |
 | 12 | Inspector — Clients, keys & federations | Every non-user entity type | UC-I7 |
 | 14 | Inspector — Verify, export & close | Integrity check, redacted export, index destruction | UC-I11, UC-I12, UC-I13 |
-| 15 | Restore — dry run & strategy | Diff against the live target; overwrite / skip / merge | UC-R3, UC-R4 |
-| 16 | Restore — applying & result | Per-category progress, post-restore validation, cancel | UC-R1, UC-R5, UC-R6, UC-R8 |
-| 17 | Job failure detail | What failed, why, whether it is retryable, what to do | UC-O5, UC-O6 |
-| 18 | Settings & maintenance | Config file location, audit log, orphaned clones, purge | UC-O7, UC-O8, UC-O10, UC-C12 |
 
 Screen 09 sits behind 07 and screen 10 behind 08 — they are the same route with the detail
 pane focused, drawn separately so the per-kind field sets and the probe fact panel can be
