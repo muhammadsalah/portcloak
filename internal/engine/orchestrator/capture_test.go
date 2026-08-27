@@ -370,7 +370,23 @@ func TestCapture_CancelRunsTeardown(t *testing.T) {
 	h.exec.CloneRef = "job/portcloak-cancel"
 
 	started := make(chan struct{})
+
+	// `release` is a leak guard, not part of the flow being tested. Cancelling
+	// is what has to unblock the command, and that is the whole assertion.
+	//
+	// It used to be closed immediately after Cancel, which left the select
+	// below with both cases ready — and Go chooses uniformly at random among
+	// ready cases. Roughly half the time the command returned success instead
+	// of the cancellation error, the capture carried on to fail somewhere
+	// else, and the job ended `failed` rather than `cancelled`. That is a coin
+	// toss, so it passed locally and lost on CI often enough to matter.
+	//
+	// Closing it from Cleanup keeps the goroutine from outliving a test that
+	// fails before cancellation propagates, without racing the thing under
+	// test.
 	release := make(chan struct{})
+	t.Cleanup(func() { close(release) })
+
 	h.exec.RunFunc = func(ctx context.Context, cmd target.Command) (target.ExecResult, error) {
 		close(started)
 		select {
@@ -389,7 +405,6 @@ func TestCapture_CancelRunsTeardown(t *testing.T) {
 	if err := h.orc.Cancel(handle.JobIDs[0]); err != nil {
 		t.Fatal(err)
 	}
-	close(release)
 
 	jobs := h.waitForJobs(handle.JobIDs)
 	if jobs[0].State != config.JobCancelled {
