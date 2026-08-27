@@ -1,12 +1,57 @@
 # Packaging
 
 ```bash
-./build/package.sh --version 0.0.1
+./build/package.sh --version 0.0.1          # everything this host can produce
+./build/package.sh --targets windows,linux  # or just some of it
 ```
 
-That is the whole release path. It builds the frontend, compiles with the
-`production` tag, stamps the build identity, assembles the platform bundle for
-the host OS and writes `dist/` with a `SHA256SUMS` beside the artifact.
+That is the whole release path. It builds the frontend, compiles each target
+with the `production` tag, stamps the build identity, assembles the platform
+bundles and writes `dist/` with one `SHA256SUMS` covering all of them.
+
+Five artifacts, six architectures:
+
+| Artifact | Arch | Built how |
+|---|---|---|
+| `PortCloak-<v>-macos-universal.zip` | arm64 + x86-64 | Native cgo per slice, `lipo`'d into one universal binary inside the `.app`. **macOS host only** — the bundle needs `lipo` and `codesign`. |
+| `PortCloak-<v>-windows-amd64.zip` | x86-64 | Cross-compiled from any host. |
+| `PortCloak-<v>-windows-arm64.zip` | arm64 | Cross-compiled from any host. |
+| `portcloak-<v>-linux-amd64.tar.gz` | x86-64 | Docker. |
+| `portcloak-<v>-linux-arm64.tar.gz` | arm64 | Docker. |
+
+**Windows needs no C cross-toolchain.** Wails' Windows backend is pure Go, so
+`CGO_ENABLED=0` builds it — no mingw, no sysroot, and it cross-compiles from
+macOS or Linux unchanged. The one flag that matters is `-H windowsgui`: without
+it the binary is a *console* executable and Windows opens a terminal window
+behind the app.
+
+**Linux cannot be cross-compiled with the Go toolchain alone.** Its Wails
+backend is cgo over GTK and WebKit — with `CGO_ENABLED=0` the build fails on
+undefined `pointer` in `webview_window_linux.go` — so it needs a C compiler
+*and* the GTK/WebKit headers and shared libraries for the target architecture.
+A cross C compiler on its own (zig cc, say) supplies libc but not those; a
+sysroot does, and `build/linux/Dockerfile` is the cheapest correct one. On a
+Linux host the script builds natively instead and skips Docker. The
+architecture that does not match the host runs under emulation and is slow.
+
+## The gtk3 build tag
+
+Linux builds pass `-tags production,gtk3`. This is a compatibility decision, not
+a preference: Wails v3 defaults to **GTK4 + webkitgtk-6.0**, and the `gtk3` tag
+selects **GTK3 + webkit2gtk-4.1** instead. The GTK4 stack is not on Debian 12 or
+Ubuntu 22.04, so a binary built against it would refuse to start for most people
+likely to run this.
+
+Three places have to agree, or the build fails on a missing `webkitgtk-6.0.pc`:
+the tag, the `-dev` packages in `build/linux/Dockerfile`, and the packages and
+tags in `.github/workflows/ci.yml`.
+
+Confirm it took by checking what the binary actually asks for — it should name
+`libgtk-3.so.0` and `libwebkit2gtk-4.1.so.0`:
+
+```bash
+readelf -d portcloak | grep NEEDED
+```
 
 For a development build, keep using `go build`:
 
@@ -101,3 +146,9 @@ Without it the build still succeeds and the executable has a generic icon and no
 version metadata, which `package.sh` says out loud rather than failing. The
 manifest also sets per-monitor-v2 DPI awareness and long-path support; without
 the first, the UI is bitmap-scaled and blurry on a high-DPI display.
+
+To check what actually landed in an `.exe`, the manifest is plain XML inside it:
+
+```bash
+python3 -c "d=open('PortCloak.exe','rb').read(); i=d.find(b'<assembly'); print(d[i:d.find(b'</assembly>',i)+11].decode())"
+```

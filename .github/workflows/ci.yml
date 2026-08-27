@@ -20,7 +20,22 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        # TAGS is empty everywhere but Linux, where `gtk3` selects Wails'
+        # GTK3 + webkit2gtk-4.1 backend. Wails defaults to GTK4 +
+        # webkitgtk-6.0, which is not the stack installed below and is not
+        # present on Debian 12 or Ubuntu 22.04 — so without this tag the
+        # Linux build fails on a missing webkitgtk-6.0 pkg-config file.
+        # Must stay in step with build/linux/Dockerfile.
+        include:
+          - os: ubuntu-latest
+            tags: gtk3
+            prod_tags: production,gtk3
+          - os: macos-latest
+            tags: ""
+            prod_tags: production
+          - os: windows-latest
+            tags: ""
+            prod_tags: production
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -44,17 +59,17 @@ jobs:
           npm --prefix frontend run build
 
       - name: Build
-        run: go build ./...
+        run: go build -tags "${{ matrix.tags }}" ./...
 
       - name: Build the application
-        run: go build -o portcloak ./cmd/portcloak
+        run: go build -tags "${{ matrix.tags }}" -o portcloak ./cmd/portcloak
 
       # The release build is a different compilation, not the same one with a
       # flag: `production` selects different files in both Wails and this
       # repository. Building it here is what stops that path rotting unnoticed
       # between releases and only failing on the day someone cuts a tag.
       - name: Build the application (production)
-        run: go build -tags production -trimpath -ldflags "-s -w" -o portcloak-production ./cmd/portcloak
+        run: go build -tags "${{ matrix.prod_tags }}" -trimpath -ldflags "-s -w" -o portcloak-production ./cmd/portcloak
 
   vet:
     name: Vet & lint
@@ -64,10 +79,16 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-      - run: go vet ./internal/... ./frontend/...
+      # internal/app imports Wails, which is cgo over GTK on Linux, so these
+      # need the same headers and the same tag as the build job.
+      - name: Linux WebKit dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+      - run: go vet -tags gtk3 ./internal/... ./frontend/...
       - uses: golangci/golangci-lint-action@v6
         with:
-          args: --timeout=5m ./internal/...
+          args: --timeout=5m --build-tags=gtk3 ./internal/...
 
   unit:
     name: Unit tests
@@ -77,9 +98,13 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
+      - name: Linux WebKit dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
       # No network, no Docker, no Keycloak. If a test in the engine needs one of
       # those, a fake is missing rather than the test being justified.
-      - run: go test ./internal/... -race -timeout 15m
+      - run: go test -tags gtk3 ./internal/... -race -timeout 15m
 
   redaction:
     # A separate stage so a redaction failure is unmissable. Test output and

@@ -1,24 +1,30 @@
 #!/usr/bin/env bash
 #
-# Builds a distributable PortCloak for the host platform.
+# Builds distributable PortCloak artifacts for every platform this host can
+# produce, on both x86-64 and arm64.
 #
-#   ./build/package.sh                 # version from git describe
+#   ./build/package.sh                          # everything possible here
 #   ./build/package.sh --version 0.0.1
-#   ./build/package.sh --skip-frontend # reuse an existing frontend/dist
+#   ./build/package.sh --targets windows,linux
+#   ./build/package.sh --skip-frontend          # reuse an existing frontend/dist
 #
-# Output lands in dist/ together with SHA256SUMS.
+# Output lands in dist/ with a SHA256SUMS covering all of it.
 #
-# What makes these different from `go build ./cmd/portcloak`:
+# | target  | arches        | how |
+# |---------|---------------|-----|
+# | darwin  | arm64, amd64  | native cgo, lipo'd into one universal .app. macOS host only. |
+# | windows | amd64, arm64  | cross-compiled from any host: Wails' Windows backend is pure Go, so CGO_ENABLED=0 works and no C cross-toolchain is needed. |
+# | linux   | amd64, arm64  | Docker. See build/linux/Dockerfile for why this one cannot be cross-compiled with the Go toolchain alone. |
 #
-#   * -tags production. This is the switch Wails reads to compile out the
-#     inspector, and that PortCloak reads to drop the Developer menu and
-#     disable the webview's context menu. A release built without it ships a
-#     right-click "Inspect Element" to every user.
-#   * -trimpath and -ldflags "-s -w". Local absolute paths are removed from the
-#     binary and the symbol table is dropped, which is both smaller and one
-#     fewer thing leaking about the machine that built it.
-#   * version, commit and build date stamped in, because the release gate
-#     requires the app to be able to say which build it is.
+# What separates these from `go build ./cmd/portcloak`:
+#
+#   * -tags production. The switch Wails reads to compile out the inspector,
+#     and that PortCloak reads to drop the Developer menu and disable the
+#     webview's context menu. Without it a release ships "Inspect Element".
+#   * -trimpath and -ldflags "-s -w". Build paths and the symbol table go.
+#   * -H windowsgui on Windows. Without it the binary is a console executable
+#     and Windows opens a terminal behind the app window.
+#   * version, commit and build date stamped in.
 #
 # Signing and notarisation are deliberately NOT here: they need credentials
 # that must not sit in a script a pull request can run. See the release gate in
@@ -30,44 +36,43 @@ root=$(cd "$(dirname "$0")/.." && pwd)
 cd "$root"
 
 version=""
+targets=""
 skip_frontend=0
 while [ $# -gt 0 ]; do
 	case "$1" in
-	--version)
-		version="$2"
-		shift 2
-		;;
-	--skip-frontend)
-		skip_frontend=1
-		shift
-		;;
-	-h | --help)
-		sed -n '2,28p' "$0"
-		exit 0
-		;;
-	*)
-		echo "unknown argument: $1" >&2
-		exit 2
-		;;
+	--version) version="$2"; shift 2 ;;
+	--targets) targets="$2"; shift 2 ;;
+	--skip-frontend) skip_frontend=1; shift ;;
+	-h | --help) sed -n '2,36p' "$0"; exit 0 ;;
+	*) echo "unknown argument: $1" >&2; exit 2 ;;
 	esac
 done
 
-# A tag if we are on one, otherwise the nearest tag plus the distance and hash.
+have() { command -v "$1" >/dev/null 2>&1; }
+
+host=$(uname -s)
+if [ -z "$targets" ]; then
+	targets="windows"
+	[ "$host" = "Darwin" ] && targets="darwin,$targets"
+	if [ "$host" = "Linux" ] || docker info >/dev/null 2>&1; then
+		targets="$targets,linux"
+	fi
+fi
+
+# A tag if we are on one, otherwise the nearest tag plus distance and hash.
 if [ -z "$version" ]; then
 	version=$(git describe --tags --always --dirty 2>/dev/null || echo "0.0.0-unknown")
 	version=${version#spec-}
 	version=${version#v}
 fi
-
 commit=$(git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
-if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
-	commit="${commit}-dirty"
-fi
-# SOURCE_DATE_EPOCH, when the caller sets it, makes the stamp reproducible.
+[ -n "$(git status --porcelain 2>/dev/null)" ] && commit="${commit}-dirty"
 date=$(date -u -r "${SOURCE_DATE_EPOCH:-$(date +%s)}" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null ||
 	date -u +%Y-%m-%dT%H:%M:%SZ)
 
 echo "PortCloak $version ($commit) $date"
+echo "targets: $targets"
+echo
 
 dist="$root/dist"
 rm -rf "$dist"
@@ -75,9 +80,9 @@ mkdir -p "$dist"
 
 # ------------------------------------------------------------------ frontend
 #
-# The Go binary embeds frontend/dist. Building the app without rebuilding the
-# frontend first is the one mistake that produces a release which looks fine
-# and runs last week's UI, so it takes an explicit flag to skip.
+# The Go binary embeds frontend/dist. Building without rebuilding the frontend
+# is the one mistake that ships a release running last week's UI, so skipping
+# takes an explicit flag.
 if [ "$skip_frontend" -eq 0 ]; then
 	echo "==> frontend"
 	npm --prefix frontend ci
@@ -85,112 +90,182 @@ if [ "$skip_frontend" -eq 0 ]; then
 else
 	echo "==> frontend (skipped)"
 fi
-
-if [ ! -f frontend/dist/index.html ]; then
-	echo "frontend/dist/index.html is missing — refusing to package a binary with no UI" >&2
+if [ ! -s frontend/dist/index.html ]; then
+	echo "frontend/dist/index.html is missing or empty — refusing to package a binary with no UI" >&2
 	exit 1
 fi
 
-ldflags="-s -w"
-ldflags="$ldflags -X main.version=$version"
-ldflags="$ldflags -X main.commit=$commit"
-ldflags="$ldflags -X main.date=$date"
+ldflags_common="-s -w -X main.version=$version -X main.commit=$commit -X main.date=$date"
 
-build_binary() { # goos goarch output
-	echo "==> go build $1/$2"
-	GOOS="$1" GOARCH="$2" CGO_ENABLED=1 \
-		go build -tags production -trimpath -ldflags "$ldflags" -o "$3" ./cmd/portcloak
-}
+wants() { case ",$targets," in *",$1,"*) return 0 ;; *) return 1 ;; esac; }
 
-sums() { # writes SHA256SUMS next to the artifacts
-	(cd "$dist" && find . -maxdepth 1 -type f ! -name SHA256SUMS -print0 |
-		sort -z | xargs -0 shasum -a 256 >SHA256SUMS)
-	echo "==> dist/SHA256SUMS"
-	cat "$dist/SHA256SUMS"
-}
-
-case "$(uname -s)" in
-
-# ------------------------------------------------------------------- macOS
-Darwin)
-	app="$dist/PortCloak.app"
+# =========================================================================
+# macOS — one universal .app
+# =========================================================================
+build_darwin() {
+	if [ "$host" != "Darwin" ]; then
+		echo "!! skipping darwin: an .app needs a macOS host (lipo, codesign)" >&2
+		return
+	fi
+	echo "==> darwin/arm64 + darwin/amd64"
+	local app="$dist/PortCloak.app"
 	mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 
-	# A universal binary is one file that runs natively on both Apple silicon
-	# and Intel. Cross-compiling the other arch needs cgo, which needs the
-	# matching SDK slice; if it is not there we ship the host arch alone rather
-	# than failing, and say so.
-	arm="$dist/.portcloak-arm64"
-	amd="$dist/.portcloak-amd64"
-	build_binary darwin arm64 "$arm"
-	if build_binary darwin amd64 "$amd" 2>/dev/null; then
-		lipo -create -output "$app/Contents/MacOS/portcloak" "$arm" "$amd"
-		echo "==> universal binary (arm64 + amd64)"
-	else
-		cp "$arm" "$app/Contents/MacOS/portcloak"
-		echo "!! amd64 slice could not be built; shipping arm64 only" >&2
+	local slices=()
+	for arch in arm64 amd64; do
+		if GOOS=darwin GOARCH="$arch" CGO_ENABLED=1 \
+			go build -tags production -trimpath -ldflags "$ldflags_common" \
+			-o "$dist/.pc-$arch" ./cmd/portcloak 2>/dev/null; then
+			slices+=("$dist/.pc-$arch")
+		else
+			echo "!! darwin/$arch slice failed to build" >&2
+		fi
+	done
+	if [ ${#slices[@]} -eq 0 ]; then
+		echo "!! no darwin slices built" >&2
+		rm -rf "$app"
+		return
 	fi
-	rm -f "$arm" "$amd"
+	lipo -create -output "$app/Contents/MacOS/portcloak" "${slices[@]}"
+	rm -f "${slices[@]}"
 	chmod +x "$app/Contents/MacOS/portcloak"
+	echo "    $(lipo -archs "$app/Contents/MacOS/portcloak")"
 
 	sed -e "s|{{VERSION}}|$version|g" -e "s|{{BUILD}}|$commit|g" \
 		build/darwin/Info.plist >"$app/Contents/Info.plist"
 	cp build/darwin/PortCloak.icns "$app/Contents/Resources/PortCloak.icns"
 	printf 'APPL????' >"$app/Contents/PkgInfo"
 
-	# An ad-hoc signature is not a Developer ID signature and will not pass
-	# Gatekeeper on another machine. It is here because an unsigned bundle on
-	# Apple silicon is killed on launch rather than merely warned about, so
-	# without this the artifact cannot even be smoke-tested locally.
-	if command -v codesign >/dev/null 2>&1; then
+	# Ad-hoc, NOT a Developer ID signature: it will not pass Gatekeeper on
+	# another machine. It is here because an unsigned bundle on Apple silicon
+	# is killed on launch rather than warned about, so without it the artifact
+	# cannot even be smoke-tested locally.
+	if have codesign; then
 		codesign --force --deep --sign - "$app" 2>/dev/null &&
-			echo "==> ad-hoc signed (NOT a Developer ID signature)"
+			echo "    ad-hoc signed (NOT a Developer ID signature)"
 	fi
 
-	(cd "$dist" && zip -qry "PortCloak-$version-macos.zip" PortCloak.app && rm -rf PortCloak.app)
-	sums
-	;;
+	(cd "$dist" && zip -qry "PortCloak-$version-macos-universal.zip" PortCloak.app && rm -rf PortCloak.app)
+}
 
-# ------------------------------------------------------------------- Linux
-Linux)
-	stage="$dist/portcloak-$version"
-	mkdir -p "$stage/bin" "$stage/share/applications"
-	build_binary linux "$(go env GOARCH)" "$stage/bin/portcloak"
-	cp build/linux/portcloak.desktop "$stage/share/applications/portcloak.desktop"
-	for px in 16 32 48 64 128 256 512; do
-		d="$stage/share/icons/hicolor/${px}x${px}/apps"
-		mkdir -p "$d"
-		cp "build/linux/appicon-${px}.png" "$d/portcloak.png"
-	done
-	cp README.md CHANGELOG.md "$stage/" 2>/dev/null || true
-	(cd "$dist" && tar czf "portcloak-$version-linux-$(go env GOARCH).tar.gz" "portcloak-$version" &&
-		rm -rf "portcloak-$version")
-	sums
-	;;
-
-# ----------------------------------------------------------------- Windows
-MINGW* | MSYS* | CYGWIN*)
-	# The icon and the version block are linked in from a .syso, which the Go
-	# toolchain picks up automatically from the package directory. go-winres
-	# generates it from build/windows/winres.json.
-	if command -v go-winres >/dev/null 2>&1; then
-		(cd cmd/portcloak && go-winres make --in "$root/build/windows/winres.json" \
-			--product-version "$version" --file-version "$version")
+# =========================================================================
+# Windows — one .exe per arch, cross-compiled, no C toolchain needed
+# =========================================================================
+build_windows() {
+	# The icon, version block and application manifest are linked in from a
+	# .syso the Go toolchain picks up automatically from the main package's
+	# directory, by GOARCH. Without go-winres the build still succeeds and the
+	# executable is simply generic-looking, which is said out loud rather than
+	# failing the release.
+	local winres=""
+	if have go-winres; then
+		winres=go-winres
+	elif [ -x "$(go env GOPATH)/bin/go-winres" ]; then
+		winres="$(go env GOPATH)/bin/go-winres"
+	fi
+	if [ -n "$winres" ]; then
+		(cd cmd/portcloak && "$winres" make --in "$root/build/windows/winres.json" \
+			--product-version "$version" --file-version "$version" \
+			--arch amd64,arm64 >/dev/null)
+		echo "==> windows resources (icon, version block, manifest)"
 	else
 		echo "!! go-winres not found — the .exe will have no icon and no version block" >&2
 		echo "   go install github.com/tc-hib/go-winres@latest" >&2
 	fi
-	build_binary windows "$(go env GOARCH)" "$dist/PortCloak.exe"
-	rm -f cmd/portcloak/*.syso
-	sums
-	;;
 
-*)
-	echo "unsupported host platform: $(uname -s)" >&2
-	exit 1
-	;;
-esac
+	for arch in amd64 arm64; do
+		echo "==> windows/$arch"
+		# -H windowsgui: without it Windows opens a console behind the app.
+		# CGO_ENABLED=0: Wails' Windows backend is pure Go, so this needs no
+		# mingw and cross-compiles from macOS or Linux unchanged.
+		GOOS=windows GOARCH="$arch" CGO_ENABLED=0 \
+			go build -tags production -trimpath \
+			-ldflags "$ldflags_common -H windowsgui" \
+			-o "$dist/PortCloak.exe" ./cmd/portcloak
+		(cd "$dist" && zip -q "PortCloak-$version-windows-$arch.zip" PortCloak.exe && rm -f PortCloak.exe)
+	done
+	rm -f cmd/portcloak/*.syso
+}
+
+# =========================================================================
+# Linux — one tarball per arch
+# =========================================================================
+stage_linux() { # arch binary
+	local arch="$1" bin="$2"
+	local stage="$dist/portcloak-$version-linux-$arch"
+	mkdir -p "$stage/bin" "$stage/share/applications"
+	cp "$bin" "$stage/bin/portcloak"
+	chmod +x "$stage/bin/portcloak"
+	cp build/linux/portcloak.desktop "$stage/share/applications/portcloak.desktop"
+	for px in 16 32 48 64 128 256 512; do
+		mkdir -p "$stage/share/icons/hicolor/${px}x${px}/apps"
+		cp "build/linux/appicon-${px}.png" "$stage/share/icons/hicolor/${px}x${px}/apps/portcloak.png"
+	done
+	cp README.md CHANGELOG.md "$stage/" 2>/dev/null || true
+	(cd "$dist" && tar czf "portcloak-$version-linux-$arch.tar.gz" "$(basename "$stage")" &&
+		rm -rf "$(basename "$stage")")
+}
+
+build_linux() {
+	if [ "$host" = "Linux" ]; then
+		local arch
+		arch=$(go env GOARCH)
+		echo "==> linux/$arch (native)"
+		# gtk3: Wails defaults to GTK4 + webkitgtk-6.0, which Debian 12 and
+		# Ubuntu 22.04 do not carry. See build/linux/Dockerfile.
+		CGO_ENABLED=1 go build -tags production,gtk3 -trimpath -ldflags "$ldflags_common" \
+			-o "$dist/.pc-linux" ./cmd/portcloak
+		stage_linux "$arch" "$dist/.pc-linux"
+		rm -f "$dist/.pc-linux"
+		echo "!! the other Linux architecture needs Docker or a machine of that arch" >&2
+		return
+	fi
+
+	if ! docker info >/dev/null 2>&1; then
+		echo "!! skipping linux: needs Docker (see build/linux/Dockerfile for why)" >&2
+		return
+	fi
+	if ! docker buildx version >/dev/null 2>&1; then
+		echo "!! skipping linux: needs docker buildx" >&2
+		return
+	fi
+
+	for arch in amd64 arm64; do
+		echo "==> linux/$arch (docker)"
+		local out="$dist/.linux-$arch"
+		rm -rf "$out"
+		# The architecture that does not match the host runs under emulation and
+		# is slow. That is the price of a correct GTK/WebKit sysroot.
+		if docker buildx build \
+			--platform "linux/$arch" \
+			--target export \
+			--file build/linux/Dockerfile \
+			--build-arg "VERSION=$version" \
+			--build-arg "COMMIT=$commit" \
+			--build-arg "DATE=$date" \
+			--output "type=local,dest=$out" \
+			. >/dev/null 2>"$dist/.linux-$arch.log"; then
+			stage_linux "$arch" "$out/portcloak"
+			rm -rf "$out" "$dist/.linux-$arch.log"
+		else
+			echo "!! linux/$arch failed; last lines of the build log:" >&2
+			tail -20 "$dist/.linux-$arch.log" >&2
+			rm -rf "$out"
+		fi
+	done
+}
+
+wants darwin && build_darwin
+wants windows && build_windows
+wants linux && build_linux
+
+# ------------------------------------------------------------------- sums
+(cd "$dist" && find . -maxdepth 1 -type f ! -name SHA256SUMS ! -name '.*' -print0 |
+	sort -z | xargs -0 shasum -a 256 >SHA256SUMS)
 
 echo
 echo "dist/:"
-ls -la "$dist"
+ls -lh "$dist" | grep -v '^total'
+echo
+echo "SHA256SUMS:"
+cat "$dist/SHA256SUMS"
