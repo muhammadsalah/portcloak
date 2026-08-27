@@ -168,6 +168,16 @@ func (o *Orchestrator) runCaptureBatch(ctx context.Context, env config.Environme
 	execCtx, err := exec.Prepare(batchCtx, target.PrepareOptions{
 		JobID: jobs[0].ID, Realms: req.Realms, Purpose: "capture",
 	})
+
+	// Teardown runs from a defer covering every exit path, including panic and
+	// including a Prepare that failed. Prepare can fail *after* the clone was
+	// created — waiting for it to come up, or setting up its work directory —
+	// and a clone left running carries the same database credentials as the
+	// serving instance. So the defer is registered before the error is checked,
+	// and the executor tears down whatever it recorded rather than whatever
+	// Prepare managed to return.
+	defer o.teardown(ctx, exec, execCtx, batchReporter, jobs)
+
 	if err != nil {
 		o.failAll(jobs, obs.PhaseClone, err)
 		return
@@ -175,13 +185,6 @@ func (o *Orchestrator) runCaptureBatch(ctx context.Context, env config.Environme
 	if execCtx.CloneRef != "" {
 		batchReporter.CloneCreated(execCtx.CloneRef)
 	}
-
-	// Teardown also runs from a defer covering every exit path, including
-	// panic. A clone left running carries the same database credentials as the
-	// serving instance, so this is a guarantee rather than a courtesy — and it
-	// is why the explicit call further down is idempotent rather than
-	// conditional.
-	defer o.teardown(ctx, exec, execCtx, batchReporter, jobs)
 
 	var verifier Verifier
 	if req.Verify || req.DetectDependencies {

@@ -233,6 +233,31 @@ func TestCapture_CancelDestroysTheClone(t *testing.T) {
 	}
 }
 
+// Prepare can fail after the clone exists — waiting for it to come up, or
+// setting up its work directory. The clone still has to be destroyed: it holds
+// the same database credentials as the serving instance, so abandoning one is
+// an operational incident rather than an untidy exit.
+func TestCapture_PrepareFailingAfterCreateStillDestroysTheClone(t *testing.T) {
+	h, p := cloneHarness(t)
+	p.WaitErr = errors.New("clone never became ready: ImagePullBackOff")
+
+	handle, err := h.orc.Capture(context.Background(), defaultRequest())
+	if err != nil {
+		t.Fatal(err)
+	}
+	jobs := h.waitForJobs(handle.JobIDs)
+
+	if jobs[0].State != config.JobFailed {
+		t.Fatalf("job ended %s, want failed", jobs[0].State)
+	}
+	if len(p.Created) != 1 {
+		t.Fatalf("the clone was created %d times", len(p.Created))
+	}
+	if err := p.Leaked(); err != nil {
+		t.Fatalf("a Prepare that failed after creating the clone abandoned it: %v", err)
+	}
+}
+
 // A clone that could never be created must leave nothing behind and say why.
 func TestCapture_CloneRefusedLeavesNothing(t *testing.T) {
 	h, p := cloneHarness(t)

@@ -372,7 +372,13 @@ func (p *Platform) CopyOut(ctx context.Context, ref, dir string, sink target.Art
 	rc, _, err := p.cli.CopyFromContainer(ctx, containerID(ref), dir)
 	if err != nil {
 		if client.IsErrNotFound(err) {
-			return nil
+			// A directory that is not there is not an empty capture. Reporting
+			// success here would produce a snapshot that looks complete and
+			// contains nothing, which is the fidelity-loss failure this tool
+			// exists to prevent.
+			return resil.Fatal("collect the exported files",
+				fmt.Sprintf("%s does not exist inside the clone, so there is nothing to collect.", dir), err).
+				WithAdvice("The export wrote nothing. Its output is in the job log.")
 		}
 		return resil.Retry("collect the exported files",
 			fmt.Sprintf("PortCloak could not read %s out of the clone.", dir), err)

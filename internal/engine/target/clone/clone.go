@@ -228,6 +228,23 @@ func (e *Executor) Prepare(ctx context.Context, opts target.PrepareOptions) (tar
 		return target.ExecContext{}, err
 	}
 
+	// The work directory is created here rather than left to whatever runs
+	// first, so a clone arrives in the same state a local or SSH target does:
+	// Prepare hands back a directory that exists. 0700 because it holds
+	// unmasked secrets from the moment kc.sh starts writing into it.
+	mk, err := e.platform.Exec(ctx, ref, target.Command{
+		Path: "/bin/sh",
+		Args: []string{"-c", "mkdir -p " + shellQuote(spec.WorkDir) + " && chmod 700 " + shellQuote(spec.WorkDir)},
+	})
+	if err != nil {
+		return target.ExecContext{}, err
+	}
+	if mk.ExitCode != 0 {
+		return target.ExecContext{}, resil.Fatal("prepare the ephemeral clone",
+			fmt.Sprintf("PortCloak could not create %s inside %s.", spec.WorkDir, ref), nil).
+			WithAdvice("The clone's image may have no writable /tmp, or no shell to create it with.")
+	}
+
 	// The port flags are passed even here, where the clone's own network
 	// namespace makes a collision impossible. It costs nothing and keeps one
 	// code path serving all four target kinds.
@@ -362,3 +379,8 @@ func roundAge(d time.Duration) string {
 		return "moments"
 	}
 }
+
+// shellQuote wraps a path for /bin/sh. Work directories are derived from a job
+// id and never contain a quote, but the export writes secrets into whatever
+// this returns, so it is quoted rather than assumed safe.
+func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
