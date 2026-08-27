@@ -12,9 +12,12 @@
 >
 > The name is a play on **Keycloak**: PortCloak *ports the cloak*.
 
-This folder is a **design-only** artifact. No implementation is included yet — the goal is a
-well-constructed, reviewable spec (with PlantUML) that shows the planned modules and proves
-each requirement is met before any code is written.
+This folder is the design PortCloak was built from, kept true to the binary rather than left
+behind as a record of intent. Every requirement traces to a module, every rollout row cites a
+test, and `build/ci/check-traceability.sh` fails the build when a citation names a test that no
+longer exists — so the evidence columns cannot quietly decay into things that were once true.
+Where a document and the shipped behaviour disagree, one of them is wrong and gets corrected;
+neither is left standing.
 
 ## What "high fidelity" means here
 
