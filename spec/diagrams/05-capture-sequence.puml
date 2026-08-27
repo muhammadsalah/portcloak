@@ -1,0 +1,59 @@
+@startuml 05-capture-sequence
+skinparam backgroundColor #FFFFFF
+title PortCloak — Capture Snapshot Sequence (offline export, one realm)
+
+actor User
+participant "Wails UI" as UI
+participant Orchestrator as O
+participant "Executor\n(local/ssh/docker/k8s)" as X
+participant "AdminApiClient\n(verification)" as API
+participant "ManifestBuilder" as MB
+participant "Packager" as P
+participant "CryptoVault" as CV
+participant "BlobStore\n(storage backend)" as S
+participant "Resilience" as R
+
+User -> UI : Select environment + realm, Start
+UI -> O : StartCapture(job)
+O -> X : Probe() - reachability, kc.sh path,\nKC version, free space, free ports
+X --> O : TargetFacts
+
+alt docker / kubernetes
+  O -> X : Materialise ephemeral clone\n(same image, hung, labels stripped)
+  note right of X : serving instance is never\nexec'd into - see diagram 15
+  X --> O : clone Running
+end
+
+O -> X : exec kc.sh export (offline)\ninto /tmp/portcloak-<id>, free ports
+X --> O : exit code + streamed stdout/stderr
+
+O -> X : Stream artifacts back (tar)
+X --> R : each chunk (retry/resume on drop)
+X --> O : realm-export.json, users-*.json, keys
+
+alt verification enabled (running server reachable)
+  O -> API : verify secrets are real, not masked
+  API --> O : secret presence report
+  O -> API : detect custom themes / provider JARs
+  API --> O : external dependency list (reported, not migrated)
+end
+
+O -> X : Destroy ephemeral clone + temp dir\n(runs on success AND failure)
+
+O -> MB : Build manifest from artifacts + verification
+MB --> O : RealmManifest + CompletenessReport
+
+O -> P : Package (tar + zstd) + IntegrityTree(sha256)
+alt encryption opted in
+  P -> CV : Encrypt bundle (age / AES-256-GCM)
+  CV --> P : sealed bundle
+end
+P --> O : snapshot.pck
+
+O -> S : Put(snapshot.pck) [multipart / resumable]
+S --> R : upload with backoff + checkpoint
+S --> O : stored location + remote checksum
+O -> UI : progress events + final summary
+UI -> User : Success + completeness report
+
+@enduml

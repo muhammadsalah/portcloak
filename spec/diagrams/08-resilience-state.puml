@@ -1,0 +1,37 @@
+@startuml 08-resilience-state
+skinparam backgroundColor #FFFFFF
+title PortCloak — Transfer State Machine (bad-connection tolerance)
+
+[*] --> Planning
+Planning --> Connecting : job ready
+Connecting --> Transferring : handshake ok
+Connecting --> Backoff : connect error (retryable)
+Transferring --> Verifying : all parts sent
+Transferring --> Interrupted : connection dropped
+Transferring --> Backoff : transient I/O error
+
+Interrupted --> Resuming : checkpoint exists\n& within retry budget
+Resuming --> Transferring : re-open from last\ngood offset/part
+Backoff --> Connecting : delay elapsed\n(exp backoff + jitter)
+Backoff --> Failed : retry budget exhausted\nor non-retryable
+
+Verifying --> Committed : checksum match
+Verifying --> Backoff : checksum mismatch\n(re-send bad part)
+
+Committed --> [*]
+Failed --> [*]
+
+note right of Interrupted
+  Checkpoint persisted to disk:
+  { key, uploadId, partsDone[], offset, etag }
+  Survives app restart -> job is resumable
+  even after PortCloak is reopened.
+end note
+
+note right of Backoff
+  CircuitBreaker may trip to OPEN
+  after N consecutive failures;
+  cools down before half-open probe.
+end note
+
+@enduml

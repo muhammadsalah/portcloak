@@ -1,0 +1,39 @@
+@startmindmap 12-ui-information-architecture
+skinparam backgroundColor #FFFFFF
+title PortCloak — UI Information Architecture (no sign-in)
+* PortCloak
+** Capture
+*** Pick environment -> probe
+*** Select realms\n(one snapshot each)
+*** Options (users mode,\nverification, encryption)
+*** Pick storage
+*** Run + live progress
+** Snapshots
+*** Library across all storage\n(Tier 0 — no key needed)
+*** <b>Inspect</b> (details, users,\nclients, keys, federations)
+*** Verify integrity
+*** Delete
+** Restore
+*** Pick snapshot + environment
+*** Confirm preconditions\n(themes / provider JARs)
+*** Strategy (overwrite/skip/merge)
+*** Dry-run diff
+*** Apply + post-check
+** Activity / Audit
+*** Live jobs + clone lifecycle
+*** Interrupted -> Resume
+*** History + redacted logs
+** Configuration
+*** <b>Environments</b>\n(where Keycloak runs)
+**** Local — server folder
+**** SSH — host + server folder
+**** Docker — service / container
+**** K8s / OC — namespace + workload
+*** <b>Storage</b>\n(where snapshots live)
+**** Disk — folder
+**** SSH — remote folder
+**** S3 — bucket + prefix
+**** Azure / Azurite — container + prefix
+*** Preferences
+*** ~/.portcloak/config.yaml\n(secrets in OS keychain)
+@endmindmap

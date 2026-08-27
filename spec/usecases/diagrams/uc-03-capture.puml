@@ -1,0 +1,80 @@
+@startuml uc-03-capture
+skinparam backgroundColor #FFFFFF
+skinparam usecase {
+  BackgroundColor #ECF0F1
+  BorderColor #2C3E50
+}
+left to right direction
+title Capture — offline kc.sh export, one realm per snapshot
+
+actor Operator as OP
+actor "Source\nKeycloak" as SRC
+actor "Container /\nCluster API" as API
+actor "Storage\nBackend" as BLOB
+
+rectangle "Capture" {
+  usecase "UC-C1 Capture\nfrom Local" as C1
+  usecase "UC-C2 Capture\nover SSH" as C2
+  usecase "UC-C3 Capture from Docker\n(ephemeral clone)" as C3
+  usecase "UC-C4 Capture from K8s / OC\n(ephemeral Job)" as C4
+  usecase "UC-C5 Capture\nseveral realms" as C5
+
+  usecase "UC-C6 Probe\nenvironment" as C6
+  usecase "UC-C7 Allocate\nfree ports" as C7
+  usecase "UC-C8 Verify secrets\nunmasked" as C8
+  usecase "UC-C9 Detect external\ndependencies" as C9
+  usecase "UC-C10 Encrypt\n(opt-in)" as C10
+  usecase "UC-C11 Destroy\nephemeral clone" as C11
+  usecase "UC-C12 Reap\norphaned clones" as C12
+}
+
+OP --> C1
+OP --> C2
+OP --> C3
+OP --> C4
+OP --> C5
+OP --> C12
+
+C1 ..> C6 : <<include>>
+C2 ..> C6 : <<include>>
+C3 ..> C6 : <<include>>
+C4 ..> C6 : <<include>>
+
+C1 ..> C7 : <<include>>
+C2 ..> C7 : <<include>>
+
+C3 ..> C11 : <<include>>
+C4 ..> C11 : <<include>>
+
+C1 ..> C8 : <<extend>>
+C1 ..> C9 : <<extend>>
+C1 ..> C10 : <<extend>>
+
+C5 ..> C1 : <<include>>
+
+C1 --> SRC
+C2 --> SRC
+C3 --> API
+C4 --> API
+C3 --> SRC
+C4 --> SRC
+C1 --> BLOB
+C2 --> BLOB
+C3 --> BLOB
+C4 --> BLOB
+C12 --> API
+
+note bottom of C11
+  Runs on success, failure AND cancel.
+  Backstopped by TTL + label sweep (UC-C12),
+  so a crash cannot leave a credential-bearing
+  container running.
+end note
+
+note top of C3
+  The SERVING instance is never exec'd into.
+  A clone of the same image is created, hung,
+  used, and destroyed.
+end note
+
+@enduml

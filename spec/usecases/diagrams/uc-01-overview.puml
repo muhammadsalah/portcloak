@@ -1,0 +1,56 @@
+@startuml uc-01-overview
+skinparam backgroundColor #FFFFFF
+skinparam usecase {
+  BackgroundColor #ECF0F1
+  BorderColor #2C3E50
+}
+left to right direction
+title PortCloak — Use Case Overview (single-user local tool, no login)
+
+actor "Operator" as OP
+
+rectangle "PortCloak" {
+  usecase "Configure\nEnvironments" as UC_ENV
+  usecase "Configure\nStorage" as UC_STO
+  usecase "Capture\na realm" as UC_CAP
+  usecase "Inspect\na snapshot" as UC_INS
+  usecase "Restore\na snapshot" as UC_RES
+  usecase "Manage jobs\n& resume" as UC_JOB
+  usecase "Review\naudit log" as UC_AUD
+}
+
+OP --> UC_ENV
+OP --> UC_STO
+OP --> UC_CAP
+OP --> UC_INS
+OP --> UC_RES
+OP --> UC_JOB
+OP --> UC_AUD
+
+UC_CAP ..> UC_ENV : <<requires>>
+UC_CAP ..> UC_STO : <<requires>>
+UC_RES ..> UC_ENV : <<requires>>
+UC_INS ..> UC_STO : <<requires>>
+
+actor "Source\nKeycloak" as SRC
+actor "Target\nKeycloak" as TGT
+actor "Container /\nCluster API" as K8S
+actor "Storage\nBackend" as BLOB
+actor "OS Keychain" as KC
+
+UC_CAP --> SRC
+UC_CAP --> K8S
+UC_CAP --> BLOB
+UC_INS --> BLOB
+UC_RES --> TGT
+UC_RES --> BLOB
+UC_ENV --> KC
+UC_STO --> KC
+
+note bottom of OP
+  There is no account, role or sign-in.
+  Authority comes only from the credentials
+  each Environment / Storage carries.
+end note
+
+@enduml

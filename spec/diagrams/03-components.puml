@@ -1,0 +1,88 @@
+@startuml 03-components
+skinparam backgroundColor #FFFFFF
+skinparam componentStyle rectangle
+title PortCloak Engine — Component Detail
+
+package "Engine" {
+
+  [Orchestrator\n(state machine per Job)] as orch
+
+  package "Target Adapters" {
+    interface "Executor" as IExec
+    [LocalExecutor] as le
+    [SSHExecutor] as se
+    [DockerExecutor] as de
+    [K8sExecutor] as ke
+    IExec <|.. le
+    IExec <|.. se
+    IExec <|.. de
+    IExec <|.. ke
+  }
+
+  package "Export/Import" {
+    [KcCliDriver\n(kc.sh export/import)] as kc
+    [ArtifactCollector\n(stream files back)] as art
+  }
+
+  package "Verification" {
+    [AdminApiClient] as api
+    [SecretVerifier] as sv
+    [DependencyScanner\n(themes, provider JARs)] as dep
+  }
+
+  package "Snapshot" {
+    [ManifestBuilder] as mb
+    [Packager\n(tar+zstd)] as pk
+    [IntegrityService\n(sha-256 tree)] as ig
+    [CryptoVault\n(age/AES-GCM)] as cv
+  }
+
+  package "Storage Backends" {
+    interface "BlobStore" as IBlob
+    [DiskStore] as ds
+    [SftpStore] as ss
+    [S3Store] as s3s
+    [AzureBlobStore] as azs
+    IBlob <|.. ds
+    IBlob <|.. ss
+    IBlob <|.. s3s
+    IBlob <|.. azs
+  }
+
+  package "Inspection" {
+    [SnapshotInspector\n(tiered open, query, diff)] as insp
+    [IndexStore\n(SQLite, ephemeral)] as idx
+    insp --> idx
+    note bottom of insp
+      Reuses the same seams as capture/restore:
+      BlobStore (fetch), CryptoVault (decrypt),
+      IntegrityService (verify). Nothing duplicated.
+    end note
+  }
+
+  package "Cross-cutting" {
+    [ResilienceLayer\n(retry/backoff/circuit/resume)] as res
+    [ConfigStore\n(+ OS keychain)] as ps
+    [Observability] as obs
+  }
+}
+
+orch --> IExec
+orch --> kc
+kc --> art
+orch --> api
+api --> sv
+api --> dep
+orch --> mb
+mb --> pk
+pk --> ig
+pk --> cv
+orch --> IBlob
+IExec ..> res
+IBlob ..> res
+api ..> res
+orch --> ps
+orch --> obs
+orch --> insp
+
+@enduml

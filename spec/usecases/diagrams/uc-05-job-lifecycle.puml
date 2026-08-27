@@ -1,0 +1,50 @@
+@startuml uc-05-job-lifecycle
+skinparam backgroundColor #FFFFFF
+title Job lifecycle across use cases (UC-O1 … UC-O6)
+
+[*] --> Queued : Operator starts\ncapture / restore / copy
+Queued --> Probing : UC-C6
+Probing --> Failed : blocking check fails\n(never starts work)
+Probing --> Cloning : docker / k8s
+Probing --> Running : local / ssh
+Cloning --> Running : clone hung & ready
+Cloning --> Failed : cannot create clone
+
+Running --> Verifying : work streamed\nand sealed
+Running --> Backoff : retryable error\n(timeout, reset, 5xx, throttle)
+Running --> Interrupted : connection dropped
+Running --> Cancelling : Operator cancels (UC-O3)
+
+Backoff --> Running : delay elapsed\n(exp backoff + jitter)
+Backoff --> CircuitOpen : N consecutive failures
+CircuitOpen --> Backoff : cooldown elapsed\n(half-open probe)
+Backoff --> Failed : retry budget exhausted\nor non-retryable
+
+Interrupted --> Resuming : Operator resumes (UC-O2)\ncheckpoint on disk
+Interrupted --> Discarded : Operator discards (UC-O4)
+Resuming --> Running : continue from last\ngood part / offset
+
+Verifying --> Committed : checksum matches
+Verifying --> Backoff : mismatch — resend part
+Verifying --> Failed : mismatch persists
+
+Cancelling --> Teardown
+Committed --> Teardown
+Failed --> Teardown
+Discarded --> Teardown
+Teardown --> [*] : clone destroyed,\ntemp dirs removed,\nmultipart aborted
+
+note right of Interrupted
+  Checkpoint lives in
+  ~/.portcloak/jobs/<id>.json
+  so the job survives PortCloak
+  being closed or crashing.
+end note
+
+note right of Teardown
+  Reached on EVERY terminal path.
+  Never leaves an ephemeral clone
+  holding database credentials.
+end note
+
+@enduml

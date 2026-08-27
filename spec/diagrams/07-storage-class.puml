@@ -1,0 +1,69 @@
+@startuml 07-storage-class
+skinparam backgroundColor #FFFFFF
+title PortCloak — Storage Backends & Transfer Contracts
+
+interface BlobStore {
+  +Stat(ctx, key): ObjectInfo
+  +Put(ctx, key, r, opts): PutResult
+  +Get(ctx, key, w, opts): GetResult
+  +List(ctx, prefix): []ObjectInfo
+  +Delete(ctx, key): error
+  +InitMultipart(ctx, key): UploadID
+  +PutPart(ctx, id, n, r): PartETag
+  +CompleteMultipart(ctx, id, parts): PutResult
+  +AbortMultipart(ctx, id): error
+}
+
+interface ResumableTransfer {
+  +Resume(ctx, checkpoint): Progress
+  +Checkpoint(): TransferState
+}
+
+class DiskStore
+class SftpStore
+class S3Store
+class AzureBlobStore
+
+BlobStore <|.. DiskStore
+BlobStore <|.. SftpStore
+BlobStore <|.. S3Store
+BlobStore <|.. AzureBlobStore
+
+ResumableTransfer <|.. S3Store
+ResumableTransfer <|.. AzureBlobStore
+ResumableTransfer <|.. SftpStore
+
+class RetryPolicy {
+  +maxAttempts: int
+  +baseDelay / maxDelay: dur
+  +jitter: bool
+  +retryable(err): bool
+}
+
+class CircuitBreaker {
+  +state: enum(closed|open|half-open)
+  +failureThreshold: int
+  +cooldown: dur
+}
+
+DiskStore ..> RetryPolicy
+SftpStore ..> RetryPolicy
+S3Store ..> RetryPolicy
+AzureBlobStore ..> RetryPolicy
+SftpStore ..> CircuitBreaker
+S3Store ..> CircuitBreaker
+AzureBlobStore ..> CircuitBreaker
+
+note bottom of S3Store
+  Multipart upload => native resume.
+  Server-side + client-side checksums.
+  Works with AWS S3 and MinIO.
+end note
+
+note bottom of AzureBlobStore
+  Block blobs (Put Block / Put Block List)
+  => resumable. Targets Azurite emulator
+  and real Azure Blob.
+end note
+
+@enduml

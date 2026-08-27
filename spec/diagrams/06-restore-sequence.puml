@@ -1,0 +1,45 @@
+@startuml 06-restore-sequence
+skinparam backgroundColor #FFFFFF
+title PortCloak — Restore / Import Snapshot Sequence
+
+actor User
+participant "Wails UI" as UI
+participant Orchestrator as O
+participant "BlobStore" as S
+participant "CryptoVault" as CV
+participant "IntegrityService" as IG
+participant "Executor\n(target)" as X
+participant "KcCliDriver" as KC
+participant "AdminApiClient" as API
+
+User -> UI : Choose snapshot + destination environment
+UI -> O : StartRestore(job)
+O -> S : Get(snapshot.pck) [resumable]
+S --> O : sealed bundle
+O -> CV : Decrypt (if snapshot was encrypted)
+CV --> O : bundle
+O -> IG : Verify sha-256 tree
+IG --> O : OK / mismatch(abort)
+
+O -> UI : Manifest preview + dry-run diff vs target
+UI -> User : Confirm (overwrite / skip / merge)
+
+O -> X : Push realm-export.json into target
+X --> O : ack
+
+alt Import strategy = kc.sh
+  O -> X : kc.sh import --file realm-export.json --override true
+  X --> O : import log (streamed)
+else Import strategy = Admin API (running server)
+  O -> API : POST /admin/realms (partialImport for merge)
+  API --> O : per-resource result
+end
+
+opt External dependencies reported
+  O -> UI : themes / provider JARs this realm expects\n(informative - provision manually, not enforced)
+end
+
+O -> UI : Restore summary + post-checks
+UI -> User : Done + warnings
+
+@enduml

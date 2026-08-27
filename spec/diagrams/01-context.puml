@@ -1,0 +1,50 @@
+@startuml 01-context
+skinparam backgroundColor #FFFFFF
+skinparam rectangle {
+  BorderColor #2C3E50
+  BackgroundColor #ECF0F1
+}
+title PortCloak — System Context
+
+actor "Platform / IAM\nEngineer" as user
+
+rectangle "PortCloak\n(Wails v3 desktop app)" as pc #AED6F1
+
+cloud "Source Keycloak\nEnvironments" as src {
+  rectangle "Local KC instance\n(offline export on a free port)" as kcl
+  rectangle "SSH host running KC" as kcssh
+  rectangle "Docker\n(ephemeral clone container)" as kcdocker
+  rectangle "Kubernetes / OpenShift\n(ephemeral Job from same image)" as kck8s
+}
+
+cloud "Snapshot Storage\nBackends" as storagegrp {
+  rectangle "Local Disk" as disk
+  rectangle "Remote Volume (SSH/SFTP)" as sftp
+  rectangle "S3-compatible object store\n(AWS S3 / MinIO)" as s3
+  rectangle "Azure Blob / Azurite" as az
+}
+
+rectangle "Target Keycloak\n(restore destination)" as dst #A9DFBF
+
+user --> pc : drives capture, inspect & restore
+pc --> kcl : kc.sh export (offline)
+pc --> kcssh : kc.sh export (offline)
+pc --> kcdocker : clone image, hang, exec kc.sh export
+pc --> kck8s : clone workload, hang, exec kc.sh export
+pc ..> src : Admin REST API\n(verify secrets, detect themes/providers)
+
+pc --> disk
+pc --> sftp
+pc --> s3
+pc --> az
+
+pc --> dst : realm import\n(kc.sh import / Admin API)
+
+note bottom of pc
+  One snapshot = one realm.
+  Sessions are out of scope; token
+  continuity comes from carrying
+  the realm signing keys.
+end note
+
+@enduml

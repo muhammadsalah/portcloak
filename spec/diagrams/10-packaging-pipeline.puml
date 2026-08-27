@@ -1,0 +1,22 @@
+@startuml 10-packaging-pipeline
+skinparam backgroundColor #FFFFFF
+title PortCloak — Snapshot Packaging Pipeline
+
+start
+:Export artifacts\n(realm JSON, user files, keys);
+:Normalize\n(stable ordering, canonical JSON);
+note right: guarantees idempotent,\ndiffable bundles (NFR-8)
+:tar (stream);
+:zstd compress (stream);
+fork
+  :Build integrity tree\n(SHA-256 per artifact + root);
+fork again
+  :Build manifest.json\n+ completeness.json;
+end fork
+:Encrypt (opt-in)\n(age recipients or AES-256-GCM passphrase);
+:Sealed bundle  <b>.pck</b>;
+:Write sidecars\n<b>.manifest.json</b> (non-secret)\n<b>.sha256</b>;
+:Upload to storage backend\n(resumable);
+stop
+
+@enduml

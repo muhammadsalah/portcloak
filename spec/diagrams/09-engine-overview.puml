@@ -1,0 +1,36 @@
+@startuml 09-engine-overview
+skinparam backgroundColor #FFFFFF
+skinparam componentStyle rectangle
+title PortCloak — Single-Binary Overview (no server component)
+
+node "Operator workstation" {
+  package "PortCloak (one binary)" {
+    [Wails Frontend\nwizard UI] as fe #AED6F1
+    [Engine\nGo core] as eng #D2B4DE
+    fe <--> eng : bindings (Go->JS)\nevents (JS<-Go)
+  }
+}
+
+cloud "Source targets" as T {
+  [Local] 
+  [SSH]
+  [Docker]
+  [Kubernetes / OpenShift]
+}
+
+cloud "Storage backends" as S {
+  [Disk]
+  [SFTP volume]
+  [S3 / MinIO]
+  [Azure Blob / Azurite]
+}
+
+eng --> T : Executors\n(run kc.sh, stream artifacts)
+eng --> S : BlobStores\n(sealed snapshot bundles)
+
+note bottom of eng
+  The operator's machine is the control plane.
+  Nothing is deployed server-side.
+end note
+
+@enduml

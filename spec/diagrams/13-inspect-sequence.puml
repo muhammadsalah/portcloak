@@ -1,0 +1,71 @@
+@startuml 13-inspect-sequence
+skinparam backgroundColor #FFFFFF
+title PortCloak — Inspect a Snapshot (tiered, lazy)
+
+actor User
+participant "Wails UI" as UI
+participant "SnapshotInspector" as INS
+participant "IndexStore\n(SQLite, ephemeral)" as IX
+participant "BlobStore\n(storage backend)" as S
+participant "CryptoVault" as CV
+participant "IntegrityService" as IG
+
+== Tier 0 — listing (no keys required) ==
+User -> UI : Open Snapshots library
+UI -> INS : List(storage backends)
+INS -> S : List(prefix) + Get(<id>.manifest.json)
+S --> INS : non-secret sidecars
+INS --> UI : rows: realm, date, source,\ncounts, completeness badge
+note right of INS
+  Sidecar manifests carry NO secrets,
+  so browsing the library needs no
+  decryption key at all.
+end note
+
+== Tier 1 — snapshot detail (decrypt manifest only) ==
+User -> UI : Open a snapshot
+UI -> INS : Describe(snapshotID)
+INS -> S : Get(.pck) [resumable]
+INS -> CV : Decrypt (if encrypted)
+INS -> IG : Verify integrity tree
+IG --> INS : OK / mismatch(warn)
+INS -> INS : stream-parse envelope + manifest.json
+INS -> IX : create session-scoped SQLite index
+INS --> UI : realm settings, keys (KIDs),\nclients, IdPs, LDAP, flows,\nsecret ledger, external deps,\ncompleteness
+
+== Tier 2 — browse users & entities (build index once) ==
+User -> UI : Open "Users" tab / search
+UI -> INS : QueryUsers(snapshotID, filter, page)
+alt index already built this session
+  IX --> INS : page of users
+else build once per open
+  INS -> INS : stream-parse users-*.json\n(bounded memory, never full load)
+  INS -> IX : write rows\n(+ clients, roles, groups, keys)
+  note right of IX
+    Holds credential PRESENCE only
+    (has OTP / passkey count),
+    never credential VALUES.
+  end note
+end
+IX --> INS : matching rows + facets
+INS --> UI : paginated table + user detail
+
+== Optional — reveal a secret ==
+User -> UI : Reveal client secret (explicit action)
+UI -> INS : RevealSecret(ref, reason)
+INS -> CV : decrypt just that field
+INS -> INS : write audit entry (who/what/when)
+INS --> UI : value shown, auto-hidden
+
+== Close — the index does not outlive the session ==
+User -> UI : Close snapshot
+UI -> INS : Close(snapshotID)
+INS -> IX : drop tables + delete SQLite file (secure_delete)
+note right of IX
+  Built on open, forgotten on close.
+  No usernames, emails or group data
+  are left on disk between sessions.
+end note
+INS --> UI : closed
+
+@enduml

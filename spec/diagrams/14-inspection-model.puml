@@ -1,0 +1,97 @@
+@startuml 14-inspection-model
+skinparam backgroundColor #FFFFFF
+title PortCloak — Snapshot Inspection Index Model
+
+class SnapshotIndex {
+  +snapshotID: ULID
+  +builtAt: time
+  +tier: enum(0-listing|1-manifest|2-full)
+  +schemaVersion: string
+  +backing: "SQLite, session-scoped"
+  +destroyedOnClose: true
+}
+
+class UserRow {
+  +id: UUID
+  +username: string
+  +email: string
+  +firstName / lastName: string
+  +enabled: bool
+  +emailVerified: bool
+  +origin: enum(local|federated-ldap)
+  +createdAt: time
+  --presence only, never values--
+  +hasPassword: bool
+  +passwordAlgo: string
+  +otpCount: int
+  +webauthnCount: int
+  +recoveryCodes: bool
+  +requiredActions: []string
+  +realmRoles: []string
+  +clientRoles: map
+  +groups: []string
+  +federatedIdentities: []string
+  +attributeKeys: []string
+}
+
+class ClientRow {
+  +clientId: string
+  +name / protocol: string
+  +enabled / publicClient: bool
+  +secretPresent: bool
+  +secretRevealed: bool (audit)
+  +redirectUris: []string
+  +serviceAccount: bool
+  +authzEnabled: bool
+  +mapperCount: int
+}
+
+class GroupRow {
+  +path: string
+  +memberCount: int
+  +roles: []string
+}
+
+class RoleRow {
+  +name: string
+  +composite: bool
+  +clientRole: bool
+  +assignedUserCount: int
+}
+
+class KeyRow {
+  +kid: string
+  +type / alg / use: string
+  +active: bool
+  +privateCarried: bool
+}
+
+class DependencyRow {
+  +type: enum(theme|provider-jar|keystore)
+  +name: string
+  +action: "provision manually"
+}
+
+class Facets {
+  +byEnabled / byOrigin
+  +byRole / byGroup
+  +by2FAType
+  +byRequiredAction
+}
+
+SnapshotIndex "1" o-- "*" UserRow
+SnapshotIndex "1" o-- "*" ClientRow
+SnapshotIndex "1" o-- "*" GroupRow
+SnapshotIndex "1" o-- "*" RoleRow
+SnapshotIndex "1" o-- "*" KeyRow
+SnapshotIndex "1" o-- "*" DependencyRow
+SnapshotIndex "1" o-- "1" Facets
+
+note bottom of UserRow
+  Browsing 50k users must never require
+  loading 50k users into memory:
+  users-*.json are stream-parsed into
+  the index once, then paged from it.
+end note
+
+@enduml

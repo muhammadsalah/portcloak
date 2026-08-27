@@ -1,0 +1,94 @@
+@startuml 04-domain-model
+skinparam backgroundColor #FFFFFF
+title PortCloak — Snapshot & Manifest Domain Model (one snapshot = one realm)
+
+class Snapshot {
+  +id: ULID
+  +createdAt: time
+  +schemaVersion: string
+  +portcloakVersion: string
+  +realm: string
+  +source: SourceRef
+  +files: []ArtifactRef
+  +manifest: RealmManifest
+  +completeness: CompletenessReport
+  +integrity: IntegrityTree
+  +encryption: EncryptionInfo
+}
+
+class SourceRef {
+  +kind: enum(local|ssh|docker|k8s)
+  +keycloakVersion: string
+  +host / container / pod: string
+  +executionMode: enum(in-place|ephemeral-clone)
+  +cloneRef: string
+}
+
+class ArtifactRef {
+  +path: string
+  +bytes: int64
+  +sha256: string
+  +kind: enum(realm-json|users-json|keys|blob)
+}
+
+class RealmManifest {
+  +settings: RealmSettings
+  +keys: []KeyProviderRef
+  +clients: []ClientSummary
+  +clientScopes: []ScopeSummary
+  +roles: RoleSummary
+  +groups: GroupSummary
+  +users: UserSummary
+  +identityProviders: []IdpSummary
+  +userFederation: []FederationSummary
+  +authFlows: []FlowSummary
+  +secrets: []SecretRef
+  +externalDeps: []ExternalDependency
+}
+
+class SecretRef {
+  +type: enum(client-secret|smtp|ldap-bind|idp-secret|key-private|authcfg)
+  +location: string
+  +carried: bool
+  +masked: bool
+}
+
+class ExternalDependency {
+  +type: enum(theme|provider-jar|keystore-file|truststore)
+  +name: string
+  +detectedAt: string
+  +action: "provision manually at destination"
+}
+note bottom of ExternalDependency
+  Detected and REPORTED, never migrated.
+  These live outside the realm representation.
+end note
+
+class CompletenessReport {
+  +captured: []Category
+  +partial: []Category
+  +missing: []Category
+  +outOfScope: []Category
+  +warnings: []string
+}
+
+class EncryptionInfo {
+  +enabled: bool
+  +algorithm: string
+  +recipients / kdf: string
+}
+note bottom of EncryptionInfo
+  Opt-in, not default.
+  When disabled the bundle holds
+  UNMASKED secrets in the clear.
+end note
+
+Snapshot "1" o-- "1" SourceRef
+Snapshot "1" o-- "*" ArtifactRef
+Snapshot "1" o-- "1" RealmManifest
+Snapshot "1" o-- "1" CompletenessReport
+Snapshot "1" o-- "1" EncryptionInfo
+RealmManifest "1" o-- "*" SecretRef
+RealmManifest "1" o-- "*" ExternalDependency
+
+@enduml

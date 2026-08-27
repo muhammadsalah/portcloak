@@ -1,0 +1,57 @@
+@startuml 02-containers
+skinparam backgroundColor #FFFFFF
+skinparam componentStyle rectangle
+title PortCloak — Container / High-Level Runtime View
+
+package "PortCloak (single binary)" {
+
+  [Wails v3 Frontend\n(TS/JS + HTML/CSS)] as fe #AED6F1
+  note right of fe
+    Wizard-driven UI:
+    - Environments
+    - Capture / Restore flows
+    - Live progress + logs
+    - Manifest preview / diff
+  end note
+
+  [Wails Binding Layer\n(Go <-> JS bridge + event bus)] as bind #D2B4DE
+
+  package "Engine (Go core)" {
+    [Orchestrator] as orch
+    [Capture Providers] as cap
+    [Import/Export Driver\n(kc.sh wrapper)] as kcdrv
+    [Admin API Verifier] as enr
+    [Manifest Builder] as man
+    [Snapshot Inspector\n(+ SQLite index)] as insp
+    [Snapshot Packager] as pack
+    [Storage Backends] as storagemod
+    [Resilience Layer] as res
+    [Crypto / Secrets Vault] as crypto
+    [Config & Config Store] as cfg
+    [Observability\n(logs, progress, audit)] as obs
+  }
+}
+
+fe --> bind : bound method calls
+bind --> orch : commands
+bind <-- obs : progress / log events
+
+orch --> cap
+orch --> kcdrv
+orch --> enr
+orch --> man
+  orch --> insp
+orch --> pack
+orch --> storagemod
+cap ..> res : all remote I/O
+storagemod ..> res : all remote I/O
+pack --> crypto : encrypt at rest
+storagemod --> crypto
+orch --> cfg
+orch --> obs
+
+cap --> [Local exec / SSH / Docker / K8s]
+storagemod --> [Disk / SFTP / S3 / Azure Blob]
+enr --> [Keycloak Admin REST API]
+
+@enduml

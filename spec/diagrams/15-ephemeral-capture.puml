@@ -1,0 +1,57 @@
+@startuml 15-ephemeral-capture
+skinparam backgroundColor #FFFFFF
+title PortCloak — Ephemeral Clone Execution (never touch the serving instance)
+
+actor Operator
+participant "PortCloak\nOrchestrator" as O
+participant "Cluster / Engine API" as API
+participant "SERVING Keycloak\n(pod / container)" as LIVE #FADBD8
+participant "EPHEMERAL clone\n(same image, hung)" as EPH #D5F5E3
+database "Keycloak DB" as DB
+
+Operator -> O : Capture realm "acme"
+
+== 1. Read the shape of the serving workload (read-only) ==
+O -> API : Get pod/container spec
+API --> LIVE : inspect (no exec, no write)
+LIVE --> O : image ref, env / envFrom, secrets,\nvolumes, serviceAccount, pull secrets,\nresources, securityContext
+note right of O
+  The serving instance is only ever READ.
+  PortCloak never execs into it, never writes
+  to its filesystem, never competes for its CPU.
+end note
+
+== 2. Materialise an ephemeral clone ==
+O -> O : derive clone spec:\n- same image + env + volumes\n- command -> hang (sleep infinity)\n- <b>STRIP selector labels</b>\n- strip probes / ownerRefs / status\n- label portcloak.io/job=<id>
+note right of O
+  Stripping app labels is critical: an inherited
+  <i>app=keycloak</i> label would make the production
+  Service load-balance real traffic into the
+  hung export pod.
+end note
+O -> API : Create Job/Pod (k8s) or Container (docker)
+API -> EPH : schedule + start (hung, not serving)
+EPH --> O : Running
+
+== 3. Export inside the clone ==
+O -> EPH : exec: kc.sh export ~--dir /tmp/portcloak-<id>\n~--realm acme ~--users different_files\n~--http-port <free> ~--http-management-port <free>
+EPH -> DB : read realm, users, credentials,\nclients, keys, federations
+DB --> EPH : rows
+EPH --> O : exit code + streamed stdout/stderr
+
+== 4. Stream artifacts out ==
+O -> EPH : exec tar / CopyFromContainer
+EPH --> O : realm-export.json, users-*.json\n(chunked, checksummed, resumable)
+
+== 5. Always destroy the clone ==
+O -> API : Delete Job/Pod/Container (force)
+API -> EPH !! : removed
+note right of API
+  Cleanup runs on success AND failure.
+  ttlSecondsAfterFinished + a label sweep on
+  next launch reap anything orphaned by a crash.
+end note
+
+O --> Operator : artifacts + manifest + completeness
+
+@enduml

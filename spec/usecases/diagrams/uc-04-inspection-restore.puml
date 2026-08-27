@@ -1,0 +1,89 @@
+@startuml uc-04-inspection-restore
+skinparam backgroundColor #FFFFFF
+skinparam usecase {
+  BackgroundColor #ECF0F1
+  BorderColor #2C3E50
+}
+left to right direction
+title Inspection & Restore
+
+actor Operator as OP
+actor "Storage\nBackend" as BLOB
+actor "Target\nKeycloak" as TGT
+
+rectangle "Inspection (tiered)" {
+  usecase "UC-I1 Browse library\n(Tier 0 — no key)" as I1
+  usecase "UC-I2 Open snapshot\n(Tier 1 — decrypt+verify)" as I2
+  usecase "UC-I3 Build index\n(Tier 2 — SQLite)" as I3
+  usecase "UC-I4 Search users" as I4
+  usecase "UC-I5 Filter / facet" as I5
+  usecase "UC-I6 View user detail" as I6
+  usecase "UC-I7 Browse clients,\nkeys, federations" as I7
+  usecase "UC-I8 View secret\nledger" as I8
+  usecase "UC-I9 Reveal a secret\n(audited)" as I9
+  usecase "UC-I10 Review external\ndependencies" as I10
+  usecase "UC-I11 Verify without\nrestoring" as I11
+  usecase "UC-I12 Export view\n(redacted)" as I13
+  usecase "UC-I13 Close snapshot\n(destroy index)" as I14
+}
+
+rectangle "Restore (whole-realm)" {
+  usecase "UC-R1 Restore into\nenvironment" as R1
+  usecase "UC-R2 Review preconditions\n(informative)" as R2
+  usecase "UC-R3 Dry-run diff" as R3
+  usecase "UC-R4 Choose strategy" as R4
+  usecase "UC-R5 Apply import" as R5
+  usecase "UC-R6 Validate\nafter restore" as R6
+  usecase "UC-R7 Restore to fresh\nKeycloak (DR)" as R7
+  usecase "UC-R8 Cancel restore" as R8
+}
+
+OP --> I1
+OP --> I2
+OP --> I4
+OP --> I5
+OP --> I6
+OP --> I7
+OP --> I8
+OP --> I9
+OP --> I10
+OP --> I11
+OP --> I13
+OP --> I14
+OP --> R1
+OP --> R7
+OP --> R8
+
+I1 --> BLOB
+I2 --> BLOB
+I2 ..> I11 : <<include>>
+I4 ..> I3 : <<include>>
+I5 ..> I3 : <<include>>
+I6 ..> I3 : <<include>>
+I7 ..> I3 : <<include>>
+I14 ..> I3 : <<destroys>>
+
+R1 ..> I2 : <<include>>
+R1 ..> R2 : <<include>>
+R1 ..> R3 : <<include>>
+R1 ..> R4 : <<include>>
+R1 ..> R5 : <<include>>
+R1 ..> R6 : <<include>>
+R7 ..> R1 : <<include>>
+R5 --> TGT
+R6 --> TGT
+
+note bottom of R2
+  Informative only. Themes / provider JARs
+  are reported, never migrated — and never
+  gate the import. The Operator knows
+  their own estate.
+end note
+
+note bottom of I14
+  Index built on open, destroyed on close.
+  No usernames or emails persist between
+  sessions.
+end note
+
+@enduml

@@ -1,0 +1,29 @@
+@startuml 11-bundle-layout
+skinparam backgroundColor #FFFFFF
+skinparam componentStyle rectangle
+title PortCloak — Snapshot Bundle Layout (.pck contents, one realm per snapshot)
+
+folder "snapshot/  (realm: acme)" {
+  file "envelope.json\n(id, schemaVersion, realm,\nsourceRef, integrity root, encInfo)" as env
+  file "integrity.json\n(sha-256 per artifact + root)" as intg
+  file "provenance.json\n(target facts, kc.sh version,\nexecution mode, clone ref, timestamps)" as prov
+  file "audit.json\n(who / when / where, redacted)" as aud
+  file "realm-export.json\n(realm representation)" as re
+  file "users-0.json ... users-N.json\n(different_files mode)" as us
+  folder "keys/" as keys
+  file "manifest.json\n(REALM MANIFEST - doc 07)" as man
+  file "completeness.json\n(captured / partial /\nmissing / out-of-scope)" as comp
+  file "dependencies.json\n(themes + provider JARs detected,\nreported NOT migrated)" as dep
+}
+
+cloud "Written NEXT TO the .pck in the storage backend\n(not inside it)" as sidecars {
+  file "<id>.manifest.json\n(non-secret subset:\ncounts, categories, completeness)" as sc1
+  file "<id>.sha256\n(digest of sealed bundle)" as sc2
+}
+
+note bottom of sidecars
+  Enables listing, preview and Tier-0
+  inspection WITHOUT decryption keys.
+end note
+
+@enduml

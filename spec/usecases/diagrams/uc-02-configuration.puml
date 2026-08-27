@@ -1,0 +1,71 @@
+@startuml uc-02-configuration
+skinparam backgroundColor #FFFFFF
+skinparam usecase {
+  BackgroundColor #ECF0F1
+  BorderColor #2C3E50
+}
+left to right direction
+title Configuration — Environments & Storage
+
+actor Operator as OP
+actor "OS Keychain" as KC
+
+rectangle "Environments — where Keycloak runs" {
+  usecase "UC-E1 Add Local\n(server folder)" as E1
+  usecase "UC-E2 Add SSH\n(host + server folder)" as E2
+  usecase "UC-E3 Add Docker\n(service / container)" as E3
+  usecase "UC-E4 Add K8s / OpenShift\n(namespace + deployment)" as E4
+  usecase "UC-E5 Test\nenvironment" as E5
+  usecase "UC-E6/7/8 Edit,\nduplicate, delete" as E6
+  usecase "UC-E9 Review\nenvironments" as E9
+}
+
+rectangle "Storage — where snapshots live" {
+  usecase "UC-S1 Add Disk\n(folder)" as S1
+  usecase "UC-S2 Add SSH\n(folder)" as S2
+  usecase "UC-S3 Add S3\n(bucket + prefix)" as S3
+  usecase "UC-S4 Add Azure / Azurite\n(container + prefix)" as S4
+  usecase "UC-S5 Test\nstorage" as S5
+  usecase "UC-S6 Edit /\ndelete" as S6
+  usecase "UC-S7 Set\ndefault" as S7
+  usecase "UC-S8 Browse\ncontents" as S8
+}
+
+OP --> E1
+OP --> E2
+OP --> E3
+OP --> E4
+OP --> E5
+OP --> E6
+OP --> E9
+OP --> S1
+OP --> S2
+OP --> S3
+OP --> S4
+OP --> S5
+OP --> S6
+OP --> S7
+OP --> S8
+
+E1 ..> E5 : <<include>>
+E2 ..> E5 : <<include>>
+E3 ..> E5 : <<include>>
+E4 ..> E5 : <<include>>
+S1 ..> S5 : <<include>>
+S2 ..> S5 : <<include>>
+S3 ..> S5 : <<include>>
+S4 ..> S5 : <<include>>
+
+E2 --> KC : store secret
+E3 --> KC
+E4 --> KC
+S2 --> KC
+S3 --> KC
+S4 --> KC
+
+note bottom of KC
+  config.yaml holds only a credentialRef.
+  No secret value is ever written to it.
+end note
+
+@enduml
