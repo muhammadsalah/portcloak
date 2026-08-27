@@ -27,10 +27,14 @@ frontend/dist/*
 !frontend/dist/.gitkeep
 frontend/.vite/
 
-# IDE
+# IDE and agent tooling
 .idea/
 .vscode/
 *.iml
+# Claude Code's per-project state. scheduled_tasks.lock had been committed —
+# a lock file in a repository is one machine's runtime state offered to every
+# other machine as if it were shared.
+.claude/
 
 # OS
 .DS_Store
