@@ -574,7 +574,7 @@ func (s *Store) Get(ctx context.Context, key string, w io.Writer, opts store.Get
 	defer out.Body.Close() //nolint:errcheck
 
 	h := sha256.New()
-	pw := &progressWriter{w: io.MultiWriter(w, h), ctx: ctx, onWrite: opts.Progress, written: opts.Offset}
+	pw := &store.ProgressWriter{W: io.MultiWriter(w, h), Ctx: ctx, OnWrite: opts.Progress, Written: opts.Offset}
 	n, err := io.Copy(pw, out.Body)
 	if err != nil {
 		return store.GetResult{}, resil.Retry("download the snapshot",
@@ -633,25 +633,6 @@ func (s *Store) Delete(ctx context.Context, key string) error {
 		return classify(err)
 	}
 	return nil
-}
-
-type progressWriter struct {
-	w       io.Writer
-	ctx     context.Context
-	onWrite func(int64)
-	written int64
-}
-
-func (p *progressWriter) Write(b []byte) (int, error) {
-	if err := p.ctx.Err(); err != nil {
-		return 0, err
-	}
-	n, err := p.w.Write(b)
-	p.written += int64(n)
-	if p.onWrite != nil {
-		p.onWrite(p.written)
-	}
-	return n, err
 }
 
 // jsonUnmarshal is a thin indirection so the credential parser does not pull

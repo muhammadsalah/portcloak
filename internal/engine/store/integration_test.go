@@ -168,3 +168,36 @@ func TestSFTP_Contract(t *testing.T) {
 		return s
 	})
 }
+
+// SFTP resumes from an offset like disk does, so it runs the same table. This
+// is the one place the read-back fallback for a missing hash state is exercised
+// against a real remote file.
+func TestSFTP_OffsetResumeContract(t *testing.T) {
+	host := env(t, "PORTCLOAK_TEST_SSH_HOST")
+	user := env(t, "PORTCLOAK_TEST_SSH_USER")
+	credential := env(t, "PORTCLOAK_TEST_SSH_CREDENTIAL")
+	folder := env(t, "PORTCLOAK_TEST_SSH_FOLDER")
+
+	storetest.RunOffsetResumeContract(t, func(t *testing.T) store.BlobStore {
+		creds := config.NewMemoryCredentials()
+		handle := config.Handle("ssh", "test")
+		if err := creds.Set(handle, credential); err != nil {
+			t.Fatal(err)
+		}
+		s, err := sftpstore.New(config.Storage{
+			Name: "test", Kind: config.StoreSSH,
+			Host: host, Port: 22, User: user, Auth: config.SSHPassword,
+			Folder:        fmt.Sprintf("%s/%s", folder, uniquePrefix(t)),
+			CredentialRef: handle,
+		}, creds)
+		if err != nil {
+			t.Fatal(err)
+		}
+		s.AcceptHostKey()
+		if err := s.EnsureRoot(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = s.Close() })
+		return s
+	})
+}

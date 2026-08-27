@@ -8,6 +8,7 @@ import (
 
 	"portcloak/internal/engine/config"
 	"portcloak/internal/engine/obs"
+	"portcloak/internal/engine/orchestrator"
 	"portcloak/internal/engine/store"
 )
 
@@ -53,6 +54,9 @@ type JobView struct {
 	Cancellable bool `json:"cancellable"`
 	// CheckpointNote says what a resume would actually pick up from.
 	CheckpointNote string `json:"checkpointNote,omitempty"`
+	// ResumeNote says what pressing Resume would do — an upload continued, or
+	// the export run again.
+	ResumeNote string `json:"resumeNote,omitempty"`
 }
 
 // ActivityView is the whole screen.
@@ -85,6 +89,10 @@ func (j *JobsController) List() ActivityView {
 		v.Discardable = job.State == config.JobInterrupted || job.State == config.JobFailed
 		v.Cancellable = running[job.ID]
 		v.CheckpointNote = describeCheckpoint(job)
+		if v.Resumable {
+			// The note and the button agree because they come from one plan.
+			v.ResumeNote = orchestrator.PlanResume(j.eng.Home, job).Reason
+		}
 
 		switch job.State {
 		case config.JobRunning, config.JobQueued:
@@ -252,23 +260,28 @@ func (j *JobsController) Discard(jobID string) DiscardResult {
 
 // Resume continues an interrupted job.
 //
-// A capture whose bundle is already sealed resumes as an upload; anything
-// earlier restarts the export, which is stated rather than implied — a
-// fine-grained resume that does not exist would be worse than an honest
-// restart.
+// What it does depends on how far the job got, and the answer is reported
+// rather than assumed: a capture whose bundle is already sealed resumes as an
+// upload, and anything earlier runs the export again. Implying a fine-grained
+// resume that does not exist would be worse than saying so.
 func (j *JobsController) Resume(jobID string) StartResult {
 	job, err := j.eng.Jobs.Load(jobID)
 	if err != nil {
 		return StartResult{Failure: Fail(err)}
 	}
-	if !job.State.Resumable() {
-		return StartResult{Failure: &Failure{
-			Message: fmt.Sprintf("That job is %s, so there is nothing to resume.", job.State),
-		}}
-	}
 
-	switch job.Kind {
-	case config.JobCapture:
+	plan := orchestrator.PlanResume(j.eng.Home, job)
+	switch plan.Kind {
+	case orchestrator.ResumeUnavailable:
+		return StartResult{Failure: &Failure{Message: plan.Reason}}
+
+	case orchestrator.ResumeUpload:
+		if err := j.eng.Orch.ResumeUpload(context.Background(), jobID); err != nil {
+			return StartResult{Failure: Fail(err)}
+		}
+		return StartResult{JobIDs: []string{jobID}, Realms: []string{job.Realm}}
+
+	default:
 		prefs := j.eng.Config.Preferences()
 		return (&CaptureController{eng: j.eng}).Start(CaptureOptions{
 			Environment:  job.Environment,
@@ -281,9 +294,16 @@ func (j *JobsController) Resume(jobID string) StartResult {
 			Encrypt:                 job.Encrypted,
 			AcknowledgedUnencrypted: !job.Encrypted,
 		})
-	default:
-		return StartResult{Failure: &Failure{
-			Message: "A restore is not resumed automatically. Keycloak's import is not transactional, so replaying one is not always safe — review what was applied and start again deliberately.",
-		}}
 	}
+}
+
+// ResumePlan says what resuming would do, so the button can say it too.
+func (j *JobsController) ResumePlan(jobID string) orchestrator.ResumePlan {
+	job, err := j.eng.Jobs.Load(jobID)
+	if err != nil {
+		return orchestrator.ResumePlan{
+			Kind: orchestrator.ResumeUnavailable, Reason: err.Error(),
+		}
+	}
+	return orchestrator.PlanResume(j.eng.Home, job)
 }

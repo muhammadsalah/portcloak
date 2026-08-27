@@ -795,27 +795,37 @@ func (o *Orchestrator) upload(ctx context.Context, cc captureContext, j *config.
 	}
 	defer f.Close() //nolint:errcheck // read-only.
 
+	// The file is handed over whole and the checkpoint travels as a hint. The
+	// backend reconciles it against what the destination actually holds and
+	// positions the reader itself, because the destination is the only
+	// authority on where a transfer got to.
 	var offset int64
+	var hashState []byte
 	if cp := j.Checkpoint; cp != nil && cp.Stage == string(obs.PhaseUpload) && cp.Key == bundleKey {
-		offset = cp.ByteOffset
-		if offset > 0 {
-			if _, err := f.Seek(offset, io.SeekStart); err != nil {
-				return err
-			}
-		}
+		offset, hashState = cp.ByteOffset, cp.HashState
 	}
 
+	// LocalBundle travels with the upload checkpoint. Without it a resume has
+	// nothing to resume from and would have to re-export the realm — which is
+	// the expensive half, and the half that was already done.
+	checkpoint := func(written int64, state []byte) {
+		j.Checkpoint = &config.Checkpoint{
+			Stage: string(obs.PhaseUpload), Key: bundleKey,
+			ByteOffset: written, Digest: sealed.seal.Digest, HashState: state,
+			LocalBundle: sealed.path, UpdatedAt: o.opts.Now(),
+		}
+	}
+	checkpoint(offset, hashState)
+
 	_, err = cc.blobs.Put(ctx, bundleKey, f, store.PutOptions{
-		Size:   info.Size(),
-		Digest: sealed.seal.Digest,
-		Offset: offset,
+		Size:      info.Size(),
+		Digest:    sealed.seal.Digest,
+		Offset:    offset,
+		HashState: hashState,
 		Progress: func(written int64) {
 			rep.Progress(written, info.Size(), "bytes", bundleKey)
-			j.Checkpoint = &config.Checkpoint{
-				Stage: string(obs.PhaseUpload), Key: bundleKey,
-				ByteOffset: written, Digest: sealed.seal.Digest, UpdatedAt: o.opts.Now(),
-			}
 		},
+		Checkpoint: checkpoint,
 	})
 	if err != nil {
 		o.saveJob(j)

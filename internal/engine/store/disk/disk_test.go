@@ -85,67 +85,54 @@ func TestDisk_InterruptedWriteLeavesNothingComplete(t *testing.T) {
 	}
 }
 
-// Resuming an interrupted local write converges on one complete object rather
-// than duplicating or concatenating.
-func TestDisk_ResumeConverges(t *testing.T) {
+// Resume is contract behaviour, not a disk quirk: SFTP resumes from an offset
+// too, and both run this table.
+func TestDisk_OffsetResumeContract(t *testing.T) {
+	storetest.RunOffsetResumeContract(t, func(t *testing.T) store.BlobStore {
+		s, err := disk.New(t.TempDir())
+		if err != nil {
+			t.Fatal(err)
+		}
+		return s
+	})
+}
+
+// A prefix that was corrupted on the medium itself, rather than coming from a
+// different object, is caught by the same continued hash.
+func TestDisk_ResumeOverACorruptedPrefixFails(t *testing.T) {
 	root := t.TempDir()
 	s, err := disk.New(root)
 	if err != nil {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-
 	body := bytes.Repeat([]byte("bundle"), 2000)
 	sum := sha256.Sum256(body)
 	digest := hex.EncodeToString(sum[:])
 
 	broken := &storetest.Reader{Data: body, Fail: 4096, Err: os.ErrClosed}
-	if _, err := s.Put(ctx, "acme/r.pck", broken, store.PutOptions{Size: int64(len(body)), Digest: digest}); err == nil {
+	if _, err := s.Put(ctx, "acme/c.pck", broken, store.PutOptions{Size: int64(len(body)), Digest: digest}); err == nil {
 		t.Fatal("expected the first attempt to fail")
 	}
 
-	res, err := s.Put(ctx, "acme/r.pck", bytes.NewReader(body[4096:]),
-		store.PutOptions{Size: int64(len(body)), Digest: digest, Offset: 4096})
+	// One byte of the partial file rots. A resume that hashed only its own tail
+	// would never notice.
+	part := filepath.Join(root, "acme", "c.pck.part")
+	held, err := os.ReadFile(part)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !res.Resumed {
-		t.Error("the write did not report itself as resumed")
-	}
-	var out bytes.Buffer
-	if _, err := s.Get(ctx, "acme/r.pck", &out, store.GetOptions{}); err != nil {
+	held[10] ^= 0xff
+	if err := os.WriteFile(part, held, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(out.Bytes(), body) {
-		t.Fatalf("resumed object is %d bytes, want %d — a resume must converge, never concatenate", out.Len(), len(body))
-	}
-}
 
-// A checkpoint describing progress the file cannot corroborate must restart
-// rather than resume into a gap.
-func TestDisk_ResumeBeyondWhatExistsRestarts(t *testing.T) {
-	root := t.TempDir()
-	s, err := disk.New(root)
-	if err != nil {
-		t.Fatal(err)
+	if _, err := s.Put(ctx, "acme/c.pck", bytes.NewReader(body),
+		store.PutOptions{Size: int64(len(body)), Digest: digest, Offset: int64(len(held))}); err == nil {
+		t.Fatal("a resume over a corrupted prefix reported success")
 	}
-	body := []byte("complete contents")
-	sum := sha256.Sum256(body)
-
-	res, err := s.Put(context.Background(), "acme/g.pck", bytes.NewReader(body),
-		store.PutOptions{Size: int64(len(body)), Digest: hex.EncodeToString(sum[:]), Offset: 99999})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if res.Resumed {
-		t.Error("a checkpoint the file cannot corroborate should not be trusted")
-	}
-	var out bytes.Buffer
-	if _, err := s.Get(context.Background(), "acme/g.pck", &out, store.GetOptions{}); err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(out.Bytes(), body) {
-		t.Fatalf("object is %q", out.String())
+	if _, err := os.Stat(filepath.Join(root, "acme", "c.pck")); !os.IsNotExist(err) {
+		t.Error("a failed verification left an object in place")
 	}
 }
 

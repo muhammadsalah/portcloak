@@ -3,6 +3,7 @@ package reliable_test
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"errors"
 	"io"
 	"strings"
@@ -124,6 +125,88 @@ func TestWrapStore_RetriesAReplayableStreamFromTheStart(t *testing.T) {
 		t.Fatalf("the retry sent %q, not the whole object", inner.received)
 	}
 }
+
+// A retry that starts from zero throws away everything the failed attempt
+// managed to transfer. When the backend checkpointed its progress, the next
+// attempt is given that offset and the hash state that goes with it.
+func TestWrapStore_RetriesFromTheLastCheckpoint(t *testing.T) {
+	inner := &checkpointingStore{failAt: 8}
+	s := reliable.WrapStore(inner, fastOptions())
+
+	var seen []int64
+	body := bytes.Repeat([]byte("bundle"), 8)
+	_, err := s.Put(context.Background(), "acme/x.pck", bytes.NewReader(body), store.PutOptions{
+		Size: int64(len(body)),
+		Checkpoint: func(written int64, _ []byte) {
+			seen = append(seen, written)
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(inner.offsets) != 2 {
+		t.Fatalf("made %d attempts, want 2", len(inner.offsets))
+	}
+	if inner.offsets[0] != 0 {
+		t.Errorf("the first attempt started at %d, want 0", inner.offsets[0])
+	}
+	if inner.offsets[1] != 8 {
+		t.Errorf("the retry started at %d, want the checkpointed 8", inner.offsets[1])
+	}
+	// The state travels with the offset: an offset on its own would force the
+	// backend to re-read the prefix to verify the finished object.
+	if len(inner.states[1]) == 0 {
+		t.Error("the retry was given an offset with no hash state")
+	}
+	// The caller still sees the checkpoints, so the job's own record keeps up.
+	if len(seen) == 0 || seen[0] != 8 {
+		t.Errorf("the caller saw checkpoints %v", seen)
+	}
+}
+
+// checkpointingStore reports durable progress before it drops, the way a real
+// backend does partway through an upload.
+type checkpointingStore struct {
+	failAt  int64
+	offsets []int64
+	states  [][]byte
+}
+
+func (c *checkpointingStore) Put(_ context.Context, key string, r io.Reader, opts store.PutOptions) (store.PutResult, error) {
+	c.offsets = append(c.offsets, opts.Offset)
+	c.states = append(c.states, opts.HashState)
+	if opts.Offset > 0 {
+		if _, err := r.(io.Seeker).Seek(opts.Offset, io.SeekStart); err != nil {
+			return store.PutResult{}, err
+		}
+	}
+	b, _ := io.ReadAll(r)
+	if opts.Offset == 0 {
+		h := sha256.New()
+		h.Write(b[:c.failAt])
+		if opts.Checkpoint != nil {
+			opts.Checkpoint(c.failAt, store.MarshalHash(h))
+		}
+		return store.PutResult{}, syscall.ECONNRESET
+	}
+	return store.PutResult{Key: key, Size: opts.Offset + int64(len(b)), Resumed: true}, nil
+}
+
+func (c *checkpointingStore) Probe(context.Context) (store.Reach, error) {
+	return store.Reach{Access: store.AccessWritable}, nil
+}
+func (c *checkpointingStore) Stat(context.Context, string) (store.ObjectInfo, error) {
+	return store.ObjectInfo{}, nil
+}
+func (c *checkpointingStore) Get(context.Context, string, io.Writer, store.GetOptions) (store.GetResult, error) {
+	return store.GetResult{}, nil
+}
+func (c *checkpointingStore) List(context.Context, string) ([]store.ObjectInfo, error) {
+	return nil, nil
+}
+func (c *checkpointingStore) Delete(context.Context, string) error { return nil }
+func (c *checkpointingStore) Endpoint() string                     { return "checkpointing://endpoint" }
+func (c *checkpointingStore) Close() error                         { return nil }
 
 // A probe is an operator asking a question. The honest answer to "is this
 // reachable right now" is the first one, not the one that arrived after thirty

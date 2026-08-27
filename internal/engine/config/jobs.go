@@ -80,6 +80,10 @@ type Checkpoint struct {
 	LocalBundle string `json:"localBundle,omitempty"`
 	// Digest is the rolling SHA-256 of what has been committed so far.
 	Digest string `json:"digest,omitempty"`
+	// HashState is the marshalled SHA-256 state covering exactly ByteOffset
+	// bytes. It is what lets a resumed upload verify the whole object against
+	// Digest rather than only the part it sent.
+	HashState []byte `json:"hashState,omitempty"`
 
 	UpdatedAt time.Time `json:"updatedAt"`
 }

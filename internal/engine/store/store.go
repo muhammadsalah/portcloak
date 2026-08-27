@@ -7,8 +7,11 @@ package store
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding"
 	"errors"
 	"fmt"
+	"hash"
 	"io"
 	"path"
 	"sort"
@@ -83,11 +86,33 @@ type PutOptions struct {
 	// reached any backend. Corruption is therefore always caught on retrieval,
 	// whatever the backend did.
 	Digest string
-	// Offset resumes a partial write. Backends that cannot resume ignore it and
-	// report so through Reach.Resumable.
+	// Offset is a resume hint from the checkpoint, not an instruction.
+	//
+	// The backend reconciles it against what it actually holds and positions
+	// the reader accordingly — so a reader must be an io.Seeker for a resume to
+	// be possible at all. This is deliberate: a checkpoint can describe progress
+	// the destination cannot corroborate, and trusting it would resume into a
+	// gap. That is the silent-corruption failure class, and the destination is
+	// the only authority on where a transfer actually got to.
 	Offset int64
-	// Progress is called with bytes written so far.
+	// HashState is the marshalled SHA-256 state covering exactly Offset bytes,
+	// carried in the checkpoint so a resumed transfer continues the hash rather
+	// than re-reading everything.
+	//
+	// Without it a resume can only hash the tail it sent, and the prefix left
+	// by the interrupted attempt would be committed having never been checked
+	// against Digest. A backend that cannot use the state re-derives one from
+	// what it holds; it never skips the verification.
+	HashState []byte
+	// Progress is called with bytes written so far. It drives the UI, so it is
+	// called often and must stay cheap.
 	Progress func(written int64)
+	// Checkpoint is called when durable progress is worth recording, with the
+	// hash state covering exactly those bytes. The two travel together on
+	// purpose: an offset stored without its matching state cannot be resumed
+	// from without re-reading, and one stored with a mismatched state is worse
+	// than either.
+	Checkpoint func(written int64, hashState []byte)
 	// ContentType is advisory metadata.
 	ContentType string
 }
@@ -304,4 +329,104 @@ func parseBase(l Layout, base string) (realm, id string, created time.Time) {
 		return realm, name, time.Time{}
 	}
 	return realm, name[stampLen+1:], t
+}
+
+// ResumeHash builds a SHA-256 that already covers the first offset bytes of the
+// object a resumed write is continuing.
+//
+// It prefers the marshalled state from the checkpoint, which is what makes a
+// resume cost the remainder rather than the whole file. When that state is
+// absent or unusable it falls back to re-reading the prefix the destination
+// already holds — slower, but it keeps the guarantee that the digest checked at
+// the end covers the entire object rather than only the part this attempt sent.
+//
+// A state that does not actually describe those bytes is not a silent hazard:
+// the caller compares the finished digest against the one computed before the
+// transfer, so a wrong state fails the write instead of committing it.
+func ResumeHash(state []byte, offset int64, prefix func() (io.ReadCloser, error)) (hash.Hash, error) {
+	h := sha256.New()
+	if offset == 0 {
+		return h, nil
+	}
+	if len(state) > 0 {
+		if u, ok := h.(encoding.BinaryUnmarshaler); ok {
+			if err := u.UnmarshalBinary(state); err == nil {
+				return h, nil
+			}
+			h = sha256.New()
+		}
+	}
+	if prefix == nil {
+		return nil, fmt.Errorf("no hash state and no way to re-read the first %d bytes", offset)
+	}
+	rc, err := prefix()
+	if err != nil {
+		return nil, err
+	}
+	defer rc.Close() //nolint:errcheck
+	if _, err := io.CopyN(h, rc, offset); err != nil {
+		return nil, err
+	}
+	return h, nil
+}
+
+// MarshalHash returns a hash's state for the checkpoint, or nil when it cannot
+// be captured. Nil is not an error: the resume falls back to re-reading.
+func MarshalHash(h hash.Hash) []byte {
+	m, ok := h.(encoding.BinaryMarshaler)
+	if !ok {
+		return nil
+	}
+	b, err := m.MarshalBinary()
+	if err != nil {
+		return nil
+	}
+	return b
+}
+
+// ProgressWriter reports how far a transfer has got and, where the backend
+// supports resuming from an offset, records the hash state alongside it.
+//
+// It lives here rather than in each backend because the two callbacks have to
+// stay in step: a checkpoint that names an offset without the matching hash
+// state forces a resume to re-read the prefix, and one that pairs an offset
+// with a state from a different position fails the digest check at the end.
+type ProgressWriter struct {
+	W   io.Writer
+	Ctx context.Context
+	// OnWrite drives the UI, so it is called on every write.
+	OnWrite func(int64)
+	// OnCheckpoint is called at intervals with the bytes written and the hash
+	// state covering exactly those bytes. Hash must be set for it to be useful.
+	OnCheckpoint func(int64, []byte)
+	Hash         hash.Hash
+	// Written seeds the counter for a resumed transfer, so progress is reported
+	// against the whole object rather than restarting at zero.
+	Written int64
+
+	checkpointed int64
+}
+
+// CheckpointEvery is how much has to be written before the hash state is
+// captured again. Marshalling on every write would cost more than the resume it
+// buys; snapshots are measured in hundreds of megabytes, so re-sending at most
+// this much is a fair worst case.
+const CheckpointEvery = 8 << 20
+
+func (p *ProgressWriter) Write(b []byte) (int, error) {
+	// A cancelled job stops writing here rather than after the transfer, which
+	// is what keeps cancellation responsive on a slow link.
+	if err := p.Ctx.Err(); err != nil {
+		return 0, err
+	}
+	n, err := p.W.Write(b)
+	p.Written += int64(n)
+	if p.OnWrite != nil {
+		p.OnWrite(p.Written)
+	}
+	if p.OnCheckpoint != nil && p.Hash != nil && p.Written-p.checkpointed >= CheckpointEvery {
+		p.checkpointed = p.Written
+		p.OnCheckpoint(p.Written, MarshalHash(p.Hash))
+	}
+	return n, err
 }

@@ -82,11 +82,25 @@ func (s *Store) Put(ctx context.Context, key string, r io.Reader, opts store.Put
 	if !replayable(r) {
 		return s.inner.Put(ctx, key, r, opts)
 	}
+	// Each attempt picks up from the last checkpoint the previous one reached
+	// rather than from where this call started. Retrying a 400 MB upload from
+	// zero because it dropped at 390 MB is the behaviour the checkpoint exists
+	// to prevent, and the state recorded alongside the offset is what lets the
+	// digest still cover the whole object at the end.
+	attempt := opts
+	caller := opts.Checkpoint
+	attempt.Checkpoint = func(written int64, state []byte) {
+		attempt.Offset, attempt.HashState = written, state
+		if caller != nil {
+			caller(written, state)
+		}
+	}
+
 	err = s.doer.Do(ctx, "upload the snapshot", func(ctx context.Context) error {
 		if err := rewind(r); err != nil {
 			return err
 		}
-		out, err = s.inner.Put(ctx, key, r, opts)
+		out, err = s.inner.Put(ctx, key, r, attempt)
 		return err
 	})
 	return out, err

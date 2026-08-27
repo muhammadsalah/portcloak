@@ -177,24 +177,59 @@ func (s *Store) Put(ctx context.Context, key string, r io.Reader, opts store.Put
 	tmp := p + ".part"
 	flag := os.O_CREATE | os.O_WRONLY
 	var written int64
+
+	// The destination decides where the transfer actually got to, and then
+	// positions the source to match. A checkpoint is a hint; this file is the
+	// authority.
+	resumeFrom := int64(0)
 	if opts.Offset > 0 {
-		if st, statErr := os.Stat(tmp); statErr == nil && st.Size() >= opts.Offset {
-			flag |= os.O_APPEND
-			written = opts.Offset
-			if st.Size() > opts.Offset {
-				if err := os.Truncate(tmp, opts.Offset); err != nil {
-					return store.PutResult{}, err
-				}
-			}
-		} else {
-			// The checkpoint describes progress this file cannot corroborate,
-			// so the honest move is to start again rather than resume into a
-			// gap.
-			opts.Offset = 0
-			flag |= os.O_TRUNC
+		if st, statErr := os.Stat(tmp); statErr == nil && st.Size() > 0 {
+			resumeFrom = min64(st.Size(), opts.Offset)
+		}
+	}
+	if resumeFrom > 0 {
+		if err := seekTo(r, resumeFrom); err != nil {
+			// A source that cannot be repositioned cannot be resumed from, so
+			// the whole object is written again rather than a truncated one
+			// committed.
+			resumeFrom = 0
+		}
+	}
+	if resumeFrom == 0 {
+		if err := seekTo(r, 0); err != nil && opts.Offset > 0 {
+			return store.PutResult{}, resil.Fatal("resume the upload",
+				fmt.Sprintf("%s cannot be resumed because its source cannot be rewound.", key), err)
+		}
+	}
+
+	if resumeFrom > 0 {
+		flag |= os.O_APPEND
+		written = resumeFrom
+		if err := os.Truncate(tmp, resumeFrom); err != nil {
+			return store.PutResult{}, err
 		}
 	} else {
 		flag |= os.O_TRUNC
+	}
+	opts.Offset = resumeFrom
+
+	// The hash picks up where the interrupted attempt left off, so the digest
+	// checked below covers the whole file rather than only the bytes this
+	// attempt wrote.
+	// The state is only usable when the destination corroborated the whole
+	// checkpoint. If it held less than the checkpoint claimed, the state
+	// describes bytes that are not there, and re-reading is the honest way to
+	// establish what is.
+	state := opts.HashState
+	if resumeFrom != opts.Offset {
+		state = nil
+	}
+	h, err := store.ResumeHash(state, resumeFrom, func() (io.ReadCloser, error) {
+		return os.Open(tmp)
+	})
+	if err != nil {
+		return store.PutResult{}, resil.Fatal("resume the write",
+			fmt.Sprintf("PortCloak could not re-establish the checksum of the %d bytes of %s already written, so resuming would commit them unverified.", resumeFrom, key), err)
 	}
 
 	f, err := os.OpenFile(tmp, flag, 0o600)
@@ -202,8 +237,8 @@ func (s *Store) Put(ctx context.Context, key string, r io.Reader, opts store.Put
 		return store.PutResult{}, fmt.Errorf("creating %s: %w", tmp, err)
 	}
 
-	h := sha256.New()
-	pw := &progressWriter{w: io.MultiWriter(f, h), ctx: ctx, onWrite: opts.Progress, written: written}
+	pw := &store.ProgressWriter{W: io.MultiWriter(f, h), Ctx: ctx, OnWrite: opts.Progress,
+		OnCheckpoint: opts.Checkpoint, Hash: h, Written: written}
 	n, copyErr := io.Copy(pw, r)
 	if copyErr != nil {
 		_ = f.Close()
@@ -217,12 +252,11 @@ func (s *Store) Put(ctx context.Context, key string, r io.Reader, opts store.Put
 		return store.PutResult{}, err
 	}
 
+	// A resumed write is verified exactly like a fresh one. The prefix it did
+	// not send is still its responsibility: it is about to be committed under
+	// this key.
 	digest := hex.EncodeToString(h.Sum(nil))
-	if opts.Offset > 0 {
-		// A resumed write cannot recompute the digest of the bytes it did not
-		// see, so the caller's precomputed digest is authoritative.
-		digest = opts.Digest
-	} else if opts.Digest != "" && opts.Digest != digest {
+	if opts.Digest != "" && opts.Digest != digest {
 		_ = os.Remove(tmp)
 		return store.PutResult{}, resil.Fatal("verify the write",
 			fmt.Sprintf("%s did not arrive intact — the bytes written do not match the digest computed before the transfer.", key), nil)
@@ -265,7 +299,7 @@ func (s *Store) Get(ctx context.Context, key string, w io.Writer, opts store.Get
 		}
 	}
 	h := sha256.New()
-	pw := &progressWriter{w: io.MultiWriter(w, h), ctx: ctx, onWrite: opts.Progress, written: opts.Offset}
+	pw := &store.ProgressWriter{W: io.MultiWriter(w, h), Ctx: ctx, OnWrite: opts.Progress, Written: opts.Offset}
 	n, err := io.Copy(pw, f)
 	if err != nil {
 		return store.GetResult{}, err
@@ -361,21 +395,24 @@ func (s *Store) EnsureRoot() error {
 	return os.MkdirAll(s.root, 0o700)
 }
 
-type progressWriter struct {
-	w       io.Writer
-	ctx     context.Context
-	onWrite func(int64)
-	written int64
+// seekTo positions a source at an absolute offset, where it can be positioned
+// at all.
+func seekTo(r io.Reader, offset int64) error {
+	seeker, ok := r.(io.Seeker)
+	if !ok {
+		if offset == 0 {
+			// A non-seekable reader is already at its start.
+			return nil
+		}
+		return fmt.Errorf("this source cannot be repositioned")
+	}
+	_, err := seeker.Seek(offset, io.SeekStart)
+	return err
 }
 
-func (p *progressWriter) Write(b []byte) (int, error) {
-	if err := p.ctx.Err(); err != nil {
-		return 0, err
+func min64(a, b int64) int64 {
+	if a < b {
+		return a
 	}
-	n, err := p.w.Write(b)
-	p.written += int64(n)
-	if p.onWrite != nil {
-		p.onWrite(p.written)
-	}
-	return n, err
+	return b
 }

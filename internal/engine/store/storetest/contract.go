@@ -381,6 +381,154 @@ func RunResumableContract(t *testing.T, newStore func(t *testing.T) store.Resuma
 	})
 }
 
+// RunOffsetResumeContract covers the backends that resume a single stream from a
+// byte offset — disk and SFTP. S3 and Azure resume by part instead and run
+// RunResumableContract.
+//
+// The guarantee under test is not just "it finishes": a resumed write commits a
+// prefix it never sent, so it has to prove the finished object matches the
+// digest computed before the transfer, exactly as a fresh write does.
+func RunOffsetResumeContract(t *testing.T, newStore Factory) {
+	t.Helper()
+
+	body := bytes.Repeat([]byte("bundle-"), 4000)
+	sum := sha256.Sum256(body)
+	digest := hex.EncodeToString(sum[:])
+
+	// interrupt writes part of body and fails, leaving whatever partial state
+	// the backend keeps for a resume.
+	interrupt := func(t *testing.T, s store.BlobStore, key string, at int) {
+		t.Helper()
+		broken := &Reader{Data: body, Fail: at, Err: io.ErrUnexpectedEOF}
+		if _, err := s.Put(context.Background(), key, broken,
+			store.PutOptions{Size: int64(len(body)), Digest: digest}); err == nil {
+			t.Fatal("an interrupted write reported success")
+		}
+		if _, err := s.Stat(context.Background(), key); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("an interrupted write left an object at the final key: %v", err)
+		}
+	}
+
+	readBack := func(t *testing.T, s store.BlobStore, key string) []byte {
+		t.Helper()
+		var out bytes.Buffer
+		if _, err := s.Get(context.Background(), key, &out, store.GetOptions{}); err != nil {
+			t.Fatal(err)
+		}
+		return out.Bytes()
+	}
+
+	t.Run("resume converges on one complete object", func(t *testing.T) {
+		s := newStore(t)
+		key := "acme/resume.pck"
+		interrupt(t, s, key, 4096)
+
+		// The whole source is handed back, exactly as a caller re-opening the
+		// sealed bundle would: the backend reconciles the offset against what
+		// it holds and positions the reader itself.
+		res, err := s.Put(context.Background(), key, bytes.NewReader(body),
+			store.PutOptions{Size: int64(len(body)), Digest: digest, Offset: 4096})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !res.Resumed {
+			t.Error("the write did not report itself as resumed")
+		}
+		if got := readBack(t, s, key); !bytes.Equal(got, body) {
+			t.Fatalf("the resumed object is %d bytes, want %d — a resume must converge, never concatenate or truncate",
+				len(got), len(body))
+		}
+		if res.Digest != digest {
+			t.Errorf("a resumed write reported digest %q, want %q", res.Digest, digest)
+		}
+	})
+
+	t.Run("a hash state from the checkpoint is still verified", func(t *testing.T) {
+		s := newStore(t)
+		key := "acme/stateful.pck"
+		interrupt(t, s, key, 4096)
+
+		// The state the checkpoint would have carried: the hash of exactly the
+		// bytes the destination holds.
+		h := sha256.New()
+		h.Write(body[:4096])
+		res, err := s.Put(context.Background(), key, bytes.NewReader(body),
+			store.PutOptions{Size: int64(len(body)), Digest: digest,
+				Offset: 4096, HashState: store.MarshalHash(h)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := readBack(t, s, key); !bytes.Equal(got, body) {
+			t.Fatalf("the resumed object is %d bytes, want %d", len(got), len(body))
+		}
+		if res.Digest != digest {
+			t.Errorf("resumed digest %q, want %q", res.Digest, digest)
+		}
+	})
+
+	// The whole point of continuing the hash: a resume must not commit a prefix
+	// it never checked. Here the prefix on the destination belongs to a
+	// different object, so the finished digest cannot match and the write has
+	// to fail rather than land.
+	t.Run("a prefix that does not belong is caught, not committed", func(t *testing.T) {
+		s := newStore(t)
+		key := "acme/mismatched.pck"
+		interrupt(t, s, key, 4096)
+
+		other := bytes.Repeat([]byte("OTHER!-"), 4000)
+		otherSum := sha256.Sum256(other)
+		if _, err := s.Put(context.Background(), key, bytes.NewReader(other),
+			store.PutOptions{Size: int64(len(other)), Digest: hex.EncodeToString(otherSum[:]),
+				Offset: 4096}); err == nil {
+			t.Fatal("a resume over a prefix from a different object reported success")
+		}
+		if _, err := s.Stat(context.Background(), key); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("a failed verification left an object in place: %v", err)
+		}
+	})
+
+	// A checkpoint can describe progress the destination cannot corroborate.
+	// Trusting it would resume into a gap, so the transfer starts again.
+	t.Run("a checkpoint beyond what the destination holds restarts", func(t *testing.T) {
+		s := newStore(t)
+		key := "acme/overclaimed.pck"
+
+		res, err := s.Put(context.Background(), key, bytes.NewReader(body),
+			store.PutOptions{Size: int64(len(body)), Digest: digest, Offset: 999999})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.Resumed {
+			t.Error("a checkpoint the destination cannot corroborate should not be trusted")
+		}
+		if got := readBack(t, s, key); !bytes.Equal(got, body) {
+			t.Fatalf("the object is %d bytes, want %d", len(got), len(body))
+		}
+	})
+
+	// A source that cannot be rewound cannot be resumed from — but it must not
+	// be concatenated onto the prefix either. The transfer starts over and the
+	// object still comes out right.
+	t.Run("a source that cannot be repositioned starts over rather than concatenating", func(t *testing.T) {
+		s := newStore(t)
+		key := "acme/unseekable.pck"
+		interrupt(t, s, key, 4096)
+
+		unseekable := struct{ io.Reader }{bytes.NewReader(body)}
+		res, err := s.Put(context.Background(), key, unseekable,
+			store.PutOptions{Size: int64(len(body)), Digest: digest, Offset: 4096})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.Resumed {
+			t.Error("a source that cannot be rewound was reported as resumed")
+		}
+		if got := readBack(t, s, key); !bytes.Equal(got, body) {
+			t.Fatalf("the object is %d bytes, want %d — the prefix was not discarded", len(got), len(body))
+		}
+	})
+}
+
 // Reader is a helper for tests that need a reader they can interrupt.
 type Reader struct {
 	Data []byte

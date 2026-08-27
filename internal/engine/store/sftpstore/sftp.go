@@ -260,21 +260,48 @@ func (s *Store) Put(ctx context.Context, key string, r io.Reader, opts store.Put
 	var written int64
 	var f *sftp.File
 
+	// The destination decides where the transfer actually got to, and then
+	// positions the source to match. A checkpoint is a hint; the remote file is
+	// the authority — trusting the hint over the file is how a resume skips
+	// bytes that were never transferred.
+	resumeFrom := int64(0)
 	if opts.Offset > 0 {
-		if st, statErr := client.Stat(tmp); statErr == nil && st.Size() >= opts.Offset {
-			f, err = client.OpenFile(tmp, os.O_WRONLY)
-			if err == nil {
-				if _, err = f.Seek(opts.Offset, io.SeekStart); err == nil {
-					written = opts.Offset
-				}
-			}
-		} else {
-			// The checkpoint describes progress the remote file cannot
-			// corroborate, so starting again is the honest move rather than
-			// resuming into a gap.
-			opts.Offset = 0
+		if st, statErr := client.Stat(tmp); statErr == nil && st.Size() > 0 {
+			resumeFrom = minInt64(st.Size(), opts.Offset)
 		}
 	}
+	if resumeFrom > 0 {
+		if err := seekTo(r, resumeFrom); err != nil {
+			// A source that cannot be repositioned cannot be resumed from, so
+			// the whole object is sent again rather than a truncated one
+			// committed.
+			resumeFrom = 0
+		}
+	}
+	if resumeFrom == 0 {
+		if err := seekTo(r, 0); err != nil && opts.Offset > 0 {
+			return store.PutResult{}, resil.Fatal("resume the upload",
+				fmt.Sprintf("%s cannot be resumed because its source cannot be rewound.", key), err)
+		}
+	}
+
+	if resumeFrom > 0 {
+		f, err = client.OpenFile(tmp, os.O_WRONLY)
+		if err == nil {
+			if _, err = f.Seek(resumeFrom, io.SeekStart); err == nil {
+				written = resumeFrom
+			} else {
+				_ = f.Close()
+				f = nil
+				resumeFrom = 0
+			}
+		} else {
+			f = nil
+			resumeFrom = 0
+		}
+	}
+	opts.Offset = resumeFrom
+
 	if f == nil {
 		f, err = client.Create(tmp)
 		if err != nil {
@@ -283,8 +310,28 @@ func (s *Store) Put(ctx context.Context, key string, r io.Reader, opts store.Put
 		}
 	}
 
-	h := sha256.New()
-	pw := &progressWriter{w: io.MultiWriter(f, h), ctx: ctx, onWrite: opts.Progress, written: written}
+	// The hash picks up where the interrupted attempt left off, so the digest
+	// checked below covers the whole object rather than only the bytes this
+	// attempt sent. Without a usable state the remote prefix is read back:
+	// slower than resuming blind, but it is the difference between a verified
+	// object and one committed on trust.
+	state := opts.HashState
+	if resumeFrom != opts.Offset {
+		state = nil
+	}
+	h, hashErr := store.ResumeHash(state, resumeFrom, func() (io.ReadCloser, error) {
+		return client.Open(tmp)
+	})
+	if hashErr != nil {
+		_ = f.Close()
+		return store.PutResult{}, resil.Fatal("resume the upload",
+			fmt.Sprintf("PortCloak could not re-establish the checksum of the %d bytes of %s already on %s, so resuming would commit them unverified.",
+				resumeFrom, key, s.cfg.Target.Host), hashErr).
+			WithAdvice("Starting the upload again will send the whole snapshot and verify it end to end.")
+	}
+
+	pw := &store.ProgressWriter{W: io.MultiWriter(f, h), Ctx: ctx, OnWrite: opts.Progress,
+		OnCheckpoint: opts.Checkpoint, Hash: h, Written: written}
 	n, copyErr := io.Copy(pw, r)
 	if copyErr != nil {
 		_ = f.Close()
@@ -297,10 +344,10 @@ func (s *Store) Put(ctx context.Context, key string, r io.Reader, opts store.Put
 			"The connection dropped while finishing the upload.", err)
 	}
 
+	// A resumed upload is verified exactly like a fresh one: the prefix it did
+	// not send is still about to be committed under this key.
 	digest := hex.EncodeToString(h.Sum(nil))
-	if opts.Offset > 0 {
-		digest = opts.Digest
-	} else if opts.Digest != "" && opts.Digest != digest {
+	if opts.Digest != "" && opts.Digest != digest {
 		_ = client.Remove(tmp)
 		return store.PutResult{}, resil.Fatal("verify the upload",
 			fmt.Sprintf("%s did not arrive intact — the bytes written do not match the digest computed before the transfer.", key), nil)
@@ -348,7 +395,7 @@ func (s *Store) Get(ctx context.Context, key string, w io.Writer, opts store.Get
 		}
 	}
 	h := sha256.New()
-	pw := &progressWriter{w: io.MultiWriter(w, h), ctx: ctx, onWrite: opts.Progress, written: opts.Offset}
+	pw := &store.ProgressWriter{W: io.MultiWriter(w, h), Ctx: ctx, OnWrite: opts.Progress, Written: opts.Offset}
 	n, err := io.Copy(pw, f)
 	if err != nil {
 		return store.GetResult{}, resil.Retry("download the snapshot",
@@ -453,29 +500,31 @@ func readAll(client *sftp.Client, p string) ([]byte, error) {
 	return io.ReadAll(f)
 }
 
+// seekTo positions a source at an absolute offset, where it can be positioned
+// at all.
+func seekTo(r io.Reader, offset int64) error {
+	seeker, ok := r.(io.Seeker)
+	if !ok {
+		if offset == 0 {
+			return nil
+		}
+		return fmt.Errorf("this source cannot be repositioned")
+	}
+	_, err := seeker.Seek(offset, io.SeekStart)
+	return err
+}
+
+func minInt64(a, b int64) int64 {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 func isNotExist(err error) bool {
 	if errors.Is(err, os.ErrNotExist) {
 		return true
 	}
 	return strings.Contains(strings.ToLower(err.Error()), "file does not exist") ||
 		strings.Contains(strings.ToLower(err.Error()), "no such file")
-}
-
-type progressWriter struct {
-	w       io.Writer
-	ctx     context.Context
-	onWrite func(int64)
-	written int64
-}
-
-func (p *progressWriter) Write(b []byte) (int, error) {
-	if err := p.ctx.Err(); err != nil {
-		return 0, err
-	}
-	n, err := p.w.Write(b)
-	p.written += int64(n)
-	if p.onWrite != nil {
-		p.onWrite(p.written)
-	}
-	return n, err
 }
