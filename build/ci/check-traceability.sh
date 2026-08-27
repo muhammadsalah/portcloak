@@ -41,17 +41,28 @@ fi
 # expanding an empty array under `set -u` is itself an "unbound variable"
 # error — the check would then fail on a developer's machine for a reason
 # that has nothing to do with the matrix it is meant to be checking.
+# The caller names extra tags as a value, not as another flag, and they are
+# merged into one comma-separated list.
+#
+# `go test -tags gtk3 -tags=integration` does not mean both: Go's flag parsing
+# takes the last occurrence, so the second silently discards the first. That is
+# how the integration listing lost the Linux backend selector and went back to
+# failing on gtk4 — with the first arrangement of this very fix.
 list_tests() {
+	local extra="${1:-}"
+	local all="$tags"
+	[ -n "$extra" ] && all="${all:+$all,}$extra"
+
 	local errors="$work/err"
-	if ! go test -tags "$tags" "$@" ./internal/... -list '.*' 2>"$errors" | grep -E '^Test' | sort -u; then
-		echo "the test list could not be built (go test -tags \"$tags\" $*):" >&2
+	if ! go test -tags "$all" ./internal/... -list '.*' 2>"$errors" | grep -E '^Test' | sort -u; then
+		echo "the test list could not be built (go test -tags \"$all\"):" >&2
 		sed 's/^/  /' "$errors" >&2
 		exit 1
 	fi
 }
 
 list_tests > "$known"
-list_tests -tags=integration >> "$known"
+list_tests integration >> "$known"
 sort -u -o "$known" "$known"
 
 # Citations are in backticks and may name a subtest after a slash; the top-level
