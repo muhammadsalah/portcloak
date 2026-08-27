@@ -24,6 +24,13 @@ const (
 	ActionPurge            Action = "purgeLocalData"
 	ActionVerify           Action = "verifySnapshot"
 	ActionJobDiscarded     Action = "jobDiscarded"
+	// Key lifecycle. A key is the difference between a bundle and a realm, so
+	// creating, importing, revealing and — above all — deleting one belongs in
+	// the permanent record next to the captures it makes readable.
+	ActionKeyCreated  Action = "keyCreated"
+	ActionKeyImported Action = "keyImported"
+	ActionKeyRevealed Action = "keyRevealed"
+	ActionKeyDeleted  Action = "keyDeleted"
 )
 
 // AuditEntry is one line of the append-only log.

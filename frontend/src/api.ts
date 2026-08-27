@@ -264,17 +264,10 @@ export interface StartResult extends MaybeFailed {
   realms: string[];
 }
 
-export interface Identity {
-  privateKey: string;
-  publicKey: string;
-  warning: string;
-}
-
 export const CaptureAPI = {
   defaults: () => call<WizardDefaults>("CaptureController", "Defaults"),
   realms: (environment: string) => call<RealmsResult>("CaptureController", "Realms", environment),
   start: (opts: CaptureOptions) => call<StartResult>("CaptureController", "Start", opts),
-  generateIdentity: () => call<[Identity, Failure | null]>("CaptureController", "GenerateIdentity"),
 };
 
 /* ── Library ───────────────────────────────────────────────────────────── */
@@ -387,6 +380,8 @@ export interface Overview extends MaybeFailed {
   bundleKey: string;
   encrypted: boolean;
   encryptionMode?: string;
+  /** The stored key that opened this snapshot without being asked for. */
+  unlockedWith?: string;
   warning?: string;
   counts: Record<string, number>;
   credentials: {
@@ -845,6 +840,65 @@ export const MaintenanceAPI = {
     call<Failure | null>("MaintenanceController", "RemoveOrphan", environment, ref),
   workingData: () => call<WorkingData>("MaintenanceController", "WorkingData"),
   purge: () => call<PurgeResult>("MaintenanceController", "Purge"),
+};
+
+/* ── Keys ──────────────────────────────────────────────────────────────── */
+
+export type KeyKind = "identity" | "passphrase";
+
+export interface StoredKey {
+  name: string;
+  kind: KeyKind;
+  publicKey?: string;
+  credentialRef: string;
+  note?: string;
+  createdAt?: string;
+  present: boolean;
+  usable: boolean;
+  age?: string;
+  summary: string;
+}
+
+export interface KeysView extends MaybeFailed {
+  keys: StoredKey[];
+  unlockable: number;
+  note: string;
+  deleteWarning: string;
+}
+
+export interface GeneratedKey extends MaybeFailed {
+  name: string;
+  publicKey: string;
+  privateKey: string;
+  warning: string;
+}
+
+export interface RevealedKey extends MaybeFailed {
+  name: string;
+  secret: string;
+  warning: string;
+}
+
+export interface KeyRecipient {
+  name: string;
+  publicKey: string;
+  note?: string;
+  openable: boolean;
+}
+
+export const KeysAPI = {
+  list: () => call<KeysView>("KeysController", "List"),
+  recipients: () => call<KeyRecipient[]>("KeysController", "Recipients"),
+  generate: (name: string, note: string) =>
+    call<GeneratedKey>("KeysController", "Generate", name, note),
+  importIdentity: (name: string, privateKey: string, note: string) =>
+    call<Failure | null>("KeysController", "ImportIdentity", name, privateKey, note),
+  savePassphrase: (name: string, passphrase: string, note: string) =>
+    call<Failure | null>("KeysController", "SavePassphrase", name, passphrase, note),
+  reveal: (name: string) => call<RevealedKey>("KeysController", "Reveal", name),
+  rename: (originalName: string, name: string, note: string) =>
+    call<Failure | null>("KeysController", "Rename", originalName, name, note),
+  remove: (name: string) => call<Failure | null>("KeysController", "Delete", name),
 };
 
 /* ── Progress events ───────────────────────────────────────────────────── */

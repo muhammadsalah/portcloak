@@ -91,6 +91,19 @@ func Validate(c *Config, locate func(path string) int) []Problem {
 		add("storage", "%d storage definitions are marked default. Exactly one can be, because it is what a new capture pre-selects.", defaults)
 	}
 
+	seenKey := map[string]int{}
+	for i, k := range c.Keys {
+		base := fmt.Sprintf("keys[%d]", i)
+		validateKey(k, base, add)
+		if k.Name == "" {
+			continue
+		}
+		if prev, dup := seenKey[k.Name]; dup {
+			add(base+".name", "two keys are both named %q; the one at entry %d and this one.", k.Name, prev+1)
+		}
+		seenKey[k.Name] = i
+	}
+
 	sort.SliceStable(problems, func(i, j int) bool { return problems[i].Line < problems[j].Line })
 	return problems
 }

@@ -1,5 +1,6 @@
 import {
   InspectAPI,
+  KeysAPI,
   RestoreAPI,
   SnapshotAPI,
   type EnvironmentView,
@@ -33,6 +34,14 @@ interface State {
    * only reached the pre-flight check would fail at the point of no return.
    */
   key: SnapshotKey;
+  /**
+   * How many keys on this machine could open a snapshot without being asked
+   * for. When there are any, the key step stops being a gate and becomes an
+   * override.
+   */
+  storedKeys: number;
+  /** The stored key that actually opened this snapshot, once one has. */
+  unlockedWith: string;
   opened: boolean;
   environment: string;
   strategy: string;
@@ -48,11 +57,12 @@ export async function renderRestore(root: HTMLElement, snapshotId?: string): Pro
   clear(root);
   root.appendChild(spinner("Loading snapshots and destinations…"));
 
-  const [library, destinations, strategies, outOfScope] = await Promise.all([
+  const [library, destinations, strategies, outOfScope, keys] = await Promise.all([
     SnapshotAPI.library(),
     RestoreAPI.destinations(),
     RestoreAPI.strategies(),
     RestoreAPI.outOfScopeNote(),
+    KeysAPI.list().catch(() => null),
   ]);
 
   const state: State = {
@@ -61,6 +71,8 @@ export async function renderRestore(root: HTMLElement, snapshotId?: string): Pro
     destinations,
     strategies,
     key: noKey(),
+    storedKeys: keys?.unlockable ?? 0,
+    unlockedWith: "",
     opened: false,
     environment: destinations[0]?.name ?? "",
     strategy: "overwrite",
@@ -186,9 +198,13 @@ function advanceable(state: State): { ok: boolean; reason?: string } {
       if (!state.environment) {
         return { ok: false, reason: "Choose a destination environment." };
       }
-      if (state.snapshot?.encrypted && !hasKey(state.key)) {
+      if (state.snapshot?.encrypted && !hasKey(state.key) && state.storedKeys === 0) {
         // Asked for here rather than discovered at Apply: without it the next
-        // step downloads the bundle only to fail on it.
+        // step downloads the bundle only to fail on it. But it is only a gate
+        // when there is nothing stored to try — a key PortCloak already holds
+        // is a key the operator has already decided to trust it with, and
+        // demanding it again is the prompt that teaches people to turn
+        // encryption off.
         return { ok: false, reason: "Enter the key this snapshot was sealed with." };
       }
       return { ok: true };
@@ -228,6 +244,7 @@ async function advance(state: State, draw: () => void): Promise<void> {
       return;
     }
     state.opened = true;
+    state.unlockedWith = overview.unlockedWith ?? "";
   }
 
   if (state.step === "destination" || state.step === "preconditions") {
@@ -350,20 +367,36 @@ function destinationStep(state: State, draw: () => void): HTMLElement {
  * be wrong can be corrected next to the message saying so; the failure from
  * pressing Next lands on this same screen.
  */
+/**
+ * The key.
+ *
+ * It is asked for here, beside the notice that promises decryption runs before
+ * the destination is contacted — because that promise is what needs it. It sits
+ * on the step rather than in a modal so that a key which turns out to be wrong
+ * can be corrected next to the message saying so; the failure from pressing
+ * Next lands on this same screen.
+ *
+ * Where this machine already holds keys, the field stops being a gate. PortCloak
+ * tries what it holds and says which one worked — silent would be the one thing
+ * worse than the prompt it replaces — and the field stays as an override for the
+ * snapshot sealed with something else.
+ */
 function keyStep(state: State, draw: () => void): HTMLElement {
-  return h(
+  const head = h(
     "div",
-    { class: "field" },
-    h(
-      "div",
-      { class: "row", style: "margin-bottom:6px" },
-      h("span", { style: "font-weight:500" }, "Decryption key"),
-      badge("Encrypted", "neutral"),
-    ),
+    { class: "row", style: "margin-bottom:6px" },
+    h("span", { style: "font-weight:500" }, "Decryption key"),
+    badge("Encrypted", "neutral"),
+  );
+
+  const fields = h(
+    "div",
+    null,
     keyFields(state.key, () => {
       // A changed key has to be proven against the bundle again, or Apply would
       // send one the pre-flight check never saw.
       state.opened = false;
+      state.unlockedWith = "";
       state.error = undefined;
       draw();
     }),
@@ -371,9 +404,43 @@ function keyStep(state: State, draw: () => void): HTMLElement {
       "div",
       { class: "field-hint" },
       state.snapshot?.encryptionMode === "recipients"
-        ? "This snapshot was sealed to age recipients, so it takes the private key of one of them. PortCloak never stored it."
-        : "PortCloak did not store this key when the snapshot was written, and cannot recover it. Without it the bundle stays sealed.",
+        ? "This snapshot was sealed to age recipients, so it takes the private key of one of them."
+        : "PortCloak did not store this key when the snapshot was written unless it was told to. Without it the bundle stays sealed.",
     ),
+  );
+
+  if (state.storedKeys === 0) {
+    return h("div", { class: "field" }, head, fields);
+  }
+
+  // With keys on this machine, the field is folded away behind the statement of
+  // what will be tried.
+  const disclosure = h("div", { style: "display:none" }, fields);
+  return h(
+    "div",
+    { class: "field" },
+    head,
+    state.unlockedWith
+      ? notice(
+          "ok",
+          `Opened with the stored key “${state.unlockedWith}”`,
+          "PortCloak held this key already, so it was not asked for. The audit log records that it was used.",
+        )
+      : notice(
+          "info",
+          `PortCloak will try the ${state.storedKeys} key(s) stored on this machine`,
+          "No key is needed here if one of them opens this snapshot. Whichever one does is named before anything is written to a destination.",
+        ),
+    h(
+      "a",
+      {
+        onClick: () => {
+          disclosure.style.display = disclosure.style.display === "none" ? "block" : "none";
+        },
+      },
+      "Use a different key",
+    ),
+    disclosure,
   );
 }
 

@@ -51,6 +51,7 @@ type Config struct {
 	Preferences  Preferences    `yaml:"preferences" json:"preferences"`
 	Environments []Environment  `yaml:"environments" json:"environments"`
 	Storage      []Storage      `yaml:"storage" json:"storage"`
+	Keys         []Key          `yaml:"keys,omitempty" json:"keys,omitempty"`
 	Extra        map[string]any `yaml:",inline" json:"-"`
 }
 

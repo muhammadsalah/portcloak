@@ -47,17 +47,17 @@ func boundFQNs(t *testing.T) map[string]bool {
 		"ServiceShutdown": true, "ServeHTTP": true,
 	}
 
-	// The same list Run binds, constructed against a zero engine: only the
-	// method set is read, never called.
-	instances := []any{
-		&ConfigController{}, &CaptureController{}, &SnapshotController{},
-		&InspectController{}, &RestoreController{}, &JobsController{},
-		&MaintenanceController{},
-	}
-
+	// Read back off the same registry Run binds, against a zero engine: only
+	// the method set is read, never called.
+	//
+	// Derived rather than restated. A second hand-written list of controllers
+	// is a list that drifts, and it did: a controller added to the registry and
+	// called from the frontend was reported by this test as eight unbound
+	// methods, which is the exact failure it exists to catch and the exact
+	// wrong place to look for the cause.
 	out := map[string]bool{}
-	for _, inst := range instances {
-		ptr := reflect.TypeOf(inst)
+	for _, svc := range controllers(&Engine{}) {
+		ptr := reflect.TypeOf(svc.Instance())
 		named := ptr.Elem()
 		for i := range ptr.NumMethod() {
 			name := ptr.Method(i).Name

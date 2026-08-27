@@ -150,6 +150,7 @@ func (r *RestoreController) Apply(req ApplyRequest) ApplyResult {
 		Strategy:     kc.ImportStrategy(req.Strategy),
 		Passphrase:   req.Passphrase,
 		Identities:   req.Identities,
+		Candidates:   r.eng.keyCandidates(),
 		ConfirmRealm: req.ConfirmRealm,
 	})
 	if err != nil {

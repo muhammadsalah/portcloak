@@ -40,6 +40,10 @@ type Overview struct {
 
 	Encrypted      bool   `json:"encrypted"`
 	EncryptionMode string `json:"encryptionMode,omitempty"`
+	// UnlockedWith names the stored key that opened this snapshot without being
+	// asked for. A key used silently is still a key an operator gets to see the
+	// name of.
+	UnlockedWith string `json:"unlockedWith,omitempty"`
 	// Warning is the unmissable label an unencrypted bundle carries.
 	Warning string `json:"warning,omitempty"`
 
@@ -87,6 +91,9 @@ func (i *InspectController) Open(req OpenRequest) (res Overview) {
 	session, err := inspect.Open(ctx, i.eng.Home, blobs, inspect.OpenRequest{
 		Storage: req.Storage, BundleKey: req.BundleKey, SnapshotID: req.SnapshotID,
 		Passphrase: req.Passphrase, Identities: req.Identities,
+		// The keys already in this machine's keychain are tried without being
+		// asked for. Whichever one worked is named on the way back.
+		Candidates: i.eng.keyCandidates(),
 	}, rep)
 	_ = blobs.Close()
 	if err != nil {
@@ -105,6 +112,7 @@ func (i *InspectController) overview(s *inspect.Session) Overview {
 		SnapshotID: s.ID, Realm: s.Realm, Storage: s.Storage, BundleKey: s.BundleKey,
 		Encrypted:       s.Envelope.Encryption.Enabled,
 		EncryptionMode:  string(s.Envelope.Encryption.Mode),
+		UnlockedWith:    s.UnlockedWith,
 		Counts:          s.Manifest.Counts,
 		Credentials:     s.Manifest.Credentials,
 		Settings:        s.Manifest.Settings,

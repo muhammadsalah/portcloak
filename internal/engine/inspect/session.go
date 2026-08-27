@@ -28,8 +28,24 @@ type OpenRequest struct {
 	BundleKey  string
 	SnapshotID string
 	// Passphrase or Identities, depending on how the bundle was encrypted.
+	// Either is an explicit override and is tried before anything stored.
 	Passphrase string
 	Identities []string
+	// Candidates are the named keys already held in this machine's keychain.
+	//
+	// They are tried without being asked for, which is the whole point: a key
+	// PortCloak generated, stored and can read is a key the operator has
+	// already decided to trust it with, and asking for it again at every
+	// restore is a prompt that teaches people to turn encryption off.
+	Candidates []KeyCandidate
+}
+
+// KeyCandidate is one named key PortCloak may try on its own. Exactly one of
+// Passphrase or Identity is set.
+type KeyCandidate struct {
+	Name       string
+	Passphrase string
+	Identity   string
 }
 
 // Session is one open snapshot.
@@ -47,6 +63,12 @@ type Session struct {
 	Manifest   manifest.Manifest
 	Provenance snapshot.Provenance
 	Verify     snapshot.VerifyResult
+
+	// UnlockedWith names the stored key that opened this snapshot without being
+	// asked for, and is empty when the operator supplied the key themselves or
+	// the bundle was never encrypted. A key used silently is still a key an
+	// operator gets to see the name of.
+	UnlockedWith string
 
 	home   config.Home
 	opened *snapshot.Opened
@@ -109,13 +131,10 @@ func Open(ctx context.Context, home config.Home, blobs store.BlobStore, req Open
 	}
 	rep.CompletePhase(obs.PhaseDownload, req.BundleKey)
 
-	// The envelope says what kind of artifact this is, which is how the right
-	// opener is chosen before any key is asked for.
-	envelope, err := readEnvelope(ctx, bundlePath, req)
-	if err != nil {
-		return nil, err
-	}
-	opener, err := crypto.OpenerFor(envelope.Encryption, req.Passphrase, req.Identities)
+	// The envelope says what kind of artifact this is, and reading it is also
+	// what proves a key opens the bundle — so the opener that succeeded here is
+	// the one used below rather than a second one built from the same material.
+	_, opener, unlockedWith, err := unseal(ctx, bundlePath, req)
 	if err != nil {
 		return nil, err
 	}
@@ -151,15 +170,16 @@ func Open(ctx context.Context, home config.Home, blobs store.BlobStore, req Open
 	}
 
 	s := &Session{
-		ID:        opened.Envelope.SnapshotID,
-		Realm:     opened.Envelope.Realm,
-		Storage:   req.Storage,
-		BundleKey: req.BundleKey,
-		OpenedAt:  time.Now(),
-		Envelope:  opened.Envelope,
-		Verify:    opened.Verify,
-		home:      home,
-		opened:    opened,
+		ID:           opened.Envelope.SnapshotID,
+		Realm:        opened.Envelope.Realm,
+		Storage:      req.Storage,
+		BundleKey:    req.BundleKey,
+		OpenedAt:     time.Now(),
+		Envelope:     opened.Envelope,
+		Verify:       opened.Verify,
+		UnlockedWith: unlockedWith,
+		home:         home,
+		opened:       opened,
 	}
 	if err := opened.Document(snapshot.ManifestPath, &s.Manifest); err != nil {
 		_ = opened.Close()
@@ -174,48 +194,126 @@ func Open(ctx context.Context, home config.Home, blobs store.BlobStore, req Open
 	return s, nil
 }
 
-func readEnvelope(ctx context.Context, path string, req OpenRequest) (snapshot.Envelope, error) {
+// unseal reads the envelope, and in doing so establishes which key opens the
+// bundle.
+//
+// Reading the envelope is the cheapest possible proof that a key works: it is
+// the first document in the archive, so a wrong key fails here rather than
+// after a multi-gigabyte extraction. That makes this the natural place to try
+// more than one key, and the order is the one an operator would expect —
+// nothing, then whatever they typed, then the keys they have already asked
+// PortCloak to hold.
+//
+// The name of the stored key that worked is returned so the screen can say
+// which one it was. A key used silently is still a key an operator gets to see
+// the name of.
+func unseal(ctx context.Context, path string, req OpenRequest) (snapshot.Envelope, *crypto.Opener, string, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return snapshot.Envelope{}, err
+		return snapshot.Envelope{}, nil, "", err
 	}
 	defer f.Close() //nolint:errcheck
 
-	// An unencrypted bundle yields its envelope directly. An encrypted one does
-	// not, and the sidecar is what says so — but a caller may have supplied a
-	// key already, so both are tried before giving up.
-	if e, err := snapshot.ReadEnvelopeOnly(ctx, f, nil); err == nil {
-		return e, nil
+	try := func(opener *crypto.Opener) (snapshot.Envelope, bool) {
+		if _, serr := f.Seek(0, 0); serr != nil {
+			return snapshot.Envelope{}, false
+		}
+		// A nil *Opener has to reach the reader as a nil interface, not as a
+		// non-nil interface holding a nil pointer, or "read it in the clear"
+		// becomes a call through a nil receiver.
+		var as snapshot.Opener
+		if opener != nil {
+			as = opener
+		}
+		e, rerr := snapshot.ReadEnvelopeOnly(ctx, f, as)
+		return e, rerr == nil
 	}
 
+	// An unencrypted bundle yields its envelope directly.
+	if e, ok := try(nil); ok {
+		return e, nil, "", nil
+	}
+
+	// What the operator supplied, which is always an override: a key typed on
+	// the screen beats a key PortCloak found for itself.
 	if req.Passphrase != "" {
-		if _, err := f.Seek(0, 0); err != nil {
-			return snapshot.Envelope{}, err
-		}
-		opener, oerr := crypto.NewPassphraseOpener(req.Passphrase)
-		if oerr == nil {
-			if e, err := snapshot.ReadEnvelopeOnly(ctx, f, opener); err == nil {
-				return e, nil
+		if opener, oerr := crypto.NewPassphraseOpener(req.Passphrase); oerr == nil {
+			if e, ok := try(opener); ok {
+				return e, opener, "", nil
 			}
 		}
 	}
 	if len(req.Identities) > 0 {
-		if _, err := f.Seek(0, 0); err != nil {
-			return snapshot.Envelope{}, err
-		}
-		opener, oerr := crypto.NewIdentityOpener(req.Identities)
-		if oerr == nil {
-			if e, err := snapshot.ReadEnvelopeOnly(ctx, f, opener); err == nil {
-				return e, nil
+		if opener, oerr := crypto.NewIdentityOpener(req.Identities); oerr == nil {
+			if e, ok := try(opener); ok {
+				return e, opener, "", nil
 			}
 		}
 	}
 
+	// Then the stored keys, one at a time rather than all at once, so the one
+	// that worked can be named. Identities first: matching an age recipient
+	// costs nothing, while every passphrase attempt pays scrypt's deliberate
+	// second of work.
+	for _, c := range candidatesInTryOrder(req.Candidates) {
+		var opener *crypto.Opener
+		var oerr error
+		switch {
+		case c.Identity != "":
+			opener, oerr = crypto.NewIdentityOpener([]string{c.Identity})
+		case c.Passphrase != "":
+			opener, oerr = crypto.NewPassphraseOpener(c.Passphrase)
+		default:
+			continue
+		}
+		if oerr != nil {
+			continue
+		}
+		if e, ok := try(opener); ok {
+			return e, opener, c.Name, nil
+		}
+	}
+
 	// The envelope could not be read at all, which for a well-formed bundle
-	// means it is encrypted and the key supplied does not open it.
-	return snapshot.Envelope{}, resil.Fatal("open the snapshot",
-		"This snapshot is encrypted and could not be opened with the key supplied.", snapshot.ErrEncrypted).
+	// means it is encrypted and nothing available opens it.
+	return snapshot.Envelope{}, nil, "", resil.Fatal("open the snapshot",
+		unopenableMessage(req), snapshot.ErrEncrypted).
 		WithAdvice("Check the passphrase, or that you hold a private key matching one of the snapshot's recipients.")
+}
+
+// candidatesInTryOrder puts identities before passphrases, because an identity
+// attempt is free and a passphrase attempt is not.
+func candidatesInTryOrder(in []KeyCandidate) []KeyCandidate {
+	out := make([]KeyCandidate, 0, len(in))
+	for _, c := range in {
+		if c.Identity != "" {
+			out = append(out, c)
+		}
+	}
+	for _, c := range in {
+		if c.Identity == "" && c.Passphrase != "" {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// unopenableMessage says what was actually tried, because "wrong key" and
+// "no key" are different problems with different fixes.
+func unopenableMessage(req OpenRequest) string {
+	supplied := req.Passphrase != "" || len(req.Identities) > 0
+	switch {
+	case supplied && len(req.Candidates) > 0:
+		return fmt.Sprintf("This snapshot is encrypted. Neither the key supplied nor any of the %d key(s) stored on this machine opened it.",
+			len(req.Candidates))
+	case supplied:
+		return "This snapshot is encrypted and could not be opened with the key supplied."
+	case len(req.Candidates) > 0:
+		return fmt.Sprintf("This snapshot is encrypted, and none of the %d key(s) stored on this machine opened it. Supply the key it was sealed with.",
+			len(req.Candidates))
+	default:
+		return "This snapshot is encrypted and no key was supplied."
+	}
 }
 
 // Representation lazily parses the realm file, which every entity view reads.

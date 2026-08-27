@@ -295,6 +295,10 @@ type RestoreRequest struct {
 	Strategy    kc.ImportStrategy
 	Passphrase  string
 	Identities  []string
+	// Candidates are the named keys held in this machine's keychain, resolved
+	// by the binding layer. The orchestrator never reaches into a keychain
+	// itself; it is handed material like every other dependency.
+	Candidates []inspect.KeyCandidate
 	// ConfirmRealm must equal the realm name when overwriting a realm that
 	// already exists, because that operation is destructive and irreversible.
 	ConfirmRealm string
@@ -363,12 +367,19 @@ func (o *Orchestrator) runRestore(ctx context.Context, env config.Environment, s
 	session, err := inspect.Open(ctx, o.opts.Home, blobs, inspect.OpenRequest{
 		Storage: st.Name, BundleKey: req.BundleKey, SnapshotID: req.SnapshotID,
 		Passphrase: req.Passphrase, Identities: req.Identities,
+		Candidates: req.Candidates,
 	}, rep)
 	if err != nil {
 		_ = o.fail(j, rep, obs.PhaseIntegrity, err)
 		return
 	}
 	defer session.Close() //nolint:errcheck
+
+	// A key used without being asked for is still named. Silence would be the
+	// one thing worse than the prompt it replaces.
+	if session.UnlockedWith != "" {
+		rep.Log(fmt.Sprintf("Opened with the stored key %q.", session.UnlockedWith))
+	}
 
 	if !session.Verify.OK {
 		_ = o.fail(j, rep, obs.PhaseIntegrity, resil.Fatal("verify the snapshot",

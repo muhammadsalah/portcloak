@@ -289,6 +289,27 @@ func GenerateIdentity() (privateKey, publicKey string, err error) {
 	return id.String(), id.Recipient().String(), nil
 }
 
+// IdentityPublicKey derives the recipient from an age private key.
+//
+// An imported key has to record its public half, because that is what a capture
+// seals to and what a snapshot's recipient list is matched against — and asking
+// an operator to paste both halves of a keypair they already hold is asking
+// them to get it wrong.
+func IdentityPublicKey(privateKey string) (string, error) {
+	id, err := age.ParseX25519Identity(strings.TrimSpace(privateKey))
+	if err != nil {
+		return "", resil.Fatal("read the key",
+			"That is not an age private key. They start with AGE-SECRET-KEY-1.", err)
+	}
+	return id.Recipient().String(), nil
+}
+
+// ValidRecipient reports whether a string is an age public key.
+func ValidRecipient(publicKey string) bool {
+	_, err := age.ParseX25519Recipient(strings.TrimSpace(publicKey))
+	return err == nil
+}
+
 func short(s string) string {
 	s = strings.TrimSpace(s)
 	if len(s) <= 16 {

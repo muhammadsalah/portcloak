@@ -1,6 +1,8 @@
 import {
   CaptureAPI,
   ConfigAPI,
+  KeysAPI,
+  type KeyRecipient,
   type CaptureOptions,
   type ProbeResult,
   type TargetFacts,
@@ -14,6 +16,7 @@ import {
   failureNotice,
   field,
   h,
+  input,
   modal,
   notice,
   select,
@@ -52,6 +55,10 @@ interface State {
   encryptionMode: "passphrase" | "recipients";
   passphrase: string;
   recipients: string[];
+  /** The keys already stored on this machine, offered by name. */
+  storedKeys: KeyRecipient[];
+  /** Remember this capture's passphrase in the keychain, under this name. */
+  rememberPassphraseAs: string;
   acknowledgedUnencrypted: boolean;
   starting: boolean;
   error?: string;
@@ -61,7 +68,13 @@ export async function renderCapture(root: HTMLElement): Promise<void> {
   clear(root);
   root.appendChild(spinner("Loading environments…"));
 
-  const defaults = await CaptureAPI.defaults();
+  const [defaults, storedKeys] = await Promise.all([
+    CaptureAPI.defaults(),
+    // Offered by name rather than as a public key to paste. A key PortCloak
+    // already holds is the one an operator will actually be able to restore
+    // with.
+    KeysAPI.recipients().catch(() => [] as KeyRecipient[]),
+  ]);
   const state: State = {
     step: "source",
     defaults,
@@ -81,6 +94,8 @@ export async function renderCapture(root: HTMLElement): Promise<void> {
     encryptionMode: "passphrase",
     passphrase: "",
     recipients: [],
+    storedKeys,
+    rememberPassphraseAs: "",
     acknowledgedUnencrypted: false,
     starting: false,
   };
@@ -506,13 +521,7 @@ function encryptionSection(state: State, draw: () => void): HTMLElement {
 
     body.appendChild(h("div", { class: "row", style: "align-items:flex-start;gap:12px" }, mode, h("div", { class: "grow" }, detail)));
     if (state.encryptionMode === "passphrase") {
-      body.appendChild(
-        h(
-          "div",
-          { class: "field-hint" },
-          "PortCloak does not store this passphrase. Without it the snapshot cannot be opened by anyone, including you.",
-        ),
-      );
+      body.appendChild(rememberPassphrase(state));
     }
   } else if (state.acknowledgedUnencrypted) {
     body.appendChild(
@@ -522,39 +531,76 @@ function encryptionSection(state: State, draw: () => void): HTMLElement {
   return body;
 }
 
+/**
+ * Who a snapshot is sealed to.
+ *
+ * The keys PortCloak already holds come first, by name. Pasting a public key
+ * still works — a colleague's key is a legitimate recipient and PortCloak will
+ * never hold its private half — but it is no longer the only way in, which is
+ * what made recipient mode something operators read about and then skipped.
+ */
 function recipientsEditor(state: State, draw: () => void): HTMLElement {
-  const chips = h("div", { class: "row", style: "flex-wrap:wrap;gap:6px;margin-bottom:8px" });
-  state.recipients.forEach((r, i) => {
-    chips.appendChild(
-      h(
-        "span",
-        { class: "chip" },
-        `${r.slice(0, 10)}…${r.slice(-4)}`,
-        h(
-          "button",
-          {
-            onClick: () => {
-              state.recipients.splice(i, 1);
-              draw();
-            },
+  const body = h("div");
+
+  if (state.storedKeys.length > 0) {
+    const list = h("div", { style: "margin-bottom:10px" });
+    for (const key of state.storedKeys) {
+      const chosen = state.recipients.includes(key.publicKey);
+      list.appendChild(
+        checkbox(
+          chosen,
+          key.name,
+          key.openable
+            ? "This machine holds the private half, so a snapshot sealed to it can be opened here without being asked for a key."
+            : "Only the public half is here. A snapshot sealed to this key cannot be opened on this machine.",
+          (on) => {
+            const at = state.recipients.indexOf(key.publicKey);
+            if (on && at < 0) state.recipients.push(key.publicKey);
+            if (!on && at >= 0) state.recipients.splice(at, 1);
+            draw();
           },
-          "×",
         ),
-      ),
-    );
-  });
+      );
+    }
+    body.appendChild(list);
+  }
+
+  // Anything sealed to a key PortCloak does not hold, shown as a chip so it is
+  // never silently part of the decision.
+  const known = new Set(state.storedKeys.map((k) => k.publicKey));
+  const pasted = state.recipients.filter((r) => !known.has(r));
+  if (pasted.length > 0) {
+    const chips = h("div", { class: "row", style: "flex-wrap:wrap;gap:6px;margin-bottom:8px" });
+    for (const r of pasted) {
+      chips.appendChild(
+        h(
+          "span",
+          { class: "chip" },
+          `${r.slice(0, 10)}…${r.slice(-4)}`,
+          h(
+            "button",
+            {
+              onClick: () => {
+                state.recipients.splice(state.recipients.indexOf(r), 1);
+                draw();
+              },
+            },
+            "×",
+          ),
+        ),
+      );
+    }
+    body.appendChild(chips);
+  }
 
   let pending = "";
-  return h(
-    "div",
-    null,
-    chips,
+  body.appendChild(
     h(
       "div",
       { class: "row" },
       h("input", {
         type: "text",
-        placeholder: "age1…",
+        placeholder: "…or paste an age public key (age1…)",
         onInput: (e: Event) => {
           pending = (e.target as HTMLInputElement).value.trim();
         },
@@ -563,7 +609,7 @@ function recipientsEditor(state: State, draw: () => void): HTMLElement {
         "button",
         {
           onClick: () => {
-            if (pending) {
+            if (pending && !state.recipients.includes(pending)) {
               state.recipients.push(pending);
               draw();
             }
@@ -571,31 +617,41 @@ function recipientsEditor(state: State, draw: () => void): HTMLElement {
         },
         "Add",
       ),
+    ),
+  );
+
+  if (state.storedKeys.length === 0) {
+    body.appendChild(
       h(
-        "button",
-        {
-          onClick: async () => {
-            const [identity, failure] = await CaptureAPI.generateIdentity();
-            if (failure) return;
-            state.recipients.push(identity.publicKey);
-            modal({
-              title: "A new age keypair",
-              body: h(
-                "div",
-                null,
-                h("p", { class: "muted small" }, identity.warning),
-                h("label", null, "Private key"),
-                h("div", { class: "reveal-value" }, identity.privateKey),
-                h("label", { style: "margin-top:12px" }, "Public key (the recipient)"),
-                h("div", { class: "reveal-value" }, identity.publicKey),
-              ),
-              cancelLabel: "Done",
-            });
-            draw();
-          },
-        },
-        "Generate",
+        "div",
+        { class: "field-hint" },
+        "There are no keys on this machine yet. Create one under Keys and it appears here by name — and opens this snapshot again without being asked for.",
       ),
+    );
+  }
+  return body;
+}
+
+/**
+ * Remembering the passphrase.
+ *
+ * A passphrase typed at capture and typed again at every restore is the reason
+ * encryption gets turned off. Naming it stores it in this machine's keychain,
+ * where a restore finds it without asking. Leaving the name empty keeps the old
+ * behaviour exactly: PortCloak holds nothing and cannot recover it.
+ */
+function rememberPassphrase(state: State): HTMLElement {
+  return h(
+    "div",
+    { style: "margin-top:10px" },
+    field(
+      "Remember this passphrase as (optional)",
+      input(state.rememberPassphraseAs, (v) => (state.rememberPassphraseAs = v), {
+        placeholder: "nightly-captures",
+      }),
+      state.rememberPassphraseAs
+        ? `Stored in this machine's keychain as the key “${state.rememberPassphraseAs}”, and tried automatically whenever a snapshot needs opening.`
+        : "Leave this empty and PortCloak stores nothing: the passphrase will be asked for every time this snapshot is opened, and cannot be recovered if it is lost.",
     ),
   );
 }
@@ -689,11 +745,7 @@ function reviewStep(state: State): HTMLElement {
     ["Detect dependencies", state.detectDependencies ? "yes" : "no"],
     [
       "Encryption",
-      state.encrypt
-        ? state.encryptionMode === "passphrase"
-          ? "passphrase"
-          : `${state.recipients.length} recipient(s)`
-        : "NONE — unmasked secrets in the clear",
+      state.encrypt ? describeEncryption(state) : "NONE — unmasked secrets in the clear",
     ],
     ["Storage", store ? `${store.name} · ${store.root}` : "—"],
   ];
@@ -720,6 +772,28 @@ function reviewStep(state: State): HTMLElement {
   );
 }
 
+/**
+ * What the review step says about encryption.
+ *
+ * Naming the keys matters here more than counting them: "2 recipient(s)" tells
+ * an operator nothing about whether they will be able to open this snapshot
+ * afterwards, and that is the only question the review step is for.
+ */
+function describeEncryption(state: State): string {
+  if (state.encryptionMode === "passphrase") {
+    return state.rememberPassphraseAs
+      ? `passphrase, remembered as “${state.rememberPassphraseAs}”`
+      : "passphrase, not stored anywhere";
+  }
+  const named = state.storedKeys
+    .filter((k) => state.recipients.includes(k.publicKey))
+    .map((k) => k.name);
+  const pasted = state.recipients.length - named.length;
+  const parts = [...named];
+  if (pasted > 0) parts.push(`${pasted} pasted key(s)`);
+  return parts.length > 0 ? `sealed to ${parts.join(", ")}` : "no recipients chosen";
+}
+
 async function start(state: State, draw: () => void): Promise<void> {
   state.starting = true;
   state.error = undefined;
@@ -739,6 +813,24 @@ async function start(state: State, draw: () => void): Promise<void> {
     recipients: state.recipients,
     acknowledgedUnencrypted: state.acknowledgedUnencrypted,
   };
+
+  // The passphrase is remembered before the capture starts, not after: a
+  // capture that fails at upload was still sealed with this passphrase, and a
+  // snapshot half-written to storage is exactly the one nobody wants to find
+  // they cannot open.
+  if (state.encrypt && state.encryptionMode === "passphrase" && state.rememberPassphraseAs) {
+    const failure = await KeysAPI.savePassphrase(
+      state.rememberPassphraseAs,
+      state.passphrase,
+      `Remembered while capturing ${state.realms.join(", ")}.`,
+    );
+    if (failure) {
+      state.starting = false;
+      state.error = `The passphrase could not be remembered: ${failure.message} Nothing was captured.`;
+      draw();
+      return;
+    }
+  }
 
   const res = await CaptureAPI.start(opts);
   state.starting = false;

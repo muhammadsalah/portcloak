@@ -42,6 +42,7 @@ func screenLoads(eng *Engine) map[string]func() any {
 	snaps := NewSnapshotController(eng)
 	restore := NewRestoreController(eng)
 	jobs := NewJobsController(eng)
+	keys := NewKeysController(eng)
 	maint := NewMaintenanceController(eng)
 
 	return map[string]func() any{
@@ -55,6 +56,8 @@ func screenLoads(eng *Engine) map[string]func() any {
 		"RestoreController.Destinations":    func() any { return restore.Destinations() },
 		"RestoreController.OutOfScopeNote":  func() any { return restore.OutOfScopeNote() },
 		"JobsController.List":               func() any { return jobs.List() },
+		"KeysController.List":               func() any { return keys.List() },
+		"KeysController.Recipients":         func() any { return keys.Recipients() },
 		"MaintenanceController.Audit":       func() any { return maint.Audit("", 30) },
 		"MaintenanceController.ConfigFile":  func() any { return maint.ConfigFile() },
 		"MaintenanceController.Orphans":     func() any { return maint.Orphans() },

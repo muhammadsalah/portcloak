@@ -10,6 +10,7 @@ import { renderEnvironments } from "./views/environments";
 import { renderStorage } from "./views/storage";
 import { renderMaintenance } from "./views/maintenance";
 import { renderInspector } from "./views/inspector";
+import { renderKeys } from "./views/keys";
 
 export type Route =
   | { name: "capture" }
@@ -19,6 +20,7 @@ export type Route =
   | { name: "environments"; select?: string }
   | { name: "storage"; select?: string }
   | { name: "browse"; storage: string }
+  | { name: "keys" }
   | { name: "maintenance" }
   | { name: "inspect"; storage: string; bundleKey: string; snapshotId: string; tab?: string };
 
@@ -75,6 +77,7 @@ const nav: { section: string; items: { label: string; route: Route; key: string 
     items: [
       { key: "environments", label: "Environments", route: { name: "environments" } },
       { key: "storage", label: "Storage", route: { name: "storage" } },
+      { key: "keys", label: "Keys", route: { name: "keys" } },
       { key: "maintenance", label: "Audit log", route: { name: "maintenance" } },
     ],
   },
@@ -170,6 +173,9 @@ function render(): void {
       break;
     case "browse":
       show(content, () => renderStorage(content, route.storage, true));
+      break;
+    case "keys":
+      show(content, () => renderKeys(content));
       break;
     case "maintenance":
       show(content, () => renderMaintenance(content));

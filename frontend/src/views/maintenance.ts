@@ -11,6 +11,8 @@ const actions = [
   { value: "encryptionDeclined", label: "Encryption declined" },
   { value: "orphanRemoved", label: "Orphans removed" },
   { value: "purgeLocalData", label: "Purges" },
+  { value: "keyCreated", label: "Keys created" },
+  { value: "keyDeleted", label: "Keys deleted" },
 ];
 
 export async function renderMaintenance(root: HTMLElement): Promise<void> {
@@ -129,6 +131,14 @@ function describe(e: { action: string; outcome: string; realm?: string; environm
       return e.outcome === "verified" ? "Verified a snapshot" : "A snapshot failed verification";
     case "jobDiscarded":
       return "Discarded an interrupted job";
+    case "keyCreated":
+      return "Created an encryption key";
+    case "keyImported":
+      return "Imported an encryption key";
+    case "keyRevealed":
+      return "Revealed the secret half of an encryption key";
+    case "keyDeleted":
+      return "DELETED an encryption key";
     default:
       return `${e.action} — ${e.outcome}`;
   }
@@ -137,7 +147,8 @@ function describe(e: { action: string; outcome: string; realm?: string; environm
 function toneFor(action: string, outcome: string): string {
   if (action === "encryptionDeclined") return "danger";
   if (outcome.includes("not finish") || outcome.includes("failed")) return "danger";
-  if (action === "secretReveal" || action === "exportView") return "warn";
+  if (action === "keyDeleted") return "danger";
+  if (action === "secretReveal" || action === "exportView" || action === "keyRevealed") return "warn";
   if (action === "snapshotDelete" || action === "jobDiscarded") return "neutral";
   return "ok";
 }

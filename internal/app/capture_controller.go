@@ -156,24 +156,3 @@ func (c *CaptureController) Start(opts CaptureOptions) (res StartResult) {
 	}
 	return StartResult{JobIDs: handle.JobIDs, Realms: handle.Realms}
 }
-
-// GenerateIdentity produces a fresh age keypair, so an operator without one can
-// still choose recipient mode.
-type Identity struct {
-	PrivateKey string `json:"privateKey"`
-	PublicKey  string `json:"publicKey"`
-	// Warning is what has to be said about a private key shown once.
-	Warning string `json:"warning"`
-}
-
-// GenerateIdentity returns a new age keypair.
-func (c *CaptureController) GenerateIdentity() (Identity, *Failure) {
-	priv, pub, err := crypto.GenerateIdentity()
-	if err != nil {
-		return Identity{}, Fail(err)
-	}
-	return Identity{
-		PrivateKey: priv, PublicKey: pub,
-		Warning: "PortCloak does not store this private key. Save it somewhere safe now — without it, snapshots encrypted to this recipient cannot be opened.",
-	}, nil
-}

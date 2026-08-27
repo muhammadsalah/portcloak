@@ -196,6 +196,9 @@ function shell(state: State, draw: () => void, root: HTMLElement): HTMLElement {
         o.encrypted
           ? badge(`Encrypted · ${o.encryptionMode}`, "neutral")
           : badge("Unencrypted", "danger"),
+        // A key used without being asked for is still named. Silence would be
+        // the one thing worse than the prompt it replaces.
+        o.unlockedWith ? badge(`Opened with “${o.unlockedWith}”`, "ok") : null,
         o.integrityOk ? badge("Integrity verified", "ok") : badge("Integrity failed", "danger"),
       ),
       h(
