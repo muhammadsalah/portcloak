@@ -555,10 +555,11 @@ func (o *Orchestrator) applyImport(ctx context.Context, env config.Environment, 
 	}
 
 	cmd, err := kc.BuildImport(kc.ImportRequest{
-		KcPath:   facts.KcPath,
-		Dir:      importDir,
-		Strategy: req.Strategy,
-		Ports:    kc.Ports{HTTP: execCtx.Ports.HTTP, HTTPS: execCtx.Ports.HTTPS, Management: execCtx.Ports.Management},
+		KcPath:    facts.KcPath,
+		Dir:       importDir,
+		Strategy:  req.Strategy,
+		Ports:     kc.Ports{HTTP: execCtx.Ports.HTTP, HTTPS: execCtx.Ports.HTTPS, Management: execCtx.Ports.Management},
+		Supported: o.discoverOptions(ctx, exec, facts.KcPath, "import", env.Sudo, rep),
 	})
 	if err != nil {
 		return applied, resil.Fatal("build the import command", err.Error(), err)

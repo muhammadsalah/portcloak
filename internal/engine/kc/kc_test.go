@@ -5,6 +5,9 @@ import (
 	"testing"
 )
 
+// The default invocation on a Keycloak that takes a management port — 25.0
+// through 26.3 of the versions measured. --http-port and --https-port are not
+// offered by any of them and must not appear here.
 func TestBuildExport_DefaultInvocation(t *testing.T) {
 	cmd, err := BuildExport(ExportRequest{
 		KcPath:       "/opt/keycloak/bin/kc.sh",
@@ -13,15 +16,19 @@ func TestBuildExport_DefaultInvocation(t *testing.T) {
 		UsersMode:    UsersDifferentFiles,
 		UsersPerFile: 1000,
 		Ports:        Ports{HTTP: 41823, HTTPS: 41824, Management: 41825},
+		Supported:    OptionSet{"dir": true, "realm": true, "users": true, "http-management-port": true},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := "/opt/keycloak/bin/kc.sh export --dir /tmp/portcloak-01J2K4 --realm acme " +
 		"--users different_files --users-per-file 1000 " +
-		"--http-port 41823 --https-port 41824 --http-management-port 41825"
+		"--http-management-port 41825"
 	if got := cmd.String(); got != want {
 		t.Fatalf("built\n  %s\nwant\n  %s", got, want)
+	}
+	if !cmd.PortsPassed {
+		t.Error("a management port was passed, so the command should say so")
 	}
 }
 

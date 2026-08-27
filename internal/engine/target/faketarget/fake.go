@@ -50,6 +50,14 @@ type Executor struct {
 	// RunFunc overrides what Run does. It receives the command and the realm
 	// it was built for.
 	RunFunc func(ctx context.Context, cmd target.Command) (target.ExecResult, error)
+	// HelpOutput is what `kc.sh <sub> --help-all` prints. The orchestrator asks
+	// before it builds an export, because which port options kc.sh accepts is a
+	// property of the binary and has changed between Keycloak releases. The
+	// default mimics 25.0–26.3: a management port and no --http-port.
+	HelpOutput string
+	// HelpExitCode makes the options question fail, for the path where nothing
+	// is discovered and no port option may be passed.
+	HelpExitCode int
 	// FetchErr makes FetchDir fail.
 	FetchErr error
 	// TeardownErr makes Teardown fail.
@@ -129,6 +137,21 @@ func (e *Executor) Run(ctx context.Context, cmd target.Command) (target.ExecResu
 	e.Commands = append(e.Commands, cmd)
 	e.mu.Unlock()
 
+	// The options question is answered ahead of RunFunc: a test scripting an
+	// export failure is scripting the export, not the question that precedes
+	// it, and routing it through the script would make every such test count
+	// an attempt that never happened.
+	if isHelp(cmd.Args) {
+		if e.HelpExitCode != 0 {
+			return target.ExecResult{ExitCode: e.HelpExitCode, Stderr: "no such command\n"}, nil
+		}
+		out := e.HelpOutput
+		if out == "" {
+			out = DefaultHelpOutput
+		}
+		return target.ExecResult{ExitCode: 0, Stdout: out}, nil
+	}
+
 	if e.RunFunc != nil {
 		return e.RunFunc(ctx, cmd)
 	}
@@ -141,6 +164,15 @@ func (e *Executor) Run(ctx context.Context, cmd target.Command) (target.ExecResu
 		if file := argValue(cmd.Args, "--file"); file != "" {
 			dir = filepath.Dir(file)
 		}
+	}
+	if dir == "" {
+		// An empty destination would copy the fixture into the package
+		// directory, which looks like a passing test and leaves three JSON
+		// files behind in the repository.
+		return target.ExecResult{
+			ExitCode: 2,
+			Stderr:   "ERROR: the command named no export directory\n",
+		}, nil
 	}
 	source := e.ExportDir
 	if per, ok := e.PerRealm[realmName]; ok {
@@ -162,6 +194,44 @@ func (e *Executor) Run(ctx context.Context, cmd target.Command) (target.ExecResu
 		cmd.OnStdout(fmt.Sprintf("Exported realm %s", realmName))
 	}
 	return target.ExecResult{ExitCode: 0, Stdout: "Export finished\n", Duration: time.Millisecond}, nil
+}
+
+// DefaultHelpOutput is shaped like the real `kc.sh export --help-all` of
+// Keycloak 25.0 through 26.3: the option definitions start at column 0, the
+// descriptions wrap indented, and there is no --http-port. The full captured
+// output of four real versions lives in testdata/kc-help.
+const DefaultHelpOutput = `Export data from realms to a file or directory.
+
+Options:
+
+-h, --help           This help message.
+--help-all           This same help message but with additional options.
+--optimized          Use this option to achieve an optimal startup time.
+
+Management:
+
+--http-management-port <port>
+                     Port of the management interface. Relevant only when
+                       something is already listening on the default.
+
+Export:
+
+--dir <dir>          Set the path to a directory where files will be created.
+--file <file>        Set the path to a file that will be created.
+--realm <realm>      Set the name of the realm to export.
+--users <strategy>   Set how users should be exported.
+--users-per-file <number>
+                     Set the number of users per file.
+`
+
+// isHelp reports whether a command is the options question rather than work.
+func isHelp(args []string) bool {
+	for _, a := range args {
+		if a == "--help-all" || a == "--help" {
+			return true
+		}
+	}
+	return false
 }
 
 func (e *Executor) FetchDir(ctx context.Context, remote string, sink target.ArtifactSink) error {

@@ -47,6 +47,10 @@ type ExportRequest struct {
 	UsersPerFile int
 	// Ports are the free ports the embedded runtime binds.
 	Ports Ports
+	// Supported is what this kc.sh reported its export command accepts. An
+	// unset set means discovery did not run or did not answer, and no port
+	// option is emitted — see portArgs for why that is the safe direction.
+	Supported OptionSet
 	// Optimized asks Keycloak to skip the build step where the installation is
 	// already built, which most container images are.
 	Optimized bool
@@ -63,10 +67,106 @@ type Ports struct {
 	Management int
 }
 
+// OptionSet is the set of option names one kc.sh subcommand accepts.
+//
+// Which port options `export` takes is not a property of PortCloak, of the
+// design spec, or of the Keycloak documentation. It is a property of the
+// binary in front of us, and it has changed twice in three minor releases —
+// measured, not inferred, from the images in testdata/kc-help:
+//
+//	24.0        no port options at all
+//	25.0–26.3   --http-management-port (and the management TLS options)
+//	26.5        no port options at all
+//
+// `--http-port` and `--https-port` are accepted by neither `export` nor
+// `import` on any of them. Passing one aborts the command before it reads the
+// realm:
+//
+//	Option: '--http-port' not valid for command export
+//
+// So the set is discovered by asking the binary, rather than derived from a
+// version table that would be wrong again by the next release.
+type OptionSet map[string]bool
+
+// Has reports whether the subcommand accepts an option, named with or without
+// its leading dashes.
+func (s OptionSet) Has(name string) bool { return s[strings.TrimLeft(name, "-")] }
+
+// Known reports whether discovery produced an answer at all. An empty set
+// means "not asked", never "accepts nothing" — the two lead to different
+// decisions and collapsing them is how a failed probe turns into a rejected
+// flag.
+func (s OptionSet) Known() bool { return len(s) > 0 }
+
 // ExportCommand is the built invocation.
 type ExportCommand struct {
 	Path string
 	Args []string
+	// PortsPassed records whether any port option made it onto the command
+	// line. Where none did, a bind conflict cannot be resolved by reallocating
+	// ports, so retrying one would be a loop with no exit.
+	PortsPassed bool
+}
+
+// BuildHelp builds the invocation that lists a subcommand's options.
+//
+// `--help-all` rather than `--help`: on every version that has them, the port
+// options sit under the additional options. It neither starts a server nor
+// triggers a re-augmentation, and returns in well under a second.
+func BuildHelp(kcPath, subcommand string) (ExportCommand, error) {
+	if kcPath == "" {
+		return ExportCommand{}, fmt.Errorf("no kc.sh path was given")
+	}
+	if subcommand == "" {
+		return ExportCommand{}, fmt.Errorf("no kc.sh subcommand was named")
+	}
+	return ExportCommand{Path: kcPath, Args: []string{subcommand, "--help-all"}}, nil
+}
+
+// optionDefRe matches an option where kc.sh *defines* one: at the start of a
+// line, optionally behind its short form. Description text is indented and
+// wrapped, so a prose mention — "if the `db-url` option is set" — is not a
+// definition and does not enter the set.
+var optionDefRe = regexp.MustCompile(`(?m)^(?:-[a-zA-Z], )?--([a-z0-9][a-z0-9-]*)`)
+
+// ParseOptions reads the option names out of kc.sh help output. Both streams
+// are accepted because kc.sh has used both across releases.
+func ParseOptions(streams ...string) OptionSet {
+	out := OptionSet{}
+	for _, s := range streams {
+		for _, m := range optionDefRe.FindAllStringSubmatch(strings.ReplaceAll(s, "\r\n", "\n"), -1) {
+			out[m[1]] = true
+		}
+	}
+	return out
+}
+
+// portArgs emits the port options this kc.sh actually accepts.
+//
+// The two failures are not symmetric. Passing an option the subcommand does
+// not take is fatal and unconditional — the command exits before it reads the
+// realm, on every capture, forever. Omitting one it would have taken risks a
+// bind conflict, and only when something is already listening on that port.
+// So the flag is omitted whenever there is any doubt, including when discovery
+// produced no answer at all.
+func portArgs(supported OptionSet, p Ports) []string {
+	if !supported.Known() {
+		return nil
+	}
+	var args []string
+	for _, o := range []struct {
+		flag string
+		port int
+	}{
+		{"http-port", p.HTTP},
+		{"https-port", p.HTTPS},
+		{"http-management-port", p.Management},
+	} {
+		if o.port > 0 && supported.Has(o.flag) {
+			args = append(args, "--"+o.flag, strconv.Itoa(o.port))
+		}
+	}
+	return args
 }
 
 // String renders the command as it would be typed, for the streamed log panel.
@@ -108,24 +208,14 @@ func BuildExport(r ExportRequest) (ExportCommand, error) {
 		args = append(args, "--users-per-file", strconv.Itoa(n))
 	}
 
-	// The port flags are always passed, even inside an ephemeral clone where
-	// the network namespace makes a conflict impossible. It costs nothing and
-	// keeps one code path serving all four target kinds.
-	if r.Ports.HTTP > 0 {
-		args = append(args, "--http-port", strconv.Itoa(r.Ports.HTTP))
-	}
-	if r.Ports.HTTPS > 0 {
-		args = append(args, "--https-port", strconv.Itoa(r.Ports.HTTPS))
-	}
-	if r.Ports.Management > 0 {
-		args = append(args, "--http-management-port", strconv.Itoa(r.Ports.Management))
-	}
+	ports := portArgs(r.Supported, r.Ports)
+	args = append(args, ports...)
 	if r.Optimized {
 		args = append(args, "--optimized")
 	}
 	args = append(args, r.ExtraArgs...)
 
-	return ExportCommand{Path: r.KcPath, Args: args}, nil
+	return ExportCommand{Path: r.KcPath, Args: args, PortsPassed: len(ports) > 0}, nil
 }
 
 // ImportStrategy is what happens to a resource that already exists.
@@ -142,11 +232,16 @@ const (
 
 // ImportRequest is everything the driver needs to build an import invocation.
 type ImportRequest struct {
-	KcPath    string
-	Dir       string
-	File      string
-	Strategy  ImportStrategy
-	Ports     Ports
+	KcPath   string
+	Dir      string
+	File     string
+	Strategy ImportStrategy
+	Ports    Ports
+	// Supported is what this kc.sh reported its import command accepts. It is
+	// discovered per subcommand rather than shared with export: they have
+	// matched on every version measured, and assuming they always will is the
+	// assumption this whole mechanism exists to stop making.
+	Supported OptionSet
 	Optimized bool
 	ExtraArgs []string
 }
@@ -184,21 +279,14 @@ func BuildImport(r ImportRequest) (ExportCommand, error) {
 		return ExportCommand{}, fmt.Errorf("%q is not an import strategy", r.Strategy)
 	}
 
-	if r.Ports.HTTP > 0 {
-		args = append(args, "--http-port", strconv.Itoa(r.Ports.HTTP))
-	}
-	if r.Ports.HTTPS > 0 {
-		args = append(args, "--https-port", strconv.Itoa(r.Ports.HTTPS))
-	}
-	if r.Ports.Management > 0 {
-		args = append(args, "--http-management-port", strconv.Itoa(r.Ports.Management))
-	}
+	ports := portArgs(r.Supported, r.Ports)
+	args = append(args, ports...)
 	if r.Optimized {
 		args = append(args, "--optimized")
 	}
 	args = append(args, r.ExtraArgs...)
 
-	return ExportCommand{Path: r.KcPath, Args: args}, nil
+	return ExportCommand{Path: r.KcPath, Args: args, PortsPassed: len(ports) > 0}, nil
 }
 
 // StrategyExplanation says what a strategy does to an existing resource, in
@@ -249,6 +337,13 @@ type Outcome struct {
 	// BindConflict marks the one failure that is worth retrying with fresh
 	// ports rather than reporting.
 	BindConflict bool
+	// RejectedOption and RejectedCommand name an option this kc.sh does not
+	// take on that subcommand. It is captured separately because the wording
+	// matches neither "unknown option" nor "unrecognized option", so it used to
+	// fall through to "kc.sh export exited with code 2" — which says nothing
+	// about the one thing that has to change.
+	RejectedOption  string
+	RejectedCommand string
 }
 
 // ParseOutput extracts warnings and errors from the two streams. Success is
@@ -277,8 +372,18 @@ func ParseOutput(stdout, stderr string) Outcome {
 		}
 	}
 	out.BindConflict = looksLikeBindConflict(stdout) || looksLikeBindConflict(stderr)
+	// Both streams, because kc.sh puts this one on stdout on some releases.
+	if m := rejectedOptionRe.FindStringSubmatch(stdout + "\n" + stderr); m != nil {
+		out.RejectedOption, out.RejectedCommand = m[1], m[2]
+	}
 	return out
 }
+
+// rejectedOptionRe matches how Keycloak reports an option the subcommand does
+// not take:
+//
+//	Option: '--http-port' not valid for command export
+var rejectedOptionRe = regexp.MustCompile(`Option: '(--[a-z0-9-]+)' not valid for command ([a-z-]+)`)
 
 func looksLikeBindConflict(s string) bool {
 	for _, needle := range []string{
@@ -345,6 +450,12 @@ func ReadLayout(realm string, names []string) ExportLayout {
 // ClassifyFailure turns a non-zero exit into the sentence an operator can act
 // on, rather than "exit status 1".
 func ClassifyFailure(realm string, o Outcome, stderr string) (message, advice string, retryable bool) {
+	if o.RejectedOption != "" {
+		return fmt.Sprintf("This Keycloak's %s command does not accept %s, so it stopped before reading the realm.",
+				o.RejectedCommand, o.RejectedOption),
+			"PortCloak asks kc.sh which options it takes before building the command, so this means the answer it got did not match the command it ran. Re-test the environment to refresh the probe.",
+			false
+	}
 	if o.BindConflict {
 		return "The export could not bind the ports it was given — something claimed them in the moment between PortCloak reserving them and Keycloak starting.",
 			"This race is unavoidable and harmless. PortCloak reallocates and tries again.",

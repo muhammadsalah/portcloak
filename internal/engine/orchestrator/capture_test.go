@@ -440,7 +440,10 @@ func TestCapture_SucceedsWithoutAdminAPI(t *testing.T) {
 	}
 }
 
-func TestCapture_UsesOfflineExportWithIsolatedPorts(t *testing.T) {
+// The invocation carries the options this kc.sh said it takes, and only those.
+// It used to carry --http-port and --https-port unconditionally, which no
+// Keycloak accepts on export: the command exits before it reads the realm.
+func TestCapture_UsesOfflineExportWithTheOptionsKcAccepts(t *testing.T) {
 	h := newHarness(t)
 	h.capture(defaultRequest())
 
@@ -449,10 +452,71 @@ func TestCapture_UsesOfflineExportWithIsolatedPorts(t *testing.T) {
 		t.Fatal("no command was run")
 	}
 	joined := strings.Join(cmd.Args, " ")
-	for _, want := range []string{"export", "--realm acme", "--users different_files", "--http-port", "--https-port", "--http-management-port"} {
+	for _, want := range []string{"export", "--realm acme", "--users different_files", "--http-management-port"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("the export invocation is missing %q: %s", want, joined)
 		}
+	}
+	for _, unwanted := range []string{"--http-port", "--https-port"} {
+		if strings.Contains(joined, unwanted) {
+			t.Errorf("%q is not an export option on any Keycloak: %s", unwanted, joined)
+		}
+	}
+}
+
+// Where kc.sh takes no port option — 24.0 and 26.5 of the versions measured —
+// none is passed, and a bind conflict is reported rather than retried, because
+// reallocating cannot change anything the command will see.
+func TestCapture_PassesNoPortWhereKcAcceptsNone(t *testing.T) {
+	h := newHarness(t)
+	h.exec.HelpOutput = "Options:\n\n--dir <dir>          Where to write.\n--realm <realm>      What to export.\n--users <strategy>   How.\n"
+
+	h.capture(defaultRequest())
+
+	cmd, ok := h.exec.LastCommand()
+	if !ok {
+		t.Fatal("no command was run")
+	}
+	if joined := strings.Join(cmd.Args, " "); strings.Contains(joined, "-port") {
+		t.Errorf("a port option was passed to a kc.sh that does not take one: %s", joined)
+	}
+}
+
+// Where the question itself fails, nothing is guessed at. A rejected option
+// fails every capture; a missing one risks a conflict only if something is
+// listening.
+func TestCapture_PassesNoPortWhenTheOptionsCannotBeAsked(t *testing.T) {
+	h := newHarness(t)
+	h.exec.HelpExitCode = 1
+
+	jobs := h.capture(defaultRequest())
+	if jobs[0].State != config.JobCompleted {
+		t.Fatalf("a capture failed because kc.sh would not list its options: %s", jobs[0].Message)
+	}
+	cmd, _ := h.exec.LastCommand()
+	if joined := strings.Join(cmd.Args, " "); strings.Contains(joined, "-port") {
+		t.Errorf("a port option was guessed at: %s", joined)
+	}
+}
+
+// A rejected option is reported as itself. Before the classifier learned this
+// wording it fell through to "kc.sh export exited with code 2", which says
+// nothing about the one thing that has to change.
+func TestCapture_ReportsARejectedOptionByName(t *testing.T) {
+	h := newHarness(t)
+	h.exec.RunFunc = func(ctx context.Context, cmd target.Command) (target.ExecResult, error) {
+		return target.ExecResult{
+			ExitCode: 2,
+			Stderr:   "Option: '--http-port' not valid for command export\n",
+		}, nil
+	}
+
+	jobs := h.capture(defaultRequest())
+	if jobs[0].State != config.JobFailed {
+		t.Fatalf("a rejected option should fail the capture, got %s", jobs[0].State)
+	}
+	if !strings.Contains(jobs[0].Message, "--http-port") {
+		t.Errorf("the failure should name the option: %s", jobs[0].Message)
 	}
 }
 

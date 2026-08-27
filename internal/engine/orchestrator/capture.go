@@ -201,6 +201,7 @@ func (o *Orchestrator) runCaptureBatch(ctx context.Context, env config.Environme
 	cc := captureContext{
 		env: env, storage: st, req: req, facts: facts,
 		execCtx: execCtx, exec: exec, blobs: blobs, verifier: verifier,
+		exportOptions: o.discoverOptions(batchCtx, exec, facts.KcPath, "export", env.Sudo, batchReporter),
 	}
 
 	// The run is in two passes, and the split is the point: everything that
@@ -299,6 +300,40 @@ type captureContext struct {
 	exec     target.Executor
 	blobs    store.BlobStore
 	verifier Verifier
+	// exportOptions is what this kc.sh said its export command accepts,
+	// discovered once for the batch because every realm runs the same binary.
+	exportOptions kc.OptionSet
+}
+
+// discoverOptions asks kc.sh which options a subcommand takes, in the execution
+// context the command will actually run in — the clone on Docker and
+// Kubernetes, the host on local and SSH. That is the only place the answer is
+// authoritative: it is a property of that binary, and kc.OptionSet records how
+// much it has moved between releases.
+//
+// A failure here is not fatal. The caller falls back to passing no port
+// options, which is the recoverable direction: see kc.portArgs.
+func (o *Orchestrator) discoverOptions(
+	ctx context.Context, exec target.Executor, kcPath, subcommand string, sudo bool, rep *obs.Reporter,
+) kc.OptionSet {
+	cmd, err := kc.BuildHelp(kcPath, subcommand)
+	if err != nil {
+		o.opts.Log.Info("kc.sh options could not be asked for", "subcommand", subcommand, "err", err)
+		return nil
+	}
+	res, err := exec.Run(ctx, target.Command{Path: cmd.Path, Args: cmd.Args, Sudo: sudo})
+	if err != nil || res.ExitCode != 0 {
+		o.opts.Log.Info("kc.sh did not list its options; port options will be omitted",
+			"subcommand", subcommand, "exit", res.ExitCode, "err", err)
+		rep.Log("kc.sh did not list the options its " + subcommand +
+			" command accepts, so none of the isolated ports will be passed to it.")
+		return nil
+	}
+	opts := kc.ParseOptions(res.Stdout, res.Stderr)
+	o.opts.Log.Info("kc.sh option support discovered",
+		"subcommand", subcommand, "options", len(opts),
+		"httpManagementPort", opts.Has("http-management-port"))
+	return opts
 }
 
 // collected is what one realm produced while the execution context was alive.
@@ -428,6 +463,7 @@ func (o *Orchestrator) export(ctx context.Context, cc captureContext, j *config.
 			UsersMode:    kc.UsersMode(cc.req.UsersMode),
 			UsersPerFile: cc.req.UsersPerFile,
 			Ports:        kc.Ports{HTTP: portSet.HTTP, HTTPS: portSet.HTTPS, Management: portSet.Management},
+			Supported:    cc.exportOptions,
 		})
 		if err != nil {
 			return kc.ExportLayout{}, resil.Fatal("build the export command", err.Error(), err)
@@ -468,6 +504,14 @@ func (o *Orchestrator) export(ctx context.Context, cc captureContext, j *config.
 		}
 
 		message, advice, retryable := kc.ClassifyFailure(j.Realm, outcome, result.Stderr)
+		if outcome.BindConflict && !cmd.PortsPassed {
+			// Reallocating is the answer only when the ports can be handed to
+			// kc.sh. This build takes no port option, so the same conflict
+			// would come back three times and then be reported as a port race
+			// that PortCloak had never had any say in.
+			retryable = false
+			advice = "This Keycloak's export command accepts no port options, so PortCloak cannot move the export off the port that is taken. Stop whatever is holding it, or capture from an environment where the export runs in its own network namespace — Docker and Kubernetes do."
+		}
 		if !retryable || !outcome.BindConflict || attempt == maxExportAttempts {
 			return kc.ExportLayout{}, resil.Fatal("export the realm", message, nil).WithAdvice(advice)
 		}

@@ -104,15 +104,16 @@ database. Large-realm exports are therefore still best scheduled off-peak.
 - **Mechanism:** direct `os/exec` of the local `kc.sh` (or `kc.bat` on Windows).
 - **Discovery:** `PATH`, common install dirs (`/opt/keycloak/bin`, `$KEYCLOAK_HOME/bin`), or the
   **server folder** recorded on the environment.
-- **Free-port isolation — the important part.** Offline export starts an embedded Keycloak
-  runtime that binds ports. If the machine is already running Keycloak on 8080/8443/9000, the
-  export **fails with a non-zero exit code**. PortCloak prevents this by:
+- **Free-port isolation.** Offline export starts an embedded Keycloak runtime, and on some
+  versions that runtime binds a port. PortCloak prevents a collision by:
   1. binding `127.0.0.1:0` to have the OS assign unused ports, recording them, then releasing;
-  2. passing them explicitly — `--http-port`, `--https-port`, and `--http-management-port`
-     (the management port is separate from Keycloak 25 onward);
-  3. treating a bind-conflict exit as **retryable**: there is an unavoidable race between
-     releasing a port and the export claiming it, so PortCloak re-allocates and retries a
-     bounded number of times.
+  2. **passing only the port options that this `kc.sh` accepts**, discovered by asking it
+     (`kc.sh export --help-all`) in the context the export will run in. Which options exist is a
+     property of the binary, not of this document — see §3.8;
+  3. treating a bind-conflict exit as **retryable** *when a port option was actually passed*:
+     there is an unavoidable race between releasing a port and the export claiming it, so
+     PortCloak re-allocates and retries a bounded number of times. Where the command takes no
+     port option, reallocating cannot change what it sees, so the conflict is reported instead.
 - **Fetch:** a local filesystem copy — still checksummed and streamed through the same pipeline
   so downstream code stays target-agnostic.
 - **Edge cases:** permissions on the export dir; DB reachable from the export process.
@@ -178,16 +179,14 @@ database. Large-realm exports are therefore still best scheduled off-peak.
 
 The Kc CLI Driver builds the command; the Executor runs it in whichever context applies.
 
-**Default (offline export, users in separate files, isolated ports):**
+**Default (offline export, users in separate files):**
 ```
 kc.sh export \
   --dir /tmp/portcloak-<jobid> \
   --realm <realm> \
   --users different_files \
   --users-per-file 1000 \
-  --http-port <free> \
-  --https-port <free> \
-  --http-management-port <free>
+  [--http-management-port <free>]     # only where this kc.sh accepts it
 ```
 
 **Single-file variant (small realms):**
@@ -200,8 +199,22 @@ Design notes:
   at file granularity — better behaviour on flaky links.
 - `--realm` is **always** passed: one snapshot holds exactly one realm (FR-S6). Capturing several
   realms runs several exports and produces several independent snapshots.
-- Port flags are always passed, even inside an ephemeral clone where the network namespace makes
-  a conflict impossible. It costs nothing and keeps one code path honest across all four targets.
+- **Port options are discovered, not assumed.** This section originally specified `--http-port`
+  and `--https-port` alongside the management port, on the reasoning that passing them cost
+  nothing. It cost every capture: neither is an option of `export` or `import` on any Keycloak
+  measured, and rejecting one aborts the command before it reads the realm
+  (`Option: '--http-port' not valid for command export`). What `export` accepts, measured from
+  the images kept in `testdata/kc-help`:
+
+  | Keycloak | port options on `export` |
+  |----------|--------------------------|
+  | 24.0 | none |
+  | 25.0 – 26.3 | `--http-management-port` (plus the management TLS options) |
+  | 26.5 | none |
+
+  Because that answer changed twice in three minor releases, the driver asks the binary rather
+  than consulting a version table, and passes nothing when it gets no answer — a rejected option
+  fails every capture, while a missing one risks a conflict only if something is listening.
 - The driver parses the export dir layout (`<realm>-realm.json`, `<realm>-users-*.json`) and
   normalizes it into `ArtifactRef`s.
 

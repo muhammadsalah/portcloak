@@ -31,11 +31,14 @@ const (
 	ModeEphemeralClone ExecMode = "ephemeral-clone"
 )
 
-// PortSet is the three ports an offline export binds.
+// PortSet is the three ports an offline export may bind.
 //
-// They are passed on every target, including inside a clone where a collision
-// is impossible. It costs nothing and keeps one code path honest across all
-// four kinds.
+// They used to be passed on every target unconditionally, on the reasoning that
+// it cost nothing. It cost every capture: `kc.sh export` accepts neither
+// `--http-port` nor `--https-port` on any Keycloak measured, and rejecting one
+// aborts the command before it reads the realm. What reaches the command line
+// is now whatever that binary says it takes — see kc.OptionSet — so this set
+// is what PortCloak reserved, not what it will pass.
 type PortSet struct {
 	HTTP       int `json:"http"`
 	HTTPS      int `json:"https"`
