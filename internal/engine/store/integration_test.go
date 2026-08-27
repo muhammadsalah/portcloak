@@ -12,6 +12,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -32,6 +33,21 @@ func env(t *testing.T, key string) string {
 		t.Fatalf("%s is not set. The integration suite expects the service containers from CI; see spec/rollout/00 §0.7.", key)
 	}
 	return v
+}
+
+// sshPort lets CI point the suite at an sshd on a non-privileged port without
+// the tests caring which.
+func sshPort(t *testing.T) int {
+	t.Helper()
+	v := os.Getenv("PORTCLOAK_TEST_SSH_PORT")
+	if v == "" {
+		return 22
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		t.Fatalf("PORTCLOAK_TEST_SSH_PORT is %q, which is not a port number", v)
+	}
+	return n
 }
 
 func uniquePrefix(t *testing.T) string {
@@ -151,7 +167,7 @@ func TestSFTP_Contract(t *testing.T) {
 		}
 		s, err := sftpstore.New(config.Storage{
 			Name: "test", Kind: config.StoreSSH,
-			Host: host, Port: 22, User: user, Auth: config.SSHPassword,
+			Host: host, Port: sshPort(t), User: user, Auth: config.SSHPassword,
 			Folder:        fmt.Sprintf("%s/%s", folder, uniquePrefix(t)),
 			CredentialRef: handle,
 		}, creds)
@@ -186,7 +202,7 @@ func TestSFTP_OffsetResumeContract(t *testing.T) {
 		}
 		s, err := sftpstore.New(config.Storage{
 			Name: "test", Kind: config.StoreSSH,
-			Host: host, Port: 22, User: user, Auth: config.SSHPassword,
+			Host: host, Port: sshPort(t), User: user, Auth: config.SSHPassword,
 			Folder:        fmt.Sprintf("%s/%s", folder, uniquePrefix(t)),
 			CredentialRef: handle,
 		}, creds)

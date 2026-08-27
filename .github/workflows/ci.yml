@@ -120,6 +120,14 @@ jobs:
       azurite:
         image: mcr.microsoft.com/azure-storage/azurite:latest
         ports: ["10000:10000"]
+      sshd:
+        image: lscr.io/linuxserver/openssh-server:latest
+        env:
+          PASSWORD_ACCESS: "true"
+          USER_NAME: portcloak
+          USER_PASSWORD: portcloak-test-secret
+          SUDO_ACCESS: "false"
+        ports: ["2222:2222"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -134,3 +142,42 @@ jobs:
             DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;
           PORTCLOAK_TEST_AZURE_CONTAINER: portcloak-test
         run: go test -tags=integration ./internal/engine/store/... -run 'TestS3|TestAzure' -timeout 20m
+
+      # SFTP resumes a single stream from an offset, which is a different
+      # implementation of the same contract disk satisfies. Running it against a
+      # real sshd is the only place the read-back fallback for a missing hash
+      # state is exercised over a network.
+      - name: Remote folder over SFTP
+        env:
+          PORTCLOAK_TEST_SSH_HOST: 127.0.0.1
+          PORTCLOAK_TEST_SSH_PORT: "2222"
+          PORTCLOAK_TEST_SSH_USER: portcloak
+          PORTCLOAK_TEST_SSH_CREDENTIAL: portcloak-test-secret
+          PORTCLOAK_TEST_SSH_FOLDER: /config
+        run: go test -tags=integration ./internal/engine/store/... -run 'TestSFTP' -timeout 20m
+
+      - name: SSH target
+        env:
+          PORTCLOAK_TEST_SSH_HOST: 127.0.0.1
+          PORTCLOAK_TEST_SSH_PORT: "2222"
+          PORTCLOAK_TEST_SSH_USER: portcloak
+          PORTCLOAK_TEST_SSH_CREDENTIAL: portcloak-test-secret
+        run: go test -tags=integration ./internal/engine/target/... -run 'TestSSH' -timeout 20m
+
+      # The Docker rows are also the clone rows: every one of them creates an
+      # ephemeral clone of the container named here, runs against it, and
+      # destroys it. The runner's own Docker daemon is used directly rather than
+      # as a service container, because the adapter talks to the socket.
+      - name: Docker target via an ephemeral clone
+        env:
+          PORTCLOAK_TEST_DOCKER_CONTAINER: portcloak-serving
+        run: |
+          docker run -d --name portcloak-serving --label app=serving alpine:3 sleep infinity
+          trap 'docker rm -f portcloak-serving >/dev/null 2>&1 || true' EXIT
+          go test -tags=integration ./internal/engine/target/... -run 'TestDocker' -timeout 20m
+          # Nothing PortCloak created may outlive the run.
+          leftovers=$(docker ps -aq --filter "label=portcloak.io/ephemeral")
+          if [ -n "$leftovers" ]; then
+            echo "ephemeral clones survived the test run:" && docker ps -a --filter "label=portcloak.io/ephemeral"
+            exit 1
+          fi
