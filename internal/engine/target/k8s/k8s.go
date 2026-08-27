@@ -202,8 +202,12 @@ func (p *Platform) Probe(ctx context.Context) (target.TargetFacts, error) {
 		return facts, nil
 	}
 
-	facts.KcPath = kcPathIn(container)
-	facts.Pass("kc.sh", facts.KcPath)
+	facts.KcPath = kcPathIn(p.env.KcPath, container)
+	if p.env.KcPath != "" {
+		facts.Pass("kc.sh", facts.KcPath+" (set on this environment)")
+	} else {
+		facts.Pass("kc.sh", facts.KcPath)
+	}
 
 	if v := versionFromImage(container.Image); v != "" {
 		facts.KeycloakVersion = v
@@ -333,7 +337,15 @@ func (p *Platform) keycloakContainer(spec *corev1.PodSpec) *corev1.Container {
 	return &spec.Containers[0]
 }
 
-func kcPathIn(c *corev1.Container) string {
+// kcPathIn decides which kc.sh the export will run.
+//
+// A path set on the environment wins outright: it is the operator saying where
+// their own image puts it, and a custom build is exactly the case the two
+// guesses below get wrong.
+func kcPathIn(configured string, c *corev1.Container) string {
+	if configured != "" {
+		return configured
+	}
 	for _, e := range c.Env {
 		if e.Name == "KEYCLOAK_HOME" && e.Value != "" {
 			return path.Join(e.Value, "bin", "kc.sh")

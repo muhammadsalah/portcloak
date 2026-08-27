@@ -354,6 +354,7 @@ function editor(state: State, draw: () => void, root: HTMLElement): HTMLElement 
           "PortCloak inspects this container read-only and runs the export inside a throwaway clone of it.",
         ),
       );
+      form.appendChild(kcPathField(env));
       break;
 
     case "kubernetes":
@@ -361,10 +362,14 @@ function editor(state: State, draw: () => void, root: HTMLElement): HTMLElement 
         h(
           "div",
           { class: "field-row" },
-          field("Name", input(env.name, (v) => (env.name = v))),
           field(
             "Kubeconfig context",
             input(env.context, (v) => (env.context = v), { placeholder: "prod-cluster" }),
+          ),
+          field(
+            "Kubeconfig file (optional)",
+            input(env.kubeconfig, (v) => (env.kubeconfig = v), { placeholder: "~/.kube/config" }),
+            "Only needed when the cluster is not in the default kubeconfig.",
           ),
         ),
       );
@@ -386,42 +391,11 @@ function editor(state: State, draw: () => void, root: HTMLElement): HTMLElement 
           "Only needed when the pod runs more than one container.",
         ),
       );
+      form.appendChild(kcPathField(env));
       break;
   }
 
-  form.appendChild(
-    field(
-      "Admin API base URL · optional, used only to verify secrets and detect themes",
-      input(env.adminBaseUrl, (v) => (env.adminBaseUrl = v), { placeholder: "https://sso.example" }),
-      "The export reads the realm from the database and does not need this. Without it, verification and dependency detection are reported as skipped.",
-    ),
-  );
-  if (env.adminBaseUrl) {
-    form.appendChild(
-      h(
-        "div",
-        { class: "field-row" },
-        field("Admin user", input(env.adminUser, (v) => (env.adminUser = v))),
-        field(
-          "Admin credential",
-          h(
-            "div",
-            { class: "row" },
-            h("input", {
-              type: "password",
-              placeholder: env.adminCredentialRef ? "•••••••• (stored)" : "password",
-              onInput: (e: Event) => {
-                state.adminSecret = (e.target as HTMLInputElement).value;
-              },
-            }),
-          ),
-          env.adminCredentialRef
-            ? `Stored in this machine's keychain as ${env.adminCredentialRef}. config.yaml holds only the handle.`
-            : "Stored in this machine's keychain; config.yaml will hold only a handle.",
-        ),
-      ),
-    );
-  }
+  form.appendChild(adminSection(state));
 
   const foot = h(
     "div",
@@ -540,6 +514,72 @@ function editor(state: State, draw: () => void, root: HTMLElement): HTMLElement 
     ),
     probeArea,
     foot,
+  );
+}
+
+/**
+ * The optional Admin API block.
+ *
+ * The user and credential fields used to appear only once a base URL had been
+ * typed, and nothing on this form redraws while you type — so the two fields
+ * that complete the block were invisible at exactly the moment they were being
+ * filled in, and only turned up after leaving the screen and coming back. They
+ * are shown from the start now. An empty base URL is still what decides whether
+ * the Admin API is used at all; the form simply stops hiding half a question.
+ */
+/**
+ * Where kc.sh lives inside the container or pod.
+ *
+ * PortCloak reads KEYCLOAK_HOME off the image and otherwise assumes the path
+ * the official images use. A custom build that installs Keycloak somewhere else
+ * is not an exotic case, and left to guess PortCloak fails deep inside the
+ * export against an executable that is not there. This is where the operator
+ * says so instead.
+ */
+function kcPathField(env: Environment): HTMLElement {
+  return field(
+    "Path to kc.sh inside the container (optional)",
+    input(env.kcPath, (v) => (env.kcPath = v), { placeholder: "/opt/keycloak/bin/kc.sh" }),
+    "Leave this empty for the official images. Set it for a custom build that installs Keycloak elsewhere — the probe reports which path it will use either way.",
+  );
+}
+
+function adminSection(state: State): HTMLElement {
+  const env = state.draft!;
+  return h(
+    "div",
+    null,
+    field(
+      "Admin API base URL · optional, used only to verify secrets and detect themes",
+      input(env.adminBaseUrl, (v) => (env.adminBaseUrl = v), { placeholder: "https://sso.example" }),
+      "The export reads the realm from the database and does not need this. Without it, verification and dependency detection are reported as skipped.",
+    ),
+    h(
+      "div",
+      { class: "field-row" },
+      field(
+        "Admin user",
+        input(env.adminUser, (v) => (env.adminUser = v), { placeholder: "admin" }),
+        "The account the verification pass signs in as. It needs to read the realm, nothing more.",
+      ),
+      field(
+        "Admin credential",
+        h(
+          "div",
+          { class: "row" },
+          h("input", {
+            type: "password",
+            placeholder: env.adminCredentialRef ? "•••••••• (stored)" : "password",
+            onInput: (e: Event) => {
+              state.adminSecret = (e.target as HTMLInputElement).value;
+            },
+          }),
+        ),
+        env.adminCredentialRef
+          ? `Stored in this machine's keychain as ${env.adminCredentialRef}. config.yaml holds only the handle.`
+          : "Stored in this machine's keychain; config.yaml will hold only a handle.",
+      ),
+    ),
   );
 }
 

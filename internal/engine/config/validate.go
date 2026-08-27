@@ -148,6 +148,12 @@ func validateEnvironment(e Environment, base string, add addFunc) {
 		add(base+".kind", "%q is not an environment kind PortCloak knows. It has to be one of local, ssh, docker or kubernetes.", e.Kind)
 	}
 
+	// kcPath names an executable inside the container or pod, so a relative
+	// path has no meaning there — the export runs from a work directory that
+	// is not the install root.
+	if e.KcPath != "" && !strings.HasPrefix(e.KcPath, "/") {
+		add(base+".kcPath", "%q is not an absolute path. kcPath says where kc.sh is inside the container, so it has to start with /.", e.KcPath)
+	}
 	if e.CredentialRef != "" && !ValidHandle(e.CredentialRef) {
 		add(base+".credentialRef", "%q is not a credential handle. Handles look like keychain://portcloak/<kind>/<name> and the value itself stays in this machine's keychain.", e.CredentialRef)
 	}

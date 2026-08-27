@@ -194,6 +194,15 @@ type Environment struct {
 	ServerFolder string `yaml:"serverFolder,omitempty" json:"serverFolder,omitempty"`
 	JavaHome     string `yaml:"javaHome,omitempty" json:"javaHome,omitempty"`
 
+	// KcPath is where kc.sh actually lives inside the container or pod.
+	//
+	// PortCloak derives it from KEYCLOAK_HOME and falls back to the path the
+	// official images use. That is right for those images and wrong for a
+	// custom build that installs Keycloak somewhere else, and the capture then
+	// fails deep in the export against an executable that is not there. Setting
+	// this says where it is rather than leaving PortCloak to guess.
+	KcPath string `yaml:"kcPath,omitempty" json:"kcPath,omitempty"`
+
 	// SSH.
 	Host     string  `yaml:"host,omitempty" json:"host,omitempty"`
 	Port     int     `yaml:"port,omitempty" json:"port,omitempty"`

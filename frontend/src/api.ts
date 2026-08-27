@@ -62,6 +62,7 @@ export interface Environment {
   kind: EnvironmentKind;
   serverFolder?: string;
   javaHome?: string;
+  kcPath?: string;
   host?: string;
   port?: number;
   user?: string;
