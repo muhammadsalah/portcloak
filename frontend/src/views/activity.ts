@@ -112,6 +112,13 @@ export async function renderActivity(root: HTMLElement): Promise<void> {
     for (const job of next.jobs) {
       root.appendChild(card(job, live, () => void reload()));
     }
+
+    // A job that is no longer listed — discarded, purged — takes its buffered
+    // output with it.
+    const listed = new Set(next.jobs.map((j) => j.id));
+    for (const id of logLines.keys()) {
+      if (!listed.has(id)) logLines.delete(id);
+    }
   };
 
   paint(view);
@@ -133,19 +140,22 @@ export async function renderActivity(root: HTMLElement): Promise<void> {
   // The listener and the timers belong to this render. Navigating away must not
   // leave one writing into a detached node, and — the older failure — must not
   // leave the previous one subscribed alongside the new one either.
-  const observer = new MutationObserver(() => {
-    if (!document.body.contains(root)) teardown?.();
-  });
-  observer.observe(document.body, { childList: true, subtree: true });
-
-  teardown = () => {
+  const dispose = (): void => {
     disposed = true;
     unsubscribe();
     observer.disconnect();
     window.clearInterval(poll);
     if (pending !== undefined) window.clearTimeout(pending);
-    teardown = null;
+    // Only if it is still ours. A newer render owns the slot by then, and
+    // clearing it would leave that one with nothing to tear down.
+    if (teardown === dispose) teardown = null;
   };
+  const observer = new MutationObserver(() => {
+    if (!document.body.contains(root)) dispose();
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+
+  teardown = dispose;
 }
 
 /** The handles on one card that the event stream can write into directly. */
@@ -309,20 +319,22 @@ function card(job: JobView, live: Map<string, LiveCard>, reload: () => void): HT
     pipeline.appendChild(step);
   }
 
+  // The tail this job has produced survives the repaint that brought this card
+  // back — and survives the job finishing, so the last thing the export said is
+  // still on screen at the moment it matters most.
+  const tail = logLines.get(job.id) ?? [];
+  for (const line of tail) {
+    log.appendChild(h("div", null, line));
+  }
   if (running) {
-    // The tail this job has already produced survives the repaint that brought
-    // this card back, so a refresh does not look like the export going quiet.
-    for (const line of logLines.get(job.id) ?? []) {
-      log.appendChild(h("div", null, line));
-    }
     live.set(job.id, { log, bar, note, elapsed, steps });
+  }
+  if (tail.length > 0) {
     // Appending happens before the node is in the document, so the scroll has
     // to be asked for once it is.
     window.setTimeout(() => {
       log.scrollTop = log.scrollHeight;
     }, 0);
-  } else {
-    logLines.delete(job.id);
   }
 
   const actions = h("div", { class: "row" });
@@ -410,7 +422,7 @@ function card(job: JobView, live: Map<string, LiveCard>, reload: () => void): HT
       : null,
     note,
     job.checkpointNote ? h("div", { class: "muted small" }, job.checkpointNote) : null,
-    running ? log : null,
+    running || tail.length > 0 ? log : null,
     job.ledger && job.ledger.length > 0 ? ledgerTable(job) : null,
     job.hint ? h("div", { class: "muted small", style: "margin-top:8px" }, job.hint) : null,
   );
