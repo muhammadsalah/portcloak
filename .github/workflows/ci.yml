@@ -27,7 +27,11 @@ on:
 
 env:
   GO_VERSION: "1.27"
-  NODE_VERSION: "22"
+  # Node 24 is the current LTS line. It is also what the runner's own actions
+  # use — actions/checkout@v4 now runs on Node 24 and warns that Node 20 is
+  # deprecated — so building on 22 meant the workflow ran two Node majors at
+  # once for no reason.
+  NODE_VERSION: "24"
 
 jobs:
   build:
