@@ -66,8 +66,8 @@ type Reach struct {
 	FreeBytes int64         `json:"freeBytes,omitempty"`
 	// FailedStep names which part of the round trip failed, so a failure says
 	// "listing the prefix" rather than wrapping an SDK error.
-	FailedStep string `json:"failedStep,omitempty"`
-	Detail     string `json:"detail,omitempty"`
+	FailedStep string    `json:"failedStep,omitempty"`
+	Detail     string    `json:"detail,omitempty"`
 	ProbedAt   time.Time `json:"probedAt"`
 }
 

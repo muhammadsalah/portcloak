@@ -383,10 +383,10 @@ func RunResumableContract(t *testing.T, newStore func(t *testing.T) store.Resuma
 
 // Reader is a helper for tests that need a reader they can interrupt.
 type Reader struct {
-	Data  []byte
-	Fail  int
-	Err   error
-	pos   int
+	Data []byte
+	Fail int
+	Err  error
+	pos  int
 }
 
 func (r *Reader) Read(p []byte) (int, error) {
