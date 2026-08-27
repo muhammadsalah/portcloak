@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	_ "modernc.org/sqlite" // pure-Go driver: no cgo, so cross-compiling for three platforms stays simple.
 
@@ -19,6 +20,10 @@ type Options struct {
 	// Path is where the index file goes. Empty means in memory, which is what
 	// a small realm gets: nothing touches disk at all.
 	Path string
+	// Name identifies the snapshot this index belongs to. It is used only to
+	// make an in-memory database's name recognisable in a stack trace; the
+	// uniqueness that actually matters is added here, not supplied.
+	Name string
 	// Progress is called as users are indexed. On a large realm this takes real
 	// time, and an unexplained wait is worse than a slow one.
 	Progress func(indexed int)
@@ -47,9 +52,27 @@ type Counts struct {
 // for the common case.
 const InMemoryThreshold = 5000
 
+// inMemorySeq numbers in-memory databases so that two of them are two of them.
+//
+// SQLite's shared cache keys an in-memory database by *name*, and the name here
+// was the constant `:memory:`. Every index in the process was therefore the same
+// database: opening a second snapshot found the first one's schema already
+// present and failed with "table users already exists". The failure was the
+// lucky outcome — the alternative shape of this bug mixes two realms' users into
+// one searchable table and answers questions about the wrong organisation.
+//
+// The cache has to stay shared: a private in-memory database lives only as long
+// as the connection that made it, and database/sql may retire an idle
+// connection underneath us. So the isolation comes from the name.
+var inMemorySeq atomic.Uint64
+
 // Open creates an empty index.
+//
+// One index is one snapshot, on disk or in memory. Nothing is shared between
+// two of them.
 func Open(opts Options) (*Index, error) {
-	dsn := "file::memory:?cache=shared&_pragma=busy_timeout(5000)"
+	dsn := fmt.Sprintf("file:portcloak-index-%s-%d?mode=memory&cache=shared&_pragma=busy_timeout(5000)",
+		safeName(opts.Name), inMemorySeq.Add(1))
 	path := ""
 	if opts.Path != "" {
 		if err := os.MkdirAll(filepath.Dir(opts.Path), 0o700); err != nil {
@@ -275,4 +298,21 @@ func nullable(s string) any {
 		return nil
 	}
 	return s
+}
+
+// safeName reduces a snapshot id to something that cannot be mistaken for part
+// of the DSN. It is cosmetic — the sequence number is what makes the name unique
+// — so an empty or unusable id is simply left out.
+func safeName(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '-':
+			b.WriteRune(r)
+		}
+	}
+	if b.Len() == 0 {
+		return "anon"
+	}
+	return b.String()
 }

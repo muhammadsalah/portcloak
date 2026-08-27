@@ -36,6 +36,12 @@ keeps it from returning.
   `Prepare`'s error check, so a `Prepare` that failed after creating the clone abandoned one
   holding the serving instance's database credentials. The capture path was fixed for this;
   restore was not.
+- **Only one snapshot could be browsed per run.** The inspection index is one database per
+  snapshot, and the on-disk form always was — but the in-memory form used for small realms opened
+  a shared-cache database under a constant name, so every index in the process was the same one
+  and the second snapshot's Users tab failed with `table users already exists`. Related:
+  re-opening a snapshot that was already open replaced its session without closing the one it
+  displaced, orphaning a decrypted working directory.
 - **A run that was happening did not look like one.** Phases were announced to the event stream
   and nowhere else, so the job record never learned which phase it was in and anything re-reading
   it drew a pipeline with no live step. A batch of realms reported its shared probe and clone

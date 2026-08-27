@@ -71,7 +71,7 @@ backend itself (SFTP in P3, S3 and Azure in P5).*
 
 | UC | Title | Phase | Evidence |
 |----|-------|:-----:|----------|
-| UC-I1 | Browse the snapshot library | P6 | `TestLibrary_AllBackendsNoKey`; `TestLibrary_UnencryptedBundleIsLabelled` |
+| UC-I1 | Browse the snapshot library | P6 | `TestLibrary_AllBackendsNoKey`; `TestLibrary_UnencryptedBundleIsLabelled`; `TestIndex_IsOnePerSnapshot` |
 | UC-I2 | Open a snapshot and view its details | P6 | `TestOpen_Tier1_ReadsFullDetail`; `TestOpen_EncryptedRoundTripAndWrongKey`; `TestOpen_UsesAStoredIdentityWithoutBeingAsked`; `TestOpen_UsesAStoredPassphraseWithoutBeingAsked`; `TestOpen_SaysWhatItTried`; `TestKeys_AKeyThatOpenedASnapshotIsNotAskedForAgain` |
 | UC-I3 | Build the inspection index | P6 | `TestIndexSchemaHasNoSecretColumns`; `TestIndex_HoldsNoSecretMaterial` |
 | UC-I4 | Search users within a snapshot | P6 | `TestIndex_SearchPageAndFacets` |

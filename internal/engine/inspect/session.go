@@ -382,7 +382,7 @@ func (s *Session) Index(ctx context.Context, rep *obs.Reporter) (*index.Index, e
 
 	// A small realm is indexed entirely in memory and never touches disk, which
 	// removes the residue question for the common case.
-	opts := index.Options{}
+	opts := index.Options{Name: s.ID}
 	if s.Manifest.Counts.Users > index.InMemoryThreshold {
 		opts.Path = s.home.IndexFile(s.ID)
 	}

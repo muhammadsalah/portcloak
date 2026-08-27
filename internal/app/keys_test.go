@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"portcloak/internal/engine/config"
+	"portcloak/internal/engine/inspect"
 	"portcloak/internal/engine/obs"
 )
 
@@ -277,5 +278,32 @@ func TestKeys_AStoredKeyIsNotRecordedAsASessionKey(t *testing.T) {
 
 	if got := keys.Availability(); got.FromSession != 0 {
 		t.Errorf("FromSession = %d after an open that needed no key", got.FromSession)
+	}
+}
+
+// Re-opening a snapshot that is already open is ordinary — navigating back into
+// the inspector does it. Replacing the map entry silently orphaned the previous
+// session: its decrypted working directory stayed on disk, and its index file,
+// named after the same snapshot, was truncated underneath it by the new one.
+func TestSessions_ReopeningASnapshotClosesTheOneItReplaces(t *testing.T) {
+	eng := keyEngine(t)
+
+	first := &inspect.Session{ID: "same-snapshot"}
+	second := &inspect.Session{ID: "same-snapshot"}
+
+	eng.putSession(first)
+	eng.putSession(second)
+
+	got, err := eng.Session("same-snapshot")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != second {
+		t.Error("the newer session is not the one held")
+	}
+	// A session closed twice must not be an error either, since the displaced
+	// one is closed here and again on shutdown.
+	if err := eng.Close(); err != nil {
+		t.Errorf("shutdown failed after a displaced session: %v", err)
 	}
 }

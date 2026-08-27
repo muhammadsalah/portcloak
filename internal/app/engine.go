@@ -277,10 +277,26 @@ func (e *Engine) Session(id string) (*inspect.Session, error) {
 	return s, nil
 }
 
+// putSession registers an open snapshot, closing any earlier session for the
+// same snapshot first.
+//
+// Re-opening a snapshot that is already open is ordinary — navigating back into
+// the inspector does it — and replacing the map entry silently orphaned the
+// previous session: its decrypted working directory stayed on disk until the
+// next launch swept it, and its index file, named after the same snapshot, was
+// truncated underneath it by the new one.
 func (e *Engine) putSession(s *inspect.Session) {
 	e.mu.Lock()
-	defer e.mu.Unlock()
+	previous := e.sessions[s.ID]
 	e.sessions[s.ID] = s
+	e.mu.Unlock()
+
+	if previous != nil && previous != s {
+		if err := previous.Close(); err != nil {
+			e.Log.Error("an earlier session for this snapshot could not be closed",
+				"snapshot", s.ID, "err", err)
+		}
+	}
 }
 
 func (e *Engine) dropSession(id string) *inspect.Session {

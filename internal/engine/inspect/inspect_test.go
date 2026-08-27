@@ -881,3 +881,55 @@ func TestSession_DependenciesAreTheSameRecordsAsTheManifest(t *testing.T) {
 		}
 	}
 }
+
+// Two snapshots open at once is the ordinary case — comparing a capture against
+// the one before it is most of what the library is for — and the second one
+// failed to index at all:
+//
+//	creating the index schema: SQL logic error: table users already exists (1)
+//
+// The on-disk index has always been one file per snapshot. The in-memory one,
+// which is what a realm under the threshold gets, was a shared-cache database
+// under a fixed name: process-wide, so the second snapshot opened the first
+// one's database and found its schema already there. Worse than the error would
+// have been the version that did not error and mixed two realms' users into one
+// searchable table.
+func TestIndex_IsOnePerSnapshot(t *testing.T) {
+	ctx := context.Background()
+
+	first := openSession(t, crypto.Config{})
+	defer first.Close() //nolint:errcheck
+	second := openSession(t, crypto.Config{})
+	defer second.Close() //nolint:errcheck
+
+	a, err := first.Index(ctx, nil)
+	if err != nil {
+		t.Fatalf("the first snapshot could not be indexed: %v", err)
+	}
+	b, err := second.Index(ctx, nil)
+	if err != nil {
+		t.Fatalf("a second snapshot open at the same time could not be indexed: %v", err)
+	}
+
+	if a.Counts().Users != b.Counts().Users {
+		t.Fatalf("the same fixture indexed differently: %d and %d", a.Counts().Users, b.Counts().Users)
+	}
+	// Each holds its own realm's users once, not both realms' twice.
+	page, err := b.Users(ctx, index.UserFilter{}, index.SortUsername, false, 0, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.Total != b.Counts().Users {
+		t.Errorf("the second index holds %d users but counted %d; two snapshots are sharing one table",
+			page.Total, b.Counts().Users)
+	}
+
+	// And closing one leaves the other usable, which a shared database would
+	// not survive either.
+	if err := a.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.Users(ctx, index.UserFilter{}, index.SortUsername, false, 0, 10); err != nil {
+		t.Errorf("closing one snapshot's index broke another's: %v", err)
+	}
+}

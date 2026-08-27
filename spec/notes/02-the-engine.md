@@ -306,3 +306,49 @@ thing that replaced a prompt has to leave more evidence than the prompt did, not
 stored key. `TestKeys_*` (`internal/app/keys_test.go`) covers the store itself: generated keys
 are usable, imports derive their own public half, deletion takes the secret with it, and a reveal
 is audited without recording what was revealed.
+
+---
+
+## 13. An in-memory SQLite database is named, and a name is shared
+
+**Symptom** — Open one snapshot, browse its users, open a second, and its Users
+tab shows only:
+
+```
+creating the index schema: SQL logic error: table users already exists (1)
+```
+
+The first snapshot is fine. Every subsequent one in the same run of the
+application is not.
+
+**Cause** — The inspection index is one database per snapshot, and the on-disk
+form always was: `Home.IndexFile(snapshotID)`. The in-memory form — which is
+what a realm under `InMemoryThreshold` gets, so that a small realm never touches
+disk — opened `file::memory:?cache=shared`. SQLite's shared cache keys an
+in-memory database by **name**, and that name was a constant. Every index in the
+process was therefore the same database, and the second `CREATE TABLE users`
+found the first one's schema already there.
+
+The error was the lucky outcome. The same bug one step to the left — a schema
+created with `IF NOT EXISTS` — mixes two realms' users into one searchable table
+and answers questions about the wrong organisation.
+
+The cache cannot simply be made private: an unshared in-memory database lives
+only as long as the connection that created it, and `database/sql` may retire an
+idle connection underneath the index. So the isolation has to come from the name.
+
+**Rule** — One index is one snapshot, in memory or on disk, sharing nothing. The
+in-memory database name carries a process-unique sequence number; the snapshot id
+is folded in for legibility only, never for uniqueness.
+
+The same rule caught a second case one layer up: re-opening a snapshot that was
+already open replaced the session in the engine's map without closing the one it
+displaced, leaving a decrypted working directory on disk until the next launch
+swept it — and, above the threshold, a second index truncating the first one's
+file underneath it. A session that is replaced is closed.
+
+**Guard** — `TestIndex_IsOnePerSnapshot`
+(`internal/engine/inspect/inspect_test.go`) opens two snapshots at once, indexes
+both, and checks that each holds its own realm's users and that closing one does
+not break the other. `TestSessions_ReopeningASnapshotClosesTheOneItReplaces`
+(`internal/app/keys_test.go`) covers the session map.
