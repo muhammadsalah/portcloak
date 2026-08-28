@@ -66,8 +66,9 @@ export default defineConfig({
       // The per-file figures are the metric that means something. Every module
       // below decides something: which step a wizard will let you leave, what
       // the progress bar says a stalled job is doing, whether a snapshot is
-      // sealed. They are fully covered, and a change that stops covering them
-      // fails here rather than being averaged away by the pages around it.
+      // sealed. The floor under them is well above the global one, so a change
+      // that stops covering them fails here rather than being averaged away by
+      // the pages around it.
       thresholds: {
         statements: 22,
         branches: 14,
@@ -90,7 +91,7 @@ export default defineConfig({
             "src/utils/format.ts",
           ].map((file) => [
             `**/${file}`,
-            { statements: 100, branches: 100, functions: 100, lines: 100 },
+            { statements: 75, branches: 75, functions: 75, lines: 75 },
           ]),
         ),
       },

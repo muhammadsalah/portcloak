@@ -24,12 +24,10 @@ import (
 	"time"
 
 	cerrdefs "github.com/containerd/errdefs"
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/filters"
-	"github.com/docker/docker/api/types/image"
-	"github.com/docker/docker/api/types/network"
-	"github.com/docker/docker/client"
-	"github.com/docker/docker/pkg/stdcopy"
+	"github.com/moby/moby/api/pkg/stdcopy"
+	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/api/types/network"
+	"github.com/moby/moby/client"
 
 	"portcloak/internal/engine/config"
 	"portcloak/internal/engine/kc"
@@ -46,13 +44,16 @@ type Platform struct {
 
 // NewPlatform connects to the Docker endpoint.
 func NewPlatform(env config.Environment) (*Platform, error) {
-	opts := []client.Opt{client.WithAPIVersionNegotiation()}
+	// API-version negotiation is not requested explicitly: the client performs
+	// it by default on the first request. It still happens, and PortCloak still
+	// depends on it — a fixed version would break against older daemons.
+	var opts []client.Opt
 	if env.DockerEndpoint != "" {
 		opts = append(opts, client.WithHost(env.DockerEndpoint))
 	} else {
 		opts = append(opts, client.FromEnv)
 	}
-	cli, err := client.NewClientWithOpts(opts...)
+	cli, err := client.New(opts...)
 	if err != nil {
 		return nil, resil.Fatal("connect to Docker",
 			fmt.Sprintf("PortCloak could not talk to Docker at %s.", endpointLabel(env)), err).
@@ -90,7 +91,7 @@ func (p *Platform) Probe(ctx context.Context) (target.TargetFacts, error) {
 		ReadOnlyNote: "Nothing was created or changed. The probe inspects the serving container and reads nothing else.",
 	}
 
-	if _, err := p.cli.Ping(ctx); err != nil {
+	if _, err := p.cli.Ping(ctx, client.PingOptions{}); err != nil {
 		facts.Fail("Docker endpoint", fmt.Sprintf("%s — %v", endpointLabel(p.env), err),
 			"Check that Docker is running and that this account can use its socket.")
 		return facts, nil
@@ -98,12 +99,13 @@ func (p *Platform) Probe(ctx context.Context) (target.TargetFacts, error) {
 	facts.Reachable = true
 	facts.Pass("Docker endpoint", endpointLabel(p.env))
 
-	info, err := p.cli.ContainerInspect(ctx, p.env.Container)
+	inspected, err := p.cli.ContainerInspect(ctx, p.env.Container, client.ContainerInspectOptions{})
 	if err != nil {
 		facts.Fail("Serving container", fmt.Sprintf("%s — not found", p.env.Container),
 			"Name the container or service running Keycloak. A container that is not running can still be selected, but a capture needs it to exist.")
 		return facts, nil
 	}
+	info := inspected.Container
 	state := "stopped"
 	if info.State != nil && info.State.Running {
 		state = "running"
@@ -192,11 +194,12 @@ func kcPathIn(configured string, env []string) string {
 
 // Inspect reads the serving container and derives a clone spec from it.
 func (p *Platform) Inspect(ctx context.Context, jobID string, realms []string) (clone.Spec, error) {
-	info, err := p.cli.ContainerInspect(ctx, p.env.Container)
+	inspected, err := p.cli.ContainerInspect(ctx, p.env.Container, client.ContainerInspectOptions{})
 	if err != nil {
 		return clone.Spec{}, resil.Fatal("read the serving container",
 			fmt.Sprintf("PortCloak could not inspect %s.", p.env.Container), err)
 	}
+	info := inspected.Container
 
 	env := map[string]string{}
 	for _, e := range info.Config.Env {
@@ -215,11 +218,12 @@ func (p *Platform) Inspect(ctx context.Context, jobID string, realms []string) (
 
 // Create materialises the clone.
 func (p *Platform) Create(ctx context.Context, spec clone.Spec) (string, error) {
-	info, err := p.cli.ContainerInspect(ctx, p.env.Container)
+	inspected, err := p.cli.ContainerInspect(ctx, p.env.Container, client.ContainerInspectOptions{})
 	if err != nil {
 		return "", resil.Fatal("read the serving container",
 			fmt.Sprintf("PortCloak could not inspect %s.", p.env.Container), err)
 	}
+	info := inspected.Container
 
 	envList := make([]string, 0, len(spec.Env))
 	for k, v := range spec.Env {
@@ -278,7 +282,9 @@ func (p *Platform) Create(ctx context.Context, spec clone.Spec) (string, error) 
 		}
 	}
 
-	created, err := p.cli.ContainerCreate(ctx, cfg, host, netCfg, nil, clone.Name(spec.JobID))
+	created, err := p.cli.ContainerCreate(ctx, client.ContainerCreateOptions{
+		Config: cfg, HostConfig: host, NetworkingConfig: netCfg, Name: clone.Name(spec.JobID),
+	})
 	if err != nil {
 		return "", resil.Fatal("create the ephemeral clone",
 			fmt.Sprintf("Docker refused to create the clone: %v", err), err).
@@ -286,10 +292,10 @@ func (p *Platform) Create(ctx context.Context, spec clone.Spec) (string, error) 
 	}
 	ref := "container/" + created.ID[:12]
 
-	if err := p.cli.ContainerStart(ctx, created.ID, container.StartOptions{}); err != nil {
+	if _, err := p.cli.ContainerStart(ctx, created.ID, client.ContainerStartOptions{}); err != nil {
 		// The container exists even though it did not start, so it is removed
 		// here rather than left for the sweep.
-		_ = p.cli.ContainerRemove(ctx, created.ID, container.RemoveOptions{Force: true})
+		_, _ = p.cli.ContainerRemove(ctx, created.ID, client.ContainerRemoveOptions{Force: true})
 		return "", resil.Fatal("start the ephemeral clone",
 			fmt.Sprintf("The clone was created but would not start: %v", err), err)
 	}
@@ -303,11 +309,12 @@ func (p *Platform) WaitRunning(ctx context.Context, ref string) error {
 	id := containerID(ref)
 	deadline := time.Now().Add(2 * time.Minute)
 	for {
-		info, err := p.cli.ContainerInspect(ctx, id)
+		inspected, err := p.cli.ContainerInspect(ctx, id, client.ContainerInspectOptions{})
 		if err != nil {
 			return resil.Retry("wait for the ephemeral clone",
 				"PortCloak lost sight of the clone while waiting for it to start.", err)
 		}
+		info := inspected.Container
 		if info.State != nil && info.State.Running {
 			return nil
 		}
@@ -341,7 +348,7 @@ func (p *Platform) exec(ctx context.Context, id string, cmd target.Command) (tar
 	}
 	sort.Strings(envList)
 
-	created, err := p.cli.ContainerExecCreate(ctx, id, container.ExecOptions{
+	created, err := p.cli.ExecCreate(ctx, id, client.ExecCreateOptions{
 		Cmd: argv, Env: envList, WorkingDir: cmd.Dir,
 		AttachStdout: true, AttachStderr: true,
 	})
@@ -350,7 +357,7 @@ func (p *Platform) exec(ctx context.Context, id string, cmd target.Command) (tar
 			"PortCloak could not start a command inside the clone.", err)
 	}
 
-	attached, err := p.cli.ContainerExecAttach(ctx, created.ID, container.ExecStartOptions{})
+	attached, err := p.cli.ExecAttach(ctx, created.ID, client.ExecAttachOptions{})
 	if err != nil {
 		return target.ExecResult{}, resil.Retry("run the command",
 			"PortCloak could not attach to the command inside the clone.", err)
@@ -367,7 +374,7 @@ func (p *Platform) exec(ctx context.Context, id string, cmd target.Command) (tar
 	outPipe.flush()
 	errPipe.flush()
 
-	inspect, err := p.cli.ContainerExecInspect(ctx, created.ID)
+	inspect, err := p.cli.ExecInspect(ctx, created.ID, client.ExecInspectOptions{})
 	if err != nil {
 		return target.ExecResult{}, resil.Retry("run the command",
 			"PortCloak could not read how the command ended.", err)
@@ -385,7 +392,7 @@ func (p *Platform) exec(ctx context.Context, id string, cmd target.Command) (tar
 // The Engine API produces its own tar stream, so an image without tar — a
 // distroless base, for instance — is survivable.
 func (p *Platform) CopyOut(ctx context.Context, ref, dir string, sink target.ArtifactSink) error {
-	rc, _, err := p.cli.CopyFromContainer(ctx, containerID(ref), dir)
+	copied, err := p.cli.CopyFromContainer(ctx, containerID(ref), client.CopyFromContainerOptions{SourcePath: dir})
 	if err != nil {
 		if cerrdefs.IsNotFound(err) {
 			// A directory that is not there is not an empty capture. Reporting
@@ -399,6 +406,7 @@ func (p *Platform) CopyOut(ctx context.Context, ref, dir string, sink target.Art
 		return resil.Retry("collect the exported files",
 			fmt.Sprintf("PortCloak could not read %s out of the clone.", dir), err)
 	}
+	rc := copied.Content
 	defer rc.Close() //nolint:errcheck
 
 	base := path.Base(strings.TrimRight(dir, "/"))
@@ -449,8 +457,9 @@ func (p *Platform) CopyIn(ctx context.Context, ref, dest string, size int64, own
 	if err := tw.Close(); err != nil {
 		return err
 	}
-	err := p.cli.CopyToContainer(ctx, containerID(ref), path.Dir(dest), &buf,
-		container.CopyToContainerOptions{})
+	_, err := p.cli.CopyToContainer(ctx, containerID(ref), client.CopyToContainerOptions{
+		DestinationPath: path.Dir(dest), Content: &buf,
+	})
 	if err != nil {
 		return resil.Retry("send the snapshot",
 			fmt.Sprintf("PortCloak could not write %s into the clone.", dest), err)
@@ -461,7 +470,7 @@ func (p *Platform) CopyIn(ctx context.Context, ref, dest string, size int64, own
 // Destroy removes the clone. A clone that is already gone is success: the
 // desired end state has been reached either way.
 func (p *Platform) Destroy(ctx context.Context, ref string) error {
-	err := p.cli.ContainerRemove(ctx, containerID(ref), container.RemoveOptions{Force: true, RemoveVolumes: true})
+	_, err := p.cli.ContainerRemove(ctx, containerID(ref), client.ContainerRemoveOptions{Force: true, RemoveVolumes: true})
 	if err != nil && !cerrdefs.IsNotFound(err) {
 		return err
 	}
@@ -470,10 +479,10 @@ func (p *Platform) Destroy(ctx context.Context, ref string) error {
 
 // FindOrphans lists containers carrying PortCloak's own label.
 func (p *Platform) FindOrphans(ctx context.Context) ([]target.Orphan, error) {
-	args := filters.NewArgs()
-	args.Add("label", target.LabelEphemeral)
-
-	list, err := p.cli.ContainerList(ctx, container.ListOptions{All: true, Filters: args})
+	list, err := p.cli.ContainerList(ctx, client.ContainerListOptions{
+		All:     true,
+		Filters: make(client.Filters).Add("label", target.LabelEphemeral),
+	})
 	if err != nil {
 		// An environment that could not be checked is reported as unchecked,
 		// never as clean.
@@ -481,15 +490,15 @@ func (p *Platform) FindOrphans(ctx context.Context) ([]target.Orphan, error) {
 			fmt.Sprintf("PortCloak could not list containers on %s, so it cannot say whether any were left behind.", endpointLabel(p.env)), err)
 	}
 
-	out := make([]target.Orphan, 0, len(list))
-	for _, c := range list {
+	out := make([]target.Orphan, 0, len(list.Items))
+	for _, c := range list.Items {
 		out = append(out, target.Orphan{
 			Environment: p.env.Name,
 			Kind:        string(config.EnvDocker),
 			Ref:         "container/" + c.ID,
 			JobID:       c.Labels[target.LabelJob],
 			CreatedAt:   time.Unix(c.Created, 0),
-			State:       c.State,
+			State:       string(c.State),
 		})
 	}
 	return out, nil
@@ -547,7 +556,3 @@ func (w *lineWriter) flush() {
 }
 
 func (w *lineWriter) String() string { return w.all.String() }
-
-// unused keeps the image import honest while the pull path is out of scope for
-// 0.0.1: PortCloak never pulls, it only checks that the image is present.
-var _ = image.InspectOptions{}

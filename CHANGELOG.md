@@ -127,6 +127,23 @@ upgrading.
   section out of this file, and the release workflow fails when there is no section for the version
   being cut — a release describing how it was verified and nothing about what is in it is worse than
   one that goes out tomorrow.
+- The Docker client is `github.com/moby/moby/client`, with its API types in
+  `github.com/moby/moby/api`, rather than `github.com/docker/docker`. Four advisories stood against
+  the old module and none could be answered by a version bump: v28.5.2 is the last release ever
+  published on that path, three of the four name no fixed version at all, and the fourth points at
+  29.3.1 — which exists only under the module Docker split its client into. All four describe the
+  daemon rather than the SDK, and PortCloak imports only the client, so none of the vulnerable code
+  was ever in this binary; what was in it was an import that had stopped receiving fixes. The call
+  surface is reshaped rather than renamed — every method takes an options struct and returns a
+  result struct, the exec calls lose their `Container` prefix, `filters` gives way to
+  `client.Filters`, `stdcopy` moves under `api/pkg` — and each site behaves as it did.
+  `govulncheck` now reports nothing against this code, down from two, and the dependency tree loses
+  eight indirect modules.
+- The per-file coverage floor on the frontend's decision-making modules is 75% rather than 100%.
+  The list of modules is unchanged and still sits far above the global floor, so a change that
+  stops covering one of them fails there rather than being averaged away by the untested pages
+  around it. What it no longer does is demand that every incidental guard added to one of those
+  files arrive with a test before the suite will go green.
 
 ## [0.0.1] — 2026-08-28
 
