@@ -127,6 +127,33 @@ func (h *harness) waitForJobs(ids []string) []*config.Job {
 	}
 }
 
+// waitForResume waits for a resumed job, which waitForJobs alone cannot do.
+//
+// ResumeUpload starts a goroutine and returns, so for a moment afterwards the
+// job on disk is still the interrupted one and the orchestrator is not yet
+// tracking it as running. waitForJobs counts interrupted as settled — it has
+// to, because that is how a dropped upload legitimately ends — and so returns
+// the job as it was before the resume, and the assertions that follow read the
+// previous attempt's state and message. Under coverage instrumentation that
+// window is wide enough to hit every time.
+//
+// So: first wait for the resume to be picked up, then wait for it to finish.
+func (h *harness) waitForResume(id string) *config.Job {
+	h.t.Helper()
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		j, err := h.jobs.Load(id)
+		if err == nil && j.State != config.JobInterrupted {
+			break
+		}
+		if time.Now().After(deadline) {
+			h.t.Fatalf("the resume of %s never started", id)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	return h.waitForJobs([]string{id})[0]
+}
+
 func (h *harness) capture(req orchestrator.CaptureRequest) []*config.Job {
 	h.t.Helper()
 	handle, err := h.orc.Capture(context.Background(), req)

@@ -88,7 +88,7 @@ func TestResume_ConvergesOnTheSameObject(t *testing.T) {
 	if err := h.orc.ResumeUpload(context.Background(), j.ID); err != nil {
 		t.Fatal(err)
 	}
-	resumed := h.waitForJobs([]string{j.ID})[0]
+	resumed := h.waitForResume(j.ID)
 
 	if resumed.State != config.JobCompleted {
 		t.Fatalf("the resumed job ended %s: %s", resumed.State, resumed.Message)
