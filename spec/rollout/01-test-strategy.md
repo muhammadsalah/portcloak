@@ -17,7 +17,7 @@ things that can actually go wrong.
 | **Fidelity loss** | The bundle is missing something, or carries a masked placeholder instead of a real secret, and nobody notices until login fails on the destination. | Fixture-matrix integration tests + the completeness report assertions (§1.5). |
 | **Collateral damage** | A production pod is disturbed, a `Service` routes live traffic into an export pod, an ephemeral clone is left running. | Clone lifecycle tests, the label-stripping test, and the leak sweep (§1.6). |
 | **Silent corruption** | A transfer is interrupted and the result *looks* like a valid bundle. | Fault-injection tests + checksum-tree verification (§1.7). |
-| **Secret leakage** | A bind password or client secret reaches a log file, a crash dump, an exported CSV or a screenshot. | The redaction suite (§1.8), which is its own CI stage. |
+| **Secret leakage** | A bind password or client secret reaches a log file, a crash dump or a screenshot. | The redaction suite (§1.8), which is its own CI stage. |
 
 Everything below exists to catch one of these four. A test that catches none of them, and does
 not protect a refactor, is a test worth deleting.

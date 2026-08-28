@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -727,93 +726,6 @@ func TestReveal_FromAnUnencryptedSnapshotSaysSo(t *testing.T) {
 	note := s.RevealNote()
 	if !strings.Contains(note, "not encrypted") {
 		t.Errorf("the note should say the value was already in the clear: %q", note)
-	}
-}
-
-func TestExport_IsRedactedAndAudited(t *testing.T) {
-	s := openSession(t, crypto.Config{})
-	ctx := context.Background()
-	dir := t.TempDir()
-	audit, err := obs.NewAuditLog(filepath.Join(dir, "audit.log"))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	views := []inspect.ExportView{
-		inspect.ExportUsers, inspect.ExportClients, inspect.ExportSecretLedger,
-		inspect.ExportCompleteness, inspect.ExportDependencies, inspect.ExportKeys,
-	}
-	for _, view := range views {
-		for _, format := range []inspect.ExportFormat{inspect.FormatCSV, inspect.FormatJSON} {
-			path := filepath.Join(dir, fmt.Sprintf("%s.%s", view, format))
-			res, err := s.Export(ctx, inspect.ExportRequest{View: view, Format: format, Path: path}, audit)
-			if err != nil {
-				t.Fatalf("%s as %s: %v", view, format, err)
-			}
-			if res.Rows == 0 && view != inspect.ExportDependencies {
-				t.Errorf("%s as %s exported no rows", view, format)
-			}
-
-			raw, err := os.ReadFile(path)
-			if err != nil {
-				t.Fatal(err)
-			}
-			for _, forbidden := range []string{
-				"app-web-real-secret", "ldap-bind-password", "smtp-password-value",
-				"azure-secret-value", "T1RQU0VDUkVU", "aGFzaA==",
-			} {
-				if strings.Contains(string(raw), forbidden) {
-					t.Errorf("%s as %s contains %q", view, format, forbidden)
-				}
-			}
-		}
-	}
-
-	entries, err := audit.Read(obs.AuditFilter{Action: obs.ActionExportView})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(entries) != len(views)*2 {
-		t.Errorf("got %d export audit entries, want %d", len(entries), len(views)*2)
-	}
-}
-
-func TestExport_UsersCarriesPresenceNotValues(t *testing.T) {
-	s := openSession(t, crypto.Config{})
-	path := filepath.Join(t.TempDir(), "users.csv")
-	if _, err := s.Export(context.Background(), inspect.ExportRequest{
-		View: inspect.ExportUsers, Format: inspect.FormatCSV, Path: path,
-	}, nil); err != nil {
-		t.Fatal(err)
-	}
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	header := strings.SplitN(string(raw), "\n", 2)[0]
-	for _, want := range []string{"hasPassword", "passwordAlgorithm", "otpEnrolments", "passkeys"} {
-		if !strings.Contains(header, want) {
-			t.Errorf("the export is missing the %q column: %s", want, header)
-		}
-	}
-	for _, forbidden := range []string{"hash", "seed", "secret"} {
-		if strings.Contains(strings.ToLower(header), forbidden) {
-			t.Errorf("the export has a column that sounds like a value: %s", header)
-		}
-	}
-}
-
-func TestExport_UnwritableDestinationNamesThePath(t *testing.T) {
-	s := openSession(t, crypto.Config{})
-	_, err := s.Export(context.Background(), inspect.ExportRequest{
-		View: inspect.ExportClients, Format: inspect.FormatCSV,
-		Path: "/proc/definitely-not-writable/users.csv",
-	}, nil)
-	if err == nil {
-		t.Fatal("an unwritable destination was accepted")
-	}
-	if !strings.Contains(err.Error(), "definitely-not-writable") {
-		t.Errorf("the failure does not name the path: %v", err)
 	}
 }
 

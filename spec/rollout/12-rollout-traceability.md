@@ -87,7 +87,7 @@ backend itself (SFTP in P3, S3 and Azure in P5).*
 | UC-I9 | Reveal a single secret | P6 | `TestReveal_WritesAuditAndNeverLogs`; `TestReveal_FromAnUnencryptedSnapshotSaysSo`; `TestReveal_RefusalsAreExplained` |
 | UC-I10 | Review external dependencies | P6 · P8 | `TestSession_DependenciesAreTheSameRecordsAsTheManifest`; `TestBuild_KeystoreFileIsReportedAsADependency` |
 | UC-I11 | Verify a snapshot without restoring | P6 | `TestVerify_ReportsPerArtifactAndContactsNothing`; `TestOpen_TamperedBundleOpensDegradedAndNamesTheArtifact` |
-| UC-I12 | Export an inspection view | P6 | `TestExport_IsRedactedAndAudited`; `TestExport_UnwritableDestinationNamesThePath` |
+| ~~UC-I12~~ | *Withdrawn — a snapshot exports nothing* | — | — |
 | UC-I13 | Close a snapshot | P6 | `TestSession_CloseDestroysTheIndexAndWorkingFiles` |
 
 ### Restore (8)
@@ -220,12 +220,16 @@ destination can use it. Only the second proves the promise.
 | FR-V6 every other entity type | P6 | `TestSession_DependenciesAreTheSameRecordsAsTheManifest`; `TestIndex_SearchPageAndFacets` |
 | FR-V7 audited single-secret reveal | P6 | `TestReveal_WritesAuditAndNeverLogs`; `TestReveal_RefusalsAreExplained` |
 | FR-V8 verify without restoring | P6 | `TestVerify_ReportsPerArtifactAndContactsNothing` |
-| FR-V10 export an inspection view | P6 | `TestExport_IsRedactedAndAudited`; `TestExport_UsersCarriesPresenceNotValues` |
 
 Withdrawn and therefore delivered by nobody: **FR-F10** (sessions,
 [D1](../12-decisions.md)) and **FR-V9** (snapshot comparison). Both are verified
 negatively — the tool reports them as out of scope rather than silently omitting
 them: `TestCompleteness_OutOfScopeIsNotMissing`.
+
+**FR-V10** (export an inspection view, with **UC-I12**) is withdrawn differently:
+it was built, shipped in 0.0.1, and taken out again in 0.0.2. There is nothing to
+verify negatively because there is nothing to report as out of scope — a snapshot
+simply has no export, and the audit log is the record the export was defending.
 
 ## 12.3 Non-functional requirements → phase and evidence
 
@@ -264,9 +268,10 @@ No phase delivers nothing.
 
 | | Count | Has a phase | Has named evidence |
 |---|---:|---:|---:|
-| Use cases | 60 | 60 | 60 |
-| Functional requirements (active) | 50 | 50 | 50 |
-| Functional requirements (withdrawn) | 2 | — | verified negatively |
+| Use cases (active) | 59 | 59 | 59 |
+| Use cases (withdrawn) | 1 | — | — |
+| Functional requirements (active) | 49 | 49 | 49 |
+| Functional requirements (withdrawn) | 3 | — | two verified negatively |
 | Non-functional requirements | 11 | 11 | 11 |
 
 `build/ci/check-traceability.sh` verifies every test named above still exists, and CI runs it on

@@ -257,24 +257,19 @@ values, OTP seeds or passkey material.
 
 ---
 
-## UC-I12 — Export an inspection view
+## UC-I12 — Export an inspection view *(withdrawn)*
 
-**Goal.** Get evidence out for a ticket or an audit.
+A snapshot exports nothing. A table view could once be written out as CSV or JSON, carrying the
+currently filtered rows under the same redaction as the screen and auditing the act of writing
+them — safe, and that was the whole of it. Every view is presence rather than values, so the
+file held nothing the screen had not already shown, and what it added was a second copy of an
+audited reading: outside the session that produced it, outside the shredding that closes one,
+and from then on somebody's to keep track of.
 
-**Main success scenario**
-1. Operator chooses *Export* on a table view and picks CSV or JSON.
-2. PortCloak writes the **currently filtered** rows, applying **the same redaction rules as the
-   UI** — presence, never values.
-3. The export action is itself audited.
+Evidence for a ticket comes from the reading, which the audit log records, or from the screen.
+Neither leaves a file behind for the operator to look after.
 
-**Alternate flows**
-- **A1 — Secret ledger export.** Types and locations only.
-
-**Exceptions**
-- **E1 — Destination not writable.** Reported with the path.
-
-**Postconditions.** A redacted file exists; exporting never becomes a secret-exfiltration path.
-**Covers.** FR-V10.
+**Covers.** Nothing. FR-V10 is withdrawn.
 
 ---
 

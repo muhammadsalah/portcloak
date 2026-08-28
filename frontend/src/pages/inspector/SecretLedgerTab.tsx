@@ -11,7 +11,7 @@
 import { useEffect, useState } from "react";
 import styled from "styled-components";
 
-import { InspectAPI, type LedgerEntry, type UsersQuery } from "../../api";
+import { InspectAPI, type LedgerEntry } from "../../api";
 import {
   Card,
   CardFoot,
@@ -33,13 +33,7 @@ import { useAsync } from "../../hooks/useAsync";
 
 type Modal = ReturnType<typeof useModal>;
 
-export function SecretLedgerTab({
-  snapshotId,
-  onExport,
-}: {
-  snapshotId: string;
-  onExport: (query: UsersQuery) => void;
-}) {
+export function SecretLedgerTab({ snapshotId }: { snapshotId: string }) {
   const { state } = useAsync(() => InspectAPI.ledger(snapshotId), [snapshotId]);
 
   if (state.status === "failed") throw state.error;
@@ -79,7 +73,6 @@ export function SecretLedgerTab({
 
         <CardFoot>
           <Small>{ledger.summary}</Small>
-          <Link onClick={() => onExport(emptyQuery(snapshotId))}>Export ledger (redacted) ↓</Link>
         </CardFoot>
       </Card>
     </div>
@@ -214,30 +207,6 @@ function RevealForm({
       />
     </div>
   );
-}
-
-/**
- * The ledger export takes the same query shape as the users export, which the
- * engine ignores for this view. It is passed rather than omitted so the export
- * call has one signature.
- */
-function emptyQuery(snapshotId: string): UsersQuery {
-  return {
-    snapshotId,
-    query: "",
-    enabled: "",
-    origin: "",
-    secondFactor: "",
-    realmRole: "",
-    clientRole: "",
-    client: "",
-    group: "",
-    requiredAction: "",
-    sort: "username",
-    descending: false,
-    offset: 0,
-    limit: 25,
-  };
 }
 
 const Status = styled.td<{ $masked: boolean }>`

@@ -33,7 +33,7 @@ import {
 } from "../../design-system";
 import { count, when } from "../../utils/format";
 import { KeyPrompt } from "./KeyPrompt";
-import { closeSnapshot, exportView, verify } from "./actions";
+import { closeSnapshot, verify } from "./actions";
 import { DependenciesTab, EntityTab } from "./EntitiesTabs";
 import { OverviewTab } from "./OverviewTab";
 import { SecretLedgerTab } from "./SecretLedgerTab";
@@ -259,20 +259,13 @@ function TabPanel({
   overview: Overview;
   snapshotId: string;
 }) {
-  const modal = useModal();
-
   switch (tab) {
     case "overview":
       return <OverviewTab overview={overview} />;
     case "users":
       return <UsersTab snapshotId={snapshotId} indexNote={overview.indexNote} />;
     case "secrets":
-      return (
-        <SecretLedgerTab
-          snapshotId={snapshotId}
-          onExport={(query) => exportView(snapshotId, "secretLedger", query, modal)}
-        />
-      );
+      return <SecretLedgerTab snapshotId={snapshotId} />;
     case "deps":
       return <DependenciesTab snapshotId={snapshotId} />;
     default:

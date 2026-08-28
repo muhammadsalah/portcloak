@@ -14,7 +14,7 @@ leaving nothing behind on disk.
 This is the phase that answers the question people actually have before a migration: *is what I
 need actually in there?*
 
-**Covers.** UC-I1…UC-I13, UC-O10 · FR-V1…FR-V8, FR-V10 · NFR-9, NFR-10.
+**Covers.** UC-I1…UC-I13, UC-O10 · FR-V1…FR-V8 · NFR-9, NFR-10.
 
 **Depends on.** P0…P5.
 
@@ -110,13 +110,11 @@ whole bundle bad.
 *Done when:* verification passes on a good bundle, and on a bundle with one flipped byte it names
 exactly which artifact failed.
 
-### T-P6.9 — Export an inspection view
-Export the user list, client list, secret ledger or completeness report as CSV or JSON (FR-V10,
-UC-I12), **redacted** — the exported ledger carries locations and kinds, never values. The export
-is an audited action, since it creates a copy of directory data outside the tool.
-
-*Done when:* every export type round-trips; the redaction suite covers exported files; each export
-writes an audit entry.
+### T-P6.9 — Export an inspection view *(withdrawn)*
+A snapshot exports nothing. This shipped and was taken out again: every view is already presence
+rather than values, so a file of one held nothing the screen did not, and the copy it made of an
+audited reading lived outside the session that produced it and outside the shredding that closes
+one. The audit log is the record the export was defending, and it is already kept.
 
 ### T-P6.10 — Close a snapshot
 Explicit close (UC-I13): release the bundle, destroy the index, and say so. Closing is a visible
@@ -155,7 +153,7 @@ with latency and memory budgets asserted.
 
 **Security.** `TestIndexSchemaHasNoSecretColumns` — a structural assertion over the schema, so
 adding a secret column requires deliberately changing a test that says not to.
-`TestIndexFileIsRemovedOnClose`. `TestReveal_WritesAudit`. `TestExport_IsRedacted`.
+`TestIndexFileIsRemovedOnClose`. `TestReveal_WritesAudit`.
 
 **Performance.** On `large`: index build time and peak memory; search and page latency budgets.
 NFR-9 is a promise about responsiveness, and a promise without a number is not testable.
@@ -176,7 +174,6 @@ The question is whether it feels like a directory browser or like a file viewer.
 | FR-V6 · UC-I7 · UC-I10 | `TestBrowse_AllEntityTypes` — counts reconcile with the manifest. |
 | FR-V7 · UC-I8 · UC-I9 | `TestReveal_WritesAudit`, `TestReveal_NeverLogs`, `TestLedger_ContainsNoValues`. |
 | FR-V8 · UC-I11 | `TestVerify_GoodBundle` and `TestVerify_NamesFailingArtifact`. |
-| FR-V10 · UC-I12 | `TestExport_AllViews` and `TestExport_IsRedacted`. |
 | UC-I3 | `TestIndexBuild_Large` — bounded memory, visible progress. |
 | UC-I13 | `TestIndexDestroyedOnClose` / `OnExit` / `SweptAfterCrash`. |
 | NFR-9 | Recorded latency and memory numbers on `large`, attached to the phase record. |

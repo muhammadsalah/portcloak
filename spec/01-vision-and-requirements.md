@@ -196,8 +196,9 @@ mid-transfer.
   restore.
 - **FR-V9** *(withdrawn — snapshot comparison is out of scope. The pre-restore **dry-run diff**
   against a live target realm remains, under FR-R2.)*
-- **FR-V10** **Export an inspection view** (user list, client list, secret ledger, completeness
-  report) as CSV/JSON for audit and change-review purposes.
+- **FR-V10** *(withdrawn — a snapshot exports nothing. The inspector reads a snapshot on screen
+  and leaves it there: every view was already redacted to presence rather than values, so a file
+  of it added a second copy to look after and no fact the screen did not already show.)*
 
 ### Manifest & reporting
 

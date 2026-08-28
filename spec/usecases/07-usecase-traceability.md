@@ -68,7 +68,7 @@ requirement is left without a behaviour that realises it.
 | UC-I9 | Reveal a secret | FR-V7, NFR-3, NFR-5 | [10 §10.6](../10-snapshot-inspection.md) |
 | UC-I10 | Review external dependencies | FR-D2, FR-V6 | [07 §M](../07-realm-carryover-manifest.md) |
 | UC-I11 | Verify without restoring | FR-V8, NFR-2 | [10 §10.7](../10-snapshot-inspection.md) |
-| UC-I12 | Export an inspection view | FR-V10 | [10 §10.8](../10-snapshot-inspection.md) |
+| ~~UC-I12~~ | *Withdrawn — a snapshot exports nothing* | — | [10 §10.8](../10-snapshot-inspection.md) |
 | UC-I13 | Close a snapshot | NFR-10, NFR-11 | [10 §10.3](../10-snapshot-inspection.md) |
 
 ## Restore

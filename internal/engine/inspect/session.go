@@ -5,7 +5,6 @@ package inspect
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -593,10 +592,6 @@ func SweepWorkDirs(home config.Home, keep map[string]bool) (removed int, err err
 	}
 	return removed, err
 }
-
-// marshalIndent is the shared encoder for exports, kept here so every export
-// path produces the same shape.
-func marshalIndent(v any) ([]byte, error) { return json.MarshalIndent(v, "", "  ") }
 
 // RealmFiles are the export artifacts this snapshot carries, in bundle-relative
 // form.

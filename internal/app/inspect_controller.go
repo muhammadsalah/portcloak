@@ -429,26 +429,6 @@ func verifyOutcome(ok bool) string {
 	return "failed verification"
 }
 
-// Export writes a view to disk, redacted.
-func (i *InspectController) Export(snapshotID string, req inspect.ExportRequest, q UsersQuery) (inspect.ExportResult, *Failure) {
-	s, err := i.eng.Session(snapshotID)
-	if err != nil {
-		return inspect.ExportResult{}, Fail(err)
-	}
-	// The export carries the rows currently shown, so what lands in the file is
-	// what was on screen.
-	req.Filter = q.filter()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
-	defer cancel()
-
-	res, err := s.Export(ctx, req, i.eng.Audit)
-	if err != nil {
-		return inspect.ExportResult{}, Fail(err)
-	}
-	return res, nil
-}
-
 // CloseResult confirms what closing removed.
 type CloseResult struct {
 	Confirmed string   `json:"confirmed"`

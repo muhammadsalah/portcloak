@@ -148,12 +148,17 @@ A **Verify** action downloads (or reads a cached) bundle, decrypts it, recompute
 integrity tree, and reports pass/fail per artifact — no target is touched. This turns
 "is my backup good?" into a routine, safe check rather than a restore drill.
 
-## 10.8 Exporting inspection views (FR-V10)
+## 10.8 Exporting inspection views (FR-V10, withdrawn)
 
-Any table view can be exported to CSV/JSON for audit trails and change-review tickets.
-Exports are **redacted by the same rules as the UI** (presence, not values), and an export
-action is itself audited. This keeps evidence-gathering from becoming an accidental
-secret-exfiltration path.
+A snapshot exports nothing. Any table view could once be written to CSV or JSON, redacted by
+the same rules as the UI and audited as it went — which made it safe, but did not make it
+useful. Every view is already presence rather than values, so the file carried no fact the
+screen did not, and what it did carry was a second copy of an audited reading, outside the
+session that produced it and outside anything that could shred it on close.
+
+The inspector reads a snapshot on screen and leaves it there. Where the reading has to go
+somewhere, the audit log is the record — it is the artefact the export was defending, and it
+is already kept.
 
 ## 10.9 Where it lives in the architecture
 
@@ -169,8 +174,8 @@ The Inspector depends on `BlobStore` (fetch), `CryptoVault` (decrypt), and `Inte
 
 ## 10.10 Requirement coverage
 
-Fulfills **FR-V1..FR-V8** and **FR-V10** (FR-V9 is withdrawn — snapshot comparison is out of
-scope), plus **NFR-9** and **NFR-10**. It also strengthens **FR-D2** (external dependencies are
+Fulfills **FR-V1..FR-V8** (FR-V9 and FR-V10 are withdrawn — snapshot comparison is out of
+scope, and a snapshot exports nothing), plus **NFR-9** and **NFR-10**. It also strengthens **FR-D2** (external dependencies are
 visible before import) and **FR-M3** (the manifest becomes explorable, not just readable).
 
 Because a snapshot holds exactly one realm (**FR-S6**), every view in this document is

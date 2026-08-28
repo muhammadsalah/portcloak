@@ -47,6 +47,17 @@ upgrading.
   transaction, and a page of a thousand can outrun the server's transaction limit and kill the
   export five minutes in. The range is enforced in the engine as well as the wizard.
 
+### Removed
+- A snapshot exports nothing. The user list and the secret ledger could each be written out as
+  CSV or JSON, redacted by the same rules as the screen and audited as they went — which made the
+  export safe, and never made it useful. Every inspection view is already presence rather than
+  values, so the file held no fact the screen had not shown; what it added was a second copy of an
+  audited reading, living outside the session that produced it and outside the shredding that
+  closes one, and from then on somebody's to keep track of. Where a reading has to be evidence,
+  the audit log is the record — it is the artefact the export was defending, and it is already
+  kept. `FR-V10` and `UC-I12` are marked withdrawn in the spec rather than deleted from it: they
+  were built and shipped in 0.0.1, and the design record should say so.
+
 ### Fixed
 - The row menu on a table was cut off at the edge of the card it opened in. Every table in the app
   sits in a box that scrolls sideways, and CSS computes `overflow-y` to `auto` alongside an explicit

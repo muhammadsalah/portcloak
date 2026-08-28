@@ -42,7 +42,6 @@ import {
 } from "../../design-system";
 import { useAsync } from "../../hooks/useAsync";
 import { count } from "../../utils/format";
-import { exportView } from "./actions";
 import { showUser } from "./UserDetail";
 
 const pageSize = 25;
@@ -214,9 +213,6 @@ export function UsersTab({ snapshotId, indexNote }: { snapshotId: string; indexN
               }
             >
               ›
-            </Button>
-            <Button onClick={() => exportView(snapshotId, "users", query, modal)}>
-              Export CSV
             </Button>
           </Row>
         </CardFoot>

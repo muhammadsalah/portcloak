@@ -592,13 +592,6 @@ export interface VerifyReport {
   note: string;
 }
 
-export interface ExportResult {
-  path: string;
-  rows: number;
-  bytes: number;
-  note: string;
-}
-
 export interface CloseResult extends MaybeFailed {
   confirmed: string;
 }
@@ -621,11 +614,6 @@ export const InspectAPI = {
     call<RevealResult>("InspectController", "Reveal", snapshotId, location, reason),
   verify: (snapshotId: string) =>
     call<[VerifyReport, Failure | null]>("InspectController", "Verify", snapshotId),
-  exportView: (
-    snapshotId: string,
-    req: { view: string; format: string; path: string },
-    q: UsersQuery,
-  ) => call<[ExportResult, Failure | null]>("InspectController", "Export", snapshotId, req, q),
   close: (snapshotId: string) => call<CloseResult>("InspectController", "Close", snapshotId),
 };
 

@@ -73,7 +73,7 @@ orphaned, and no module exists without a requirement.
 | FR-V7 | Audited, explicit secret reveal | Snapshot Inspector, Crypto Vault, Observability | [10 §10.6](./10-snapshot-inspection.md), [08](./08-security.md) |
 | FR-V8 | Verify integrity without restoring | Integrity Service, Crypto Vault | [10 §10.7](./10-snapshot-inspection.md) |
 | ~~FR-V9~~ | *Withdrawn — snapshot comparison out of scope; the pre-restore dry-run stays under FR-R2* | — | [09 §9.3](./09-workflows-and-ui.md) |
-| FR-V10 | Export inspection views (CSV/JSON), redacted | Snapshot Inspector, Observability | [10 §10.8](./10-snapshot-inspection.md) |
+| ~~FR-V10~~ | *Withdrawn — a snapshot exports nothing; the inspector reads it on screen* | — | [10 §10.8](./10-snapshot-inspection.md) |
 
 ## 11.5 Non-functional
 
