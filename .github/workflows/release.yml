@@ -347,12 +347,40 @@ jobs:
           retention-days: 7
 
   # ---------------------------------------------------------------------------
-  # Linux — both architectures through the Dockerfile's GTK/WebKit sysroot.
+  # Linux — one runner per architecture, built natively, no container.
+  #
+  # A native build inherits the host's glibc and GTK, which makes the runner
+  # image the compatibility floor. That is why the label is `ubuntu-22.04` and
+  # not `ubuntu-latest`: 22.04 carries glibc 2.35, and 24.04 carries 2.39.
+  # glibc is forward-compatible and not backward, so a binary built on 24.04
+  # will not start on Debian 12 or Ubuntu 22.04 — which build/README.md names
+  # as the people the gtk3 tag exists to serve.
+  #
+  # This used to build in the Debian 12 container on two emulated platforms.
+  # The container pinned the floor explicitly, which is worth something, but
+  # QEMU made the arm64 half take longer than macOS and Windows combined. On
+  # 22.04 the floor is a shade lower than the container's Debian 12 gave, so
+  # nothing is given up on reach — and the assertion below turns the one real
+  # risk of an inherited floor, GitHub eventually retiring this image, into a
+  # failed build rather than a release that silently stops starting.
+  #
+  # build/linux/Dockerfile stays. It is the only way to produce a Linux binary
+  # from a Mac, and it is the fallback if the runner images stop offering a
+  # distribution old enough to build against.
   # ---------------------------------------------------------------------------
   linux:
-    name: Linux (amd64 + arm64)
+    name: Linux (${{ matrix.arch }})
     needs: frontend
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      # One architecture failing should not hide whether the other works.
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-22.04
+          - arch: arm64
+            runner: ubuntu-22.04-arm
     env:
       VERSION: ${{ needs.frontend.outputs.version }}
     steps:
@@ -368,31 +396,64 @@ jobs:
           name: frontend-dist
           path: frontend/dist
 
-      # arm64 is built under emulation, which is slow but is the price of a
-      # correct sysroot — see build/linux/Dockerfile for why this target cannot
-      # be cross-compiled with the Go toolchain alone.
-      - uses: docker/setup-qemu-action@v4
-      - uses: docker/setup-buildx-action@v4
+      # The same two packages build/linux/Dockerfile installs, and the same
+      # ones ci.yml installs: gtk3 + webkit2gtk-4.1, which is what the gtk3
+      # build tag selects. Wails would otherwise default to webkitgtk-6.0,
+      # which is on none of the distributions this targets.
+      - name: GTK and WebKit
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
 
       - name: Build and package
-        run: ./build/package.sh --targets linux --version "$VERSION" --skip-frontend --linux-docker
+        run: |
+          ./build/package.sh --targets linux --version "$VERSION" \
+            --skip-frontend --linux-arch "${{ matrix.arch }}"
 
       - name: Refuse a binary linked against the wrong toolkit
         run: |
           set -euo pipefail
           # The gtk3 tag has to have taken, or the binary asks for
-          # webkitgtk-6.0 and will not start on Debian 12 or Ubuntu 22.04 —
-          # which is most of the people likely to run this. build/README.md
-          # names this as the check to run.
-          tar xzf dist/portcloak-*-linux-amd64.tar.gz -C "$RUNNER_TEMP"
-          needed=$(readelf -d "$RUNNER_TEMP"/portcloak-*-linux-amd64/bin/portcloak | grep NEEDED)
+          # webkitgtk-6.0 and will not start on Debian 12 or Ubuntu 22.04.
+          # build/README.md names this as the check to run.
+          tar xzf "dist/portcloak-${VERSION}-linux-${{ matrix.arch }}.tar.gz" -C "$RUNNER_TEMP"
+          needed=$(readelf -d "$RUNNER_TEMP/portcloak-${VERSION}-linux-${{ matrix.arch }}/bin/portcloak" | grep NEEDED)
           echo "$needed"
           echo "$needed" | grep -q 'libwebkit2gtk-4.1.so.0' \
             || { echo "not linked against webkit2gtk-4.1 — the gtk3 tag did not take" >&2; exit 1; }
 
+      - name: Refuse a binary that needs a newer glibc than we promise
+        run: |
+          set -euo pipefail
+          # The check that makes an inherited floor safe. Building natively
+          # means the runner image decides how old a system can run this, and
+          # GitHub supports only the latest two Ubuntu releases — so this label
+          # will be retired, and the replacement will carry a newer glibc. That
+          # is a silent break: the build succeeds and the binary refuses to
+          # start on a distribution nobody on the project is running.
+          #
+          # 2.35 is Ubuntu 22.04's, the oldest system build/README.md promises.
+          # A container build against Debian 12 reaches 2.34 today, so this has
+          # headroom rather than being set to whatever happens to pass.
+          #
+          # Compared numerically with sort -V, not matched against a pattern:
+          # real symbol versions include three-part ones like GLIBC_2.2.5,
+          # which a glob written for two parts would reject as too new.
+          floor=2.35
+          bin="$RUNNER_TEMP/portcloak-${VERSION}-linux-${{ matrix.arch }}/bin/portcloak"
+          highest=$(readelf --dyn-syms --wide "$bin" \
+            | grep -o 'GLIBC_[0-9][0-9.]*' | sed 's/^GLIBC_//' | sort -uV | tail -1)
+          echo "highest glibc symbol required: ${highest:-none} (floor $floor)"
+          if [ -n "$highest" ] && \
+             [ "$(printf '%s\n%s\n' "$highest" "$floor" | sort -V | tail -1)" != "$floor" ]; then
+            echo "requires glibc $highest, above the promised $floor." >&2
+            echo "Either the runner image moved, or something new is being linked in." >&2
+            exit 1
+          fi
+
       - uses: actions/upload-artifact@v7
         with:
-          name: artifacts-linux
+          name: artifacts-linux-${{ matrix.arch }}
           path: dist/*.tar.gz
           retention-days: 7
 

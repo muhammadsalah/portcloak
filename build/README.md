@@ -42,11 +42,25 @@ backend is cgo over GTK and WebKit — with `CGO_ENABLED=0` the build fails on
 undefined `pointer` in `webview_window_linux.go` — so it needs a C compiler
 *and* the GTK/WebKit headers and shared libraries for the target architecture.
 A cross C compiler on its own (zig cc, say) supplies libc but not those; a
-sysroot does, and `build/linux/Dockerfile` is the cheapest correct one. On a
-Linux host the script builds natively instead and skips Docker, because that is
-far faster and is what a developer on that machine wants; `--linux-docker`
-forces the container anyway, which is what a release needs. The architecture
-that does not match the host runs under emulation and is slow.
+sysroot does, and `build/linux/Dockerfile` is the cheapest correct one — which
+is how a Mac produces a Linux binary at all.
+
+On a Linux host the script builds natively and skips Docker, which is far
+faster and is what a developer on that machine wants. **The release does the
+same**, on `ubuntu-22.04` runners, one per architecture. A native build
+inherits the host's glibc and GTK, so the runner image is the compatibility
+floor, and that label is chosen rather than inherited: 22.04 carries glibc
+2.35, `ubuntu-latest` carries 2.39, and glibc is forward-compatible but not
+backward — a binary built on 24.04 will not start on Debian 12 or Ubuntu 22.04.
+The release asserts the resulting ceiling rather than trusting the label to
+stay available, because GitHub keeps only the latest two Ubuntu images.
+
+`--linux-docker` forces the container on a Linux host too. It is the fallback
+if the runner images stop offering a distribution old enough to build against,
+and `--linux-arch` builds one architecture rather than both. Under Docker, an
+architecture that does not match the host runs under emulation and is slow —
+which is why the release stopped doing that and put each architecture on a
+machine of its own.
 
 ## The gtk3 build tag
 

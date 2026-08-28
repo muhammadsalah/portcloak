@@ -13,6 +13,7 @@
 #   ./build/package.sh --stage-only             # build and assemble, do not archive
 #   ./build/package.sh --archive-only           # archive what is already staged
 #   ./build/package.sh --linux-docker           # containerise Linux even on Linux
+#   ./build/package.sh --linux-arch arm64       # just one Linux architecture
 #
 # Output lands in dist/ with a SHA256SUMS covering all of it.
 #
@@ -53,6 +54,7 @@ skip_frontend=0
 do_build=1
 do_archive=1
 linux_docker=0
+linux_arches="amd64 arm64"
 while [ $# -gt 0 ]; do
 	case "$1" in
 	--version) version="$2"; shift 2 ;;
@@ -61,6 +63,7 @@ while [ $# -gt 0 ]; do
 	--stage-only) do_archive=0; shift ;;
 	--archive-only) do_build=0; skip_frontend=1; shift ;;
 	--linux-docker) linux_docker=1; shift ;;
+	--linux-arch) linux_arches="$2"; shift 2 ;;
 	-h | --help) sed -n '2,42p' "$0"; exit 0 ;;
 	*) echo "unknown argument: $1" >&2; exit 2 ;;
 	esac
@@ -282,19 +285,27 @@ archive_linux() {
 }
 
 build_linux() {
-	# On a Linux host the default is a native build, because it is far faster
-	# and a developer wants their own machine's toolchain. A release wants the
-	# opposite: --linux-docker forces the container even here.
+	# On a Linux host the default is a native build. It is far faster, and the
+	# host's own toolchain is what a developer there wants.
 	#
-	# It is not only about the second architecture. A native build links
-	# against whatever GTK and glibc the host happens to carry — on a current
-	# runner image, newer than Debian 12 or Ubuntu 22.04 — and produces a
-	# binary that refuses to start for exactly the people build/README.md says
-	# the gtk3 tag exists to serve. The Dockerfile is the controlled sysroot,
-	# and a release is the case that needs one.
+	# It is also what the release uses, on `ubuntu-22.04` runners chosen for
+	# their glibc rather than taken as `ubuntu-latest`. A native build inherits
+	# the host's glibc and GTK, so the host is the floor: 22.04 carries glibc
+	# 2.35, older than the Dockerfile's Debian 12, and `ubuntu-latest` carries
+	# 2.39, which would not start on either. The release asserts the resulting
+	# ceiling rather than trusting the runner label to stay put.
+	#
+	# --linux-docker forces the container anyway. That is how a Mac produces a
+	# Linux binary at all — there is no native path there — and it is the
+	# fallback if the runner images ever stop offering a distribution old
+	# enough to build against.
 	if [ "$host" = "Linux" ] && [ "$linux_docker" -eq 0 ]; then
 		local arch
 		arch=$(go env GOARCH)
+		case " $linux_arches " in *" $arch "*) ;; *)
+			echo "!! skipping linux: --linux-arch asked for $linux_arches, this host is $arch" >&2
+			return ;;
+		esac
 		echo "==> linux/$arch (native)"
 		# gtk3: Wails defaults to GTK4 + webkitgtk-6.0, which Debian 12 and
 		# Ubuntu 22.04 do not carry. See build/linux/Dockerfile.
@@ -302,7 +313,12 @@ build_linux() {
 			-o "$dist/.pc-linux" ./cmd/portcloak
 		stage_linux "$arch" "$dist/.pc-linux"
 		rm -f "$dist/.pc-linux"
-		echo "!! the other Linux architecture needs Docker or a machine of that arch" >&2
+		# Only worth saying when both were asked for. A caller that named one
+		# architecture already knows it is getting one, and on a release runner
+		# this line would be a warning about working as instructed.
+		if [ "$linux_arches" = "amd64 arm64" ]; then
+			echo "!! the other Linux architecture needs Docker or a machine of that arch" >&2
+		fi
 		return
 	fi
 
@@ -315,12 +331,19 @@ build_linux() {
 		return
 	fi
 
-	for arch in amd64 arm64; do
+	# Word-split on purpose: --linux-arch takes one architecture, and the
+	# default is both.
+	# shellcheck disable=SC2086
+	for arch in $linux_arches; do
 		echo "==> linux/$arch (docker)"
 		local out="$dist/.linux-$arch"
 		rm -rf "$out"
-		# The architecture that does not match the host runs under emulation and
-		# is slow. That is the price of a correct GTK/WebKit sysroot.
+		# An architecture that does not match the host runs under emulation and
+		# is slow — minutes rather than seconds. The way to avoid that is not to
+		# drop the container, which is what pins the glibc floor, but to run
+		# this on a machine of that architecture and ask for that one alone:
+		# `--linux-arch arm64` on an arm64 host is a native container build.
+		# The release workflow does exactly that, one runner per architecture.
 		if docker buildx build \
 			--platform "linux/$arch" \
 			--target export \

@@ -11,7 +11,15 @@
 # architecture. A cross C compiler alone (zig cc, for instance) does not supply
 # those; a sysroot does, and this image is the cheapest correct sysroot.
 #
-# Driven by build/package.sh. Not used on a Linux host, which builds natively.
+# Driven by build/package.sh, and reached in two cases: a Mac, which has no
+# native path to a Linux binary, and `--linux-docker` on a Linux host.
+#
+# The release does not use it. It builds natively on ubuntu-22.04 runners, one
+# per architecture, because under Docker the architecture that does not match
+# the host runs under QEMU and took longer than the macOS and Windows jobs
+# combined. This image remains the fallback for when the runner images stop
+# offering a distribution old enough to build against — bookworm's glibc 2.36
+# is a floor pinned here, where a runner label is a floor GitHub can retire.
 FROM golang:1.27-bookworm AS build
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
