@@ -433,7 +433,11 @@ jobs:
           (cd dist && sha256sum ./* > SHA256SUMS)
           cat dist/SHA256SUMS
 
-      - uses: sigstore/cosign-installer@v4
+      # Pinned to an exact version, unlike everything else here. sigstore
+      # publishes no moving major tag for this action — only v4.1.2 and its
+      # predecessors exist as refs — so `@v4` resolves to nothing and the job
+      # fails before it starts.
+      - uses: sigstore/cosign-installer@v4.1.2
 
       # Keyless: the signing identity is this workflow's OIDC token, and the
       # certificate it mints is logged in Rekor. Nothing secret is stored, which
