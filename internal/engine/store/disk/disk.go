@@ -319,13 +319,15 @@ func (s *Store) List(ctx context.Context, prefix string) ([]store.ObjectInfo, er
 			return nil, err
 		}
 		base = p
+		// A prefix that is not a directory still lists: it is a key stem, which
+		// is how every object store treats it. It applies to a prefix only —
+		// applied to the root it would scan the folder above the configured
+		// one and report its contents as this storage's.
+		if st, err := os.Stat(base); err != nil || !st.IsDir() {
+			base = filepath.Dir(base)
+		}
 	}
-	// A prefix that is not a directory still lists: it is a key stem, which is
-	// how every object store treats it.
 	scanRoot := base
-	if st, err := os.Stat(base); err != nil || !st.IsDir() {
-		scanRoot = filepath.Dir(base)
-	}
 
 	var out []store.ObjectInfo
 	err := filepath.WalkDir(scanRoot, func(p string, d os.DirEntry, err error) error {

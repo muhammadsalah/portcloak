@@ -48,6 +48,19 @@ upgrading.
   export five minutes in. The range is enforced in the engine as well as the wizard.
 
 ### Fixed
+- A storage backend listed the folder above the one it was configured with. The scan fell back to
+  the parent whenever the configured root could not be stat'd, which was meant for a prefix naming
+  a key stem rather than a directory — every object store treats a prefix that way — but it fired
+  just as readily when the root itself was missing. What came back was the contents of somewhere
+  else, keyed against a root they had never been under, so the inspector reported them as objects
+  PortCloak had not written: true, and true of a folder nobody had pointed it at. The fallback now
+  applies only where it was meant to, to an explicit prefix, and a root that is not there lists
+  nothing. Both the remote folder and the disk backend had it.
+- A remote folder that does not exist yet is created rather than reported as unreachable. Naming a
+  path on an SFTP host that has not been made by hand is the ordinary case, not a mistake, and
+  `unreachable` is what PortCloak says when it cannot talk to the host at all — so the probe read
+  as a broken connection to a server that was answering perfectly well. It is created on the first
+  probe, and only a folder that cannot be created is a failure, which says so in those terms.
 - An ephemeral clone belonging to a running job was reported as orphaned, with a button offering to
   remove it. A clone a capture is exporting through and one a crashed session abandoned are
   indistinguishable by inspection — same image, same labels, same name — and the only thing that

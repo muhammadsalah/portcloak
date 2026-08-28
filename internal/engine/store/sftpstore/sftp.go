@@ -127,11 +127,17 @@ func (s *Store) Probe(ctx context.Context) (store.Reach, error) {
 		return r, nil
 	}
 
+	// A folder that is not there yet is created rather than reported as
+	// unreachable. The operator named where the snapshots go; a remote path
+	// they have not made by hand is the ordinary case, not a mistake, and
+	// "unreachable" reads as a host that cannot be talked to at all.
 	if _, err := client.Stat(s.root); err != nil {
-		r.Access = store.AccessNone
-		r.FailedStep = "finding the folder"
-		r.Detail = fmt.Sprintf("%s does not exist on %s.", s.root, s.cfg.Target.Host)
-		return r, nil
+		if err := client.MkdirAll(s.root); err != nil {
+			r.Access = store.AccessNone
+			r.FailedStep = "creating the folder"
+			r.Detail = fmt.Sprintf("%s does not exist on %s and could not be created: %v", s.root, s.cfg.Target.Host, err)
+			return r, nil
+		}
 	}
 	if _, err := client.ReadDir(s.root); err != nil {
 		r.Access = store.AccessNone
@@ -420,9 +426,16 @@ func (s *Store) List(ctx context.Context, prefix string) ([]store.ObjectInfo, er
 			return nil, err
 		}
 		base = p
-	}
-	if st, err := client.Stat(base); err != nil || !st.IsDir() {
-		base = path.Dir(base)
+		// A prefix that is not a directory still lists: it is a key stem, which
+		// is how every object store treats it. This only ever applies to a
+		// prefix. Doing it to the root itself would walk the folder above the
+		// one the operator configured and report what it found there as this
+		// storage's contents — objects PortCloak neither wrote nor was pointed
+		// at, keyed by a path that no longer matches the root they were
+		// measured against.
+		if st, err := client.Stat(base); err != nil || !st.IsDir() {
+			base = path.Dir(base)
+		}
 	}
 
 	var out []store.ObjectInfo
