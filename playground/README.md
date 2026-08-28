@@ -31,12 +31,14 @@ docker compose -f playground/storage/compose.yml up -d
 |---|---|---|
 | S3 | `http://127.0.0.1:9000`, bucket `portcloak` | `portcloak` / `portcloak-test-secret` |
 | Azure Blob | `http://127.0.0.1:10000/devstoreaccount1` | Azurite's well-known development account |
-| SFTP | `127.0.0.1:2222` | `portcloak` / `portcloak-test-secret` |
+| SFTP | `127.0.0.1:2223` | `portcloak` / `portcloak-test-secret` |
 | Disk | any folder | — |
 
 The images and credentials are the ones `.github/workflows/ci.yml` uses. That is
 deliberate: a playground that authenticates differently from CI is a playground
-that proves something CI does not. Drop a public key into `storage/keys/` to
+that proves something CI does not. The SFTP port is the one exception — CI
+publishes 2222, and this publishes 2223, because CRC holds `127.0.0.1:2222` for
+the OpenShift VM's own SSH and would answer in this container's place. Drop a public key into `storage/keys/` to
 exercise key authentication beside passwords.
 
 ## Targets

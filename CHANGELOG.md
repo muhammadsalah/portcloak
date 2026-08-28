@@ -144,6 +144,11 @@ upgrading.
   stops covering one of them fails there rather than being averaged away by the untested pages
   around it. What it no longer does is demand that every incidental guard added to one of those
   files arrive with a test before the suite will go green.
+- The storage playground publishes its sshd on 2223 rather than 2222. CRC binds `127.0.0.1:2222`
+  for the OpenShift VM's own SSH, and a bind to a specific address beats Docker's wildcard, so on
+  any machine running the Kubernetes target playground alongside this one every IPv4 connection to
+  2222 reached CRC instead — which answers, rejects the playground's credentials, and looks for all
+  the world like a broken SFTP backend. CI keeps 2222, where nothing competes for it.
 
 ## [0.0.1] — 2026-08-28
 

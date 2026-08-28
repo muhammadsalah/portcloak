@@ -84,7 +84,15 @@ services:
       PGID: "1000"
       TZ: Etc/UTC
     ports:
-      - "2222:2222"
+      # 2223 on the host, not 2222 as in CI. CRC binds 127.0.0.1:2222 for the
+      # OpenShift VM's own SSH, and a bind to a specific address beats Docker's
+      # wildcard, so on a machine running the Kubernetes target playground every
+      # IPv4 connection to 127.0.0.1:2222 reaches CRC instead of this container.
+      # It answers, and then rejects these credentials — which reads as a broken
+      # playground rather than as the port collision it is. The container still
+      # listens on 2222; only the host side moves, so the images and credentials
+      # this file shares with CI are untouched.
+      - "2223:2222"
     volumes:
       - sshd-config:/config
       # Anything here becomes an authorized key, for testing key auth beside
