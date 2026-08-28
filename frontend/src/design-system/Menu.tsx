@@ -20,7 +20,8 @@
  * value, and choosing one closes the menu before its action runs.
  */
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
-import styled, { css } from "styled-components";
+import { createPortal } from "react-dom";
+import styled from "styled-components";
 
 import type { ReactNode } from "react";
 
@@ -50,9 +51,13 @@ export function Menu({
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const [dropUp, setDropUp] = useState(false);
+  // Viewport coordinates, because the list is rendered into the body rather
+  // than beside the trigger. Null until the trigger has been measured.
+  const [at, setAt] = useState<{ right: number; top?: number; bottom?: number } | null>(null);
 
   const wrap = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
+  const list = useRef<HTMLUListElement>(null);
 
   const close = useCallback((focusTrigger = true) => {
     setOpen(false);
@@ -71,18 +76,55 @@ export function Menu({
     [close, items],
   );
 
-  useLayoutEffect(() => {
-    if (!open) return;
+  // The list is measured against the viewport rather than the trigger's own
+  // offset parent. It has to be: every table in the app sits in a box that
+  // scrolls sideways, and `overflow-x: auto` computes `overflow-y` to `auto`
+  // with it, so a list positioned inside one is clipped at the box's edge no
+  // matter what it is stacked above. Rendered into the body at viewport
+  // coordinates, there is nothing left to clip it.
+  const place = useCallback(() => {
     const box = trigger.current?.getBoundingClientRect();
     if (!box) return;
+    const wanted = Math.min(maxMenuHeight, items.length * 36 + 16);
     const below = window.innerHeight - box.bottom;
-    setDropUp(below < Math.min(maxMenuHeight, items.length * 36 + 16) && box.top > below);
-  }, [open, items.length]);
+    const up = below < wanted && box.top > below;
+    setDropUp(up);
+    setAt({
+      // Right-aligned to the trigger, which is what `right: 0` did while the
+      // list was positioned against it.
+      right: Math.max(0, window.innerWidth - box.right),
+      ...(up ? { bottom: window.innerHeight - box.top + 4 } : { top: box.bottom + 4 }),
+    });
+  }, [items.length]);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    place();
+  }, [open, place]);
+
+  // A fixed list does not travel with the page, so it is re-placed while
+  // anything scrolls underneath it — including the sideways scroll of the
+  // table it belongs to, which is why this listens in the capture phase.
+  useEffect(() => {
+    if (!open) return;
+    const onMove = () => place();
+    window.addEventListener("scroll", onMove, true);
+    window.addEventListener("resize", onMove);
+    return () => {
+      window.removeEventListener("scroll", onMove, true);
+      window.removeEventListener("resize", onMove);
+    };
+  }, [open, place]);
 
   useEffect(() => {
     if (!open) return;
     const onPointerDown = (event: PointerEvent) => {
-      if (!wrap.current?.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      // The list is no longer inside the wrapper, so it has to be asked
+      // separately. Without this, choosing an item would read as a click
+      // outside and close the menu before the item could act on it.
+      if (wrap.current?.contains(target) || list.current?.contains(target)) return;
+      setOpen(false);
     };
     document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
@@ -154,23 +196,32 @@ export function Menu({
         </svg>
       </Trigger>
 
-      {open ? (
-        <List id={listId} role="menu" $up={dropUp}>
-          {items.map((item, index) => (
-            <Item
-              key={item.label}
-              role="menuitem"
-              $active={index === active}
-              $danger={item.tone === "danger"}
-              onPointerMove={() => setActive(index)}
-              onClick={() => choose(index)}
+      {open && at
+        ? createPortal(
+            <List
+              ref={list}
+              id={listId}
+              role="menu"
+              $up={dropUp}
+              style={{ right: at.right, top: at.top, bottom: at.bottom }}
             >
-              {item.icon ? <ItemIcon>{item.icon}</ItemIcon> : null}
-              <span>{item.label}</span>
-            </Item>
-          ))}
-        </List>
-      ) : null}
+              {items.map((item, index) => (
+                <Item
+                  key={item.label}
+                  role="menuitem"
+                  $active={index === active}
+                  $danger={item.tone === "danger"}
+                  onPointerMove={() => setActive(index)}
+                  onClick={() => choose(index)}
+                >
+                  {item.icon ? <ItemIcon>{item.icon}</ItemIcon> : null}
+                  <span>{item.label}</span>
+                </Item>
+              ))}
+            </List>,
+            document.body,
+          )
+        : null}
     </Wrap>
   );
 }
@@ -205,16 +256,9 @@ const Trigger = styled.button<{ $open: boolean }>`
 `;
 
 const List = styled.ul<{ $up: boolean }>`
-  position: absolute;
-  right: 0;
-  ${(p) =>
-    p.$up
-      ? css`
-          bottom: calc(100% + 4px);
-        `
-      : css`
-          top: calc(100% + 4px);
-        `}
+  /* Fixed, and placed from the trigger's viewport rect: see place(). The
+     offsets arrive as inline styles because they change with every open. */
+  position: fixed;
   z-index: ${(p) => p.theme.z.dropdown};
   min-width: 168px;
   max-height: ${maxMenuHeight}px;

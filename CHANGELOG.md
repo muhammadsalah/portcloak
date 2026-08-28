@@ -48,6 +48,15 @@ upgrading.
   export five minutes in. The range is enforced in the engine as well as the wizard.
 
 ### Fixed
+- The row menu on a table was cut off at the edge of the card it opened in. Every table in the app
+  sits in a box that scrolls sideways, and CSS computes `overflow-y` to `auto` alongside an explicit
+  `overflow-x: auto` — so the box clips vertically whether or not anything asked it to, and a menu
+  positioned inside it is cut off no matter what it is stacked above. Stacking order was never the
+  problem, which is why raising it would not have helped. The list is now drawn into the document
+  body at the trigger's viewport coordinates, where there is nothing left to clip it, and re-placed
+  while anything scrolls beneath it. It still flips upwards near the bottom of the window, still
+  runs the item that was chosen, and still closes on a click elsewhere — the three things moving it
+  out of the row could have cost, and the three the new tests hold down.
 - An Azure endpoint that does not name the storage account said `ResourceNotFound (HTTP 404)` and
   left the operator to work out the rest. Azure carries the account in the host name and an
   emulator carries it as the first path segment, so an endpoint that stops at the port leaves the
