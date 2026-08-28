@@ -38,8 +38,82 @@ The images and credentials are the ones `.github/workflows/ci.yml` uses. That is
 deliberate: a playground that authenticates differently from CI is a playground
 that proves something CI does not. The SFTP port is the one exception — CI
 publishes 2222, and this publishes 2223, because CRC holds `127.0.0.1:2222` for
-the OpenShift VM's own SSH and would answer in this container's place. Drop a public key into `storage/keys/` to
-exercise key authentication beside passwords.
+the OpenShift VM's own SSH and would answer in this container's place. Drop a
+public key into `storage/keys/` to exercise key authentication beside passwords.
+
+MinIO's console is at <http://127.0.0.1:9001> with the same credentials, for
+looking at what a capture actually wrote.
+
+### Filling the storage form
+
+What follows is every field, per backend, against the stack above. A field not
+listed is left empty. None of the destinations need to exist first: the probe
+creates the folder, the bucket or the container on the first Test.
+
+**Disk**
+
+| Field | Value |
+|---|---|
+| Folder | any path, e.g. `~/portcloak-snapshots` |
+
+**S3**, against MinIO:
+
+| Field | Value |
+|---|---|
+| Endpoint | `http://127.0.0.1:9000` |
+| Region | `us-east-1` |
+| Bucket | `portcloak` |
+| Prefix | optional, e.g. `snapshots` |
+| Path style | **on** |
+| Credential | `portcloak:portcloak-test-secret` |
+
+Path style is not optional here. MinIO addresses a bucket as a path segment —
+`127.0.0.1:9000/portcloak` — where AWS puts it in the hostname, and an IP
+address has no room for a bucket subdomain. The credential is one field holding
+both halves, `key:secret`.
+
+**Azure Blob**, against Azurite:
+
+| Field | Value |
+|---|---|
+| Container | `portcloak` |
+| Prefix | optional, e.g. `snapshots` |
+| Credential | the connection string below |
+
+```
+DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;
+```
+
+Leave **Account** and **Endpoint** empty. The connection string carries its own
+`BlobEndpoint`, which is what points the client at Azurite rather than at
+`*.blob.core.windows.net`, and filling Account instead selects the shared-key
+path that builds the URL out of those two fields.
+
+If you do want that path — an account key rather than a connection string —
+both fields have to be right together: Account `devstoreaccount1`, and Endpoint
+`http://127.0.0.1:10000/devstoreaccount1` **including the account segment**.
+Azurite lays its URLs out as `host:port/<account>/<container>`, so an endpoint
+that stops at the port makes the container name be read as an account name. The
+result is `ResourceNotFound (HTTP 404)` on a container that is present and a
+credential that is correct — and it is not a missing container, so PortCloak
+will not create one in response to it.
+
+**SFTP**
+
+| Field | Value |
+|---|---|
+| Host | `127.0.0.1` |
+| Port | `2223` |
+| User | `portcloak` |
+| Authentication | password |
+| Folder | `/config/snapshots` |
+| Credential | `portcloak-test-secret` |
+
+`/config` is the home directory of the container's `portcloak` user, and the
+only path backed by a named volume — `/tmp` is writable too, and empties on
+restart. Remote folders belong under `/config` for that reason: what lands
+there survives a restart, and goes away with `down -v`. Anywhere above it is
+root-owned and `SUDO_ACCESS` is off, so a folder outside it fails to create.
 
 ## Targets
 
