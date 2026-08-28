@@ -13,6 +13,19 @@ record; unprefixed `v` tags mark shipped binaries.
 
 ## [Unreleased]
 
+### Fixed
+- The seeding script died on `unbound variable` before it could load a directory. macOS ships bash
+  3.2, which finds the end of a variable name one byte at a time: in `"$service…"` it takes the
+  first byte of the ellipsis to be part of the name, looks up a variable nobody set, and `set -u`
+  ends the run. Braces settle where the name stops. CI never saw it because CI runs bash 5, which
+  reads the character rather than the byte — so this was a macOS-only failure in a script whose
+  whole purpose is to be run on a workstation.
+- The same script's check for a stopped Docker playground never fired. `compose ps` succeeds
+  whether or not anything is running, an empty playground being a valid answer rather than an
+  error, so testing its exit status tested nothing. What got through failed later as `service
+  "ldap-a" is not running` and a refused connection on 8080 — a longer way of saying what the
+  check already had a sentence for. It tests the output now.
+
 ### Development
 - The OpenShift playground's routes answer on `nip.io` hostnames carrying the cluster's own
   address — `kc-a.127.0.0.1.nip.io` and its two siblings — rather than on the `apps-crc.testing`

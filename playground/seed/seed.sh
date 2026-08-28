@@ -72,7 +72,13 @@ generate() {
 # re-seeding tops a directory up instead of failing on the first collision.
 load_directory() {
 	local service=$1 realm=$2
-	echo "loading $realm into $service…"
+	# Braced because of the ellipsis. macOS ships bash 3.2, which finds the end
+	# of a variable name a byte at a time: in "$service…" it takes the first
+	# byte of the ellipsis to be part of the name, looks up a variable that was
+	# never set, and `set -u` ends the run. Any non-ASCII character straight
+	# after an unbraced name does this, and only on the old bash — which is why
+	# CI, on bash 5, never saw it.
+	echo "loading $realm into ${service}…"
 	$compose exec -T "$service" ldapadd -x \
 		-H ldap://127.0.0.1:1389 \
 		-D "cn=admin,dc=$realm,dc=example,dc=com" -w adminpassword \
@@ -82,7 +88,7 @@ load_directory() {
 # load_directory_oc is the same thing where the directory is a pod.
 load_directory_oc() {
 	local app=$1 realm=$2 pod
-	echo "loading $realm into $app…"
+	echo "loading $realm into ${app}…"
 	pod=$(oc get pod -n kc -l "app=$app" -o jsonpath='{.items[0].metadata.name}')
 	oc exec -n kc -i "$pod" -- ldapadd -x \
 		-H ldap://127.0.0.1:1389 \
@@ -102,7 +108,12 @@ post() {
 
 case "$mode" in
 docker)
-	$compose ps --status running --quiet >/dev/null 2>&1 || {
+	# The output is what is tested, not the exit status. `compose ps` succeeds
+	# whether or not anything is running — an empty playground is a valid answer
+	# to the question, not an error — so testing the status let a stopped stack
+	# through to fail later as "service is not running" and a refused connection,
+	# which is a longer way of saying what this message says.
+	[ -n "$($compose ps --status running --quiet 2>/dev/null)" ] || {
 		echo "!! the docker playground is not up. Start it with:" >&2
 		echo "   $compose up -d" >&2
 		exit 1
