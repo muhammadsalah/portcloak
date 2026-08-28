@@ -78,6 +78,18 @@ Two changes are visible immediately and neither needs a decision:
 - **Dropdowns are drawn by the app** rather than by the operating system, so they carry the same
   typography and spacing as the rest of the interface.
 
+One thing is gone, and it is the only reason to read this section twice:
+
+- **A snapshot no longer exports.** The user list and the secret ledger each had a button that
+  wrote the current rows out as CSV or JSON, redacted and audited. Both are removed. Every
+  inspection view is presence rather than values, so the file carried no fact the screen had not
+  already shown, and what it added was a second copy of an audited reading — outside the session
+  that produced it, and outside the shredding that runs when one closes. Where a reading has to be
+  evidence, the audit log is the record, and it is already kept. `FR-V10` and `UC-I12` are marked
+  withdrawn rather than deleted: they were built, they shipped in 0.0.1, and the record should say
+  so. Files written by 0.0.1 are unaffected — they are ordinary files, and PortCloak never tracked
+  them.
+
 ## Before you lift the transaction limit
 
 The option is off unless asked for, and it should stay off unless a capture has actually failed on

@@ -11,12 +11,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Tags prefixed `spec-` mark the design
 record; unprefixed `v` tags mark shipped binaries.
 
-## [0.0.2] — 2026-08-28
+## [0.0.2] — 2026-08-29
 
 The release that came out of one failure. A capture of a realm federated to a slow LDAP directory
 died after exactly five minutes and reported `kc.sh export exited with code 1` — which reads like a
 disk problem and is not one. Everything under *Fixed* is what that sentence turned out to be hiding,
 and most of what is under *Added* is what it needed in order not to happen again.
+
+One thing is taken away rather than added: a snapshot no longer exports. The user list and the
+secret ledger could each be written out as a redacted file, and every view they wrote was already
+presence rather than values — so the file said nothing the screen had not, and left a copy of an
+audited reading outside the session that made it.
 
 Nothing changes about what a snapshot carries or how it is sealed, so a 0.0.1 bundle opens and
 restores under 0.0.2 unchanged. See
