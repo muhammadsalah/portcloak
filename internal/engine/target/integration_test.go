@@ -14,6 +14,7 @@ package target_test
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"strconv"
 	"testing"
 
@@ -72,7 +73,10 @@ func TestSSH_ExecutorContract(t *testing.T) {
 		}
 		// A first connection to a throwaway test host is accepted
 		// deliberately; in the application this is always an operator's
-		// decision.
+		// decision. The key it records goes to a temporary file: a suite that
+		// trusts a throwaway host has no business writing that into the
+		// operator's known_hosts.
+		e.UseKnownHostsFile(filepath.Join(t.TempDir(), "known_hosts"))
 		e.AcceptHostKey()
 		return e
 	})

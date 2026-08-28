@@ -174,6 +174,32 @@ func (s *Store) unkey(k string) string {
 
 // Probe performs the round trip UC-S3 describes: list the prefix, do a small
 // multipart upload, verify it, then remove the probe object.
+// EnsureBucket creates the bucket, for the "it does not exist, shall I create
+// it?" path.
+//
+// BucketAlreadyOwnedByYou is success: the bucket is there and it is this
+// account's. BucketAlreadyExists is not, and is deliberately not folded in with
+// it — that code means the name belongs to somebody else, and treating it as
+// success would leave PortCloak pointed at a bucket nobody here can write to.
+func (s *Store) EnsureBucket(ctx context.Context) error {
+	in := &s3.CreateBucketInput{Bucket: aws.String(s.bucket)}
+	// us-east-1 is the API's own default and is rejected when named explicitly,
+	// so it is the one region that must be left unsaid.
+	if region := s.cli.Options().Region; region != "" && region != "us-east-1" {
+		in.CreateBucketConfiguration = &types.CreateBucketConfiguration{
+			LocationConstraint: types.BucketLocationConstraint(region),
+		}
+	}
+	if _, err := s.cli.CreateBucket(ctx, in); err != nil {
+		var owned *types.BucketAlreadyOwnedByYou
+		if errors.As(err, &owned) {
+			return nil
+		}
+		return classify(err)
+	}
+	return nil
+}
+
 func (s *Store) Probe(ctx context.Context) (store.Reach, error) {
 	start := time.Now()
 	r := store.Reach{
@@ -186,11 +212,25 @@ func (s *Store) Probe(ctx context.Context) (store.Reach, error) {
 	if _, err := s.cli.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
 		Bucket: aws.String(s.bucket), Prefix: aws.String(s.prefix), MaxKeys: aws.Int32(1),
 	}); err != nil {
-		r.Access = store.AccessNone
-		r.FailedStep = "ListObjects"
-		r.Detail = describeAWSError(err, s.bucket)
-		r.Latency = time.Since(start)
-		return r, nil
+		// A bucket that is not there yet is created rather than reported as a
+		// failure. Only its absence is treated that way: a rejected credential
+		// or a denied listing is the operator's to see, and must not arrive
+		// dressed as a bucket that simply had not been made.
+		var api smithy.APIError
+		if !errors.As(err, &api) || api.ErrorCode() != "NoSuchBucket" {
+			r.Access = store.AccessNone
+			r.FailedStep = "ListObjects"
+			r.Detail = describeAWSError(err, s.bucket)
+			r.Latency = time.Since(start)
+			return r, nil
+		}
+		if mkErr := s.EnsureBucket(ctx); mkErr != nil {
+			r.Access = store.AccessNone
+			r.FailedStep = "creating the bucket"
+			r.Detail = fmt.Sprintf("There is no bucket called %q at this endpoint and it could not be created: %v", s.bucket, mkErr)
+			r.Latency = time.Since(start)
+			return r, nil
+		}
 	}
 	r.Access = store.AccessReadOnly
 

@@ -139,8 +139,42 @@ func TestDisk_ResumeOverACorruptedPrefixFails(t *testing.T) {
 	}
 }
 
-func TestDisk_ProbeDistinguishesMissingFromUnwritable(t *testing.T) {
-	missing := filepath.Join(t.TempDir(), "not-created-yet")
+// A folder the operator named but has not made by hand is the ordinary case,
+// so the probe creates it. A folder it cannot create is the real failure, and
+// has to say so in terms that name the path.
+func TestDisk_ProbeCreatesMissingFolder(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "not-created-yet", "nested")
+	s, err := disk.New(missing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := s.Probe(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Access != store.AccessWritable {
+		t.Fatalf("a missing folder probed as %q rather than being created: %+v", r.Access, r)
+	}
+	if st, err := os.Stat(missing); err != nil || !st.IsDir() {
+		t.Fatalf("the probe reported writable but %s is not a folder: %v", missing, err)
+	}
+	if r.FreeBytes <= 0 {
+		t.Error("a writable disk store should report free space")
+	}
+}
+
+func TestDisk_ProbeReportsAFolderItCannotCreate(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root can write into a read-only directory, so there is nothing to observe")
+	}
+	parent := filepath.Join(t.TempDir(), "sealed")
+	if err := os.Mkdir(parent, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	// Restored so the temporary directory can be cleaned up.
+	t.Cleanup(func() { _ = os.Chmod(parent, 0o700) })
+
+	missing := filepath.Join(parent, "not-created-yet")
 	s, err := disk.New(missing)
 	if err != nil {
 		t.Fatal(err)
@@ -150,24 +184,10 @@ func TestDisk_ProbeDistinguishesMissingFromUnwritable(t *testing.T) {
 		t.Fatal(err)
 	}
 	if r.Access != store.AccessNone {
-		t.Fatalf("a missing folder probed as %q", r.Access)
+		t.Fatalf("a folder that cannot be created probed as %q", r.Access)
 	}
 	if !strings.Contains(r.Detail, missing) {
-		t.Errorf("the failure does not name the path it looked for: %q", r.Detail)
-	}
-
-	if err := s.EnsureRoot(); err != nil {
-		t.Fatal(err)
-	}
-	r, err = s.Probe(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if r.Access != store.AccessWritable {
-		t.Fatalf("after creating the folder the probe reported %q: %+v", r.Access, r)
-	}
-	if r.FreeBytes <= 0 {
-		t.Error("a writable disk store should report free space")
+		t.Errorf("the failure does not name the path it could not create: %q", r.Detail)
 	}
 }
 

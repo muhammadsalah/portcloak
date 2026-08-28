@@ -56,11 +56,15 @@ upgrading.
   PortCloak had not written: true, and true of a folder nobody had pointed it at. The fallback now
   applies only where it was meant to, to an explicit prefix, and a root that is not there lists
   nothing. Both the remote folder and the disk backend had it.
-- A remote folder that does not exist yet is created rather than reported as unreachable. Naming a
-  path on an SFTP host that has not been made by hand is the ordinary case, not a mistake, and
-  `unreachable` is what PortCloak says when it cannot talk to the host at all — so the probe read
-  as a broken connection to a server that was answering perfectly well. It is created on the first
-  probe, and only a folder that cannot be created is a failure, which says so in those terms.
+- A destination that does not exist yet is created rather than reported as unreachable, on all four
+  backends. Naming a folder, a bucket or a container that nobody has made by hand is the ordinary
+  case, not a mistake, and `unreachable` is what PortCloak says when it cannot talk to the endpoint
+  at all — so a server answering perfectly well presented as a broken connection. The first probe
+  creates it: `MkdirAll` on a folder or an SFTP host, `CreateBucket` on S3, `CreateContainer` on
+  Azure Blob. Only what cannot be created is a failure, and it says which of the two it was. The
+  absence is the one condition treated this way; a rejected credential or a denied listing is still
+  the operator's to see, and must not arrive dressed as something that had simply not been made yet.
+  On S3 a name already owned by another account stays an error for the same reason.
 - An ephemeral clone belonging to a running job was reported as orphaned, with a button offering to
   remove it. A clone a capture is exporting through and one a crashed session abandoned are
   indistinguishable by inspection — same image, same labels, same name — and the only thing that
@@ -157,6 +161,11 @@ upgrading.
   stops covering one of them fails there rather than being averaged away by the untested pages
   around it. What it no longer does is demand that every incidental guard added to one of those
   files arrive with a test before the suite will go green.
+- The integration suite records host keys in a temporary file rather than the operator's own
+  `~/.ssh/known_hosts`. It accepts a first connection deliberately — the hosts it connects to are
+  throwaway containers — but it was writing that decision into the file every ssh client on the
+  machine reads, so a suite run left a trust the operator had not granted and would not have known
+  to look for.
 - The storage playground publishes its sshd on 2223 rather than 2222. CRC binds `127.0.0.1:2222`
   for the OpenShift VM's own SSH, and a bind to a specific address beats Docker's wildcard, so on
   any machine running the Kubernetes target playground alongside this one every IPv4 connection to

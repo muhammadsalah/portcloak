@@ -73,14 +73,20 @@ func (s *Store) Probe(ctx context.Context) (store.Reach, error) {
 		ProbedAt:  start,
 	}
 
+	// A folder that is not there yet is created rather than reported as a
+	// failure. The operator named where the snapshots go, and a folder they
+	// have not made by hand is the ordinary case rather than a mistake.
 	st, err := os.Stat(s.root)
-	if err != nil {
-		if os.IsNotExist(err) {
+	if err != nil && os.IsNotExist(err) {
+		if mkErr := os.MkdirAll(s.root, 0o700); mkErr != nil {
 			r.Access = store.AccessNone
-			r.FailedStep = "finding the folder"
-			r.Detail = fmt.Sprintf("%s does not exist yet.", s.root)
+			r.FailedStep = "creating the folder"
+			r.Detail = fmt.Sprintf("%s does not exist and could not be created: %v", s.root, mkErr)
 			return r, nil
 		}
+		st, err = os.Stat(s.root)
+	}
+	if err != nil {
 		r.Access = store.AccessNone
 		r.FailedStep = "reading the folder"
 		r.Detail = err.Error()

@@ -56,6 +56,13 @@ func New(env config.Environment, creds config.CredentialStore) (*Executor, error
 // AcceptHostKey records the operator's decision to trust a first connection.
 func (e *Executor) AcceptHostKey() { e.cfg.AcceptNewHostKey = true }
 
+// UseKnownHostsFile verifies against a file other than the operator's own
+// ~/.ssh/known_hosts, and appends there when a first connection is accepted.
+// The tests point this at a temporary file: a suite that trusts a throwaway
+// host on the operator's behalf should not leave that decision in the file
+// their ssh client reads.
+func (e *Executor) UseKnownHostsFile(path string) { e.cfg.KnownHostsFile = path }
+
 func (e *Executor) connect(ctx context.Context) (*sshx.Conn, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()

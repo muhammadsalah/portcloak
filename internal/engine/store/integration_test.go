@@ -15,6 +15,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"testing"
 	"time"
@@ -178,7 +179,10 @@ func TestSFTP_Contract(t *testing.T) {
 			t.Fatal(err)
 		}
 		// A first connection to a throwaway test host is accepted deliberately;
-		// in the application this is always an operator's decision.
+		// in the application this is always an operator's decision. The key it
+		// records goes to a temporary file: a suite that trusts a throwaway
+		// host has no business writing that into the operator's known_hosts.
+		s.UseKnownHostsFile(filepath.Join(t.TempDir(), "known_hosts"))
 		s.AcceptHostKey()
 		if err := s.EnsureRoot(context.Background()); err != nil {
 			t.Fatal(err)
@@ -212,6 +216,7 @@ func TestSFTP_OffsetResumeContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		s.UseKnownHostsFile(filepath.Join(t.TempDir(), "known_hosts"))
 		s.AcceptHostKey()
 		if err := s.EnsureRoot(context.Background()); err != nil {
 			t.Fatal(err)

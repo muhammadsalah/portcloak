@@ -169,11 +169,24 @@ func (s *Store) Probe(ctx context.Context) (store.Reach, error) {
 	})
 	if pager.More() {
 		if _, err := pager.NextPage(ctx); err != nil {
-			r.Access = store.AccessNone
-			r.FailedStep = "ListBlobs"
-			r.Detail = describeAzureError(err, s.container)
-			r.Latency = time.Since(start)
-			return r, nil
+			// A container that is not there yet is created rather than
+			// reported as a failure, and the listing is attempted once more
+			// against it. Anything other than its absence is the operator's to
+			// see: a rejected credential must not read as a missing container.
+			if !bloberror.HasCode(err, bloberror.ContainerNotFound) {
+				r.Access = store.AccessNone
+				r.FailedStep = "ListBlobs"
+				r.Detail = describeAzureError(err, s.container)
+				r.Latency = time.Since(start)
+				return r, nil
+			}
+			if mkErr := s.EnsureContainer(ctx); mkErr != nil {
+				r.Access = store.AccessNone
+				r.FailedStep = "creating the container"
+				r.Detail = fmt.Sprintf("There is no container called %q at this endpoint and it could not be created: %v", s.container, mkErr)
+				r.Latency = time.Since(start)
+				return r, nil
+			}
 		}
 	}
 	r.Access = store.AccessReadOnly

@@ -60,6 +60,13 @@ func New(st config.Storage, creds config.CredentialStore) (*Store, error) {
 // AcceptHostKey records the operator's decision to trust a first connection.
 func (s *Store) AcceptHostKey() { s.cfg.AcceptNewHostKey = true }
 
+// UseKnownHostsFile verifies against a file other than the operator's own
+// ~/.ssh/known_hosts, and appends there when a first connection is accepted.
+// The tests point this at a temporary file: a suite that trusts a throwaway
+// host on the operator's behalf should not leave that decision in the file
+// their ssh client reads.
+func (s *Store) UseKnownHostsFile(path string) { s.cfg.KnownHostsFile = path }
+
 // Endpoint identifies this store for the circuit breaker and error messages.
 func (s *Store) Endpoint() string {
 	return fmt.Sprintf("sftp://%s@%s%s", s.cfg.Target.User, s.cfg.Target.Host, s.root)
