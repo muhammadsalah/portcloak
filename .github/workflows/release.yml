@@ -292,10 +292,16 @@ jobs:
       # signing service that has no reason to know about them is how they come
       # back missing. They are already staged beside the binaries and are
       # picked up at archive time.
+      #
+      # Deliberately NOT named `artifacts-*`. This exists only so SignPath has
+      # something to fetch, and it holds a directory per architecture rather
+      # than a finished archive. The publish job collects `artifacts-*` and
+      # merges them into one directory, so a name matching that pattern put two
+      # directories where it expected files and killed the checksum step.
       - uses: actions/upload-artifact@v7
         id: unsigned
         with:
-          name: artifacts-windows-unsigned
+          name: windows-unsigned-executables
           path: dist/stage/*/PortCloak.exe
           retention-days: 1
 
@@ -488,10 +494,22 @@ jobs:
           set -euo pipefail
           mkdir -p dist
           mv incoming/* dist/
+
+          # Only files, and only at the top level. `sha256sum ./*` was what ran
+          # here, and it exits 1 on a directory — which is exactly what an
+          # intermediate artifact swept in by the download pattern put in front
+          # of it. Being explicit about what a release artifact is costs one
+          # line and removes the whole class.
+          shopt -s nullglob
+          for entry in dist/*; do
+            [ -f "$entry" ] || { echo "not a release artifact, dropping: $entry" >&2; rm -rf "$entry"; }
+          done
+
           # Computed here, after Windows signing changed those bytes and after
           # macOS stapling changed those. A checksum taken any earlier would
           # describe files nobody is going to download.
           (cd dist && sha256sum ./* > SHA256SUMS)
+          echo
           cat dist/SHA256SUMS
 
       # Pinned to an exact version, unlike everything else here. sigstore
