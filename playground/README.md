@@ -153,6 +153,16 @@ creates the Role PortCloak's Kubernetes adapter needs — get, list, create and
 delete on pods, create on `pods/exec` — which is the whole list, and worth
 reading beside what the tool actually does.
 
+The three servers answer on `kc-a`, `kc-b` and `kc-merged` under
+`<address>.nip.io`, where the address is whatever `crc ip` reports — `apply.sh`
+substitutes it into the routes, and `apply.sh urls` prints them. nip.io resolves
+any name ending in an embedded address to that address, so the hostnames work
+without an `/etc/hosts` entry or CRC's own resolver, and they say which cluster
+they point at in a way `apps-crc.testing` does not. On macOS the address is
+`127.0.0.1`, because CRC forwards 80 and 443 into the VM rather than exposing
+it; on Linux it is the VM's own. Set `PLAYGROUND_INGRESS_IP` to override, which
+is also what a cluster that is not CRC needs.
+
 The VM is sized in `crc.sh` and it is not a guess. Three Keycloaks each want a
 JVM heap, and during a capture a fourth appears: the ephemeral clone, with the
 same image and the same database connection. Eight cores and 32 GiB is what

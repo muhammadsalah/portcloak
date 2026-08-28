@@ -110,6 +110,11 @@ metadata:
   name: kc-a
   namespace: kc
 spec:
+  # __INGRESS_IP__ is substituted by apply.sh from `crc ip`. nip.io resolves
+  # any name ending in an embedded address to that address, so the host works
+  # from this machine without an /etc/hosts entry or CRC's resolver — and
+  # names the cluster it points at, which `apps-crc.testing` does not.
+  host: kc-a.__INGRESS_IP__.nip.io
   to:
     kind: Service
     name: kc-a
@@ -199,6 +204,11 @@ metadata:
   name: kc-b
   namespace: kc
 spec:
+  # __INGRESS_IP__ is substituted by apply.sh from `crc ip`. nip.io resolves
+  # any name ending in an embedded address to that address, so the host works
+  # from this machine without an /etc/hosts entry or CRC's resolver — and
+  # names the cluster it points at, which `apps-crc.testing` does not.
+  host: kc-b.__INGRESS_IP__.nip.io
   to:
     kind: Service
     name: kc-b
@@ -288,6 +298,11 @@ metadata:
   name: kc-merged
   namespace: kc
 spec:
+  # __INGRESS_IP__ is substituted by apply.sh from `crc ip`. nip.io resolves
+  # any name ending in an embedded address to that address, so the host works
+  # from this machine without an /etc/hosts entry or CRC's resolver — and
+  # names the cluster it points at, which `apps-crc.testing` does not.
+  host: kc-merged.__INGRESS_IP__.nip.io
   to:
     kind: Service
     name: kc-merged

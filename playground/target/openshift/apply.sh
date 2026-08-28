@@ -26,6 +26,45 @@ need() {
 }
 need oc
 
+# ingress_ip is the address the routes' nip.io hostnames embed.
+#
+# CRC's own domain, apps-crc.testing, resolves only because CRC installs a
+# resolver for it; a host that has not run `crc setup`, or has had it undone,
+# gets nothing. nip.io needs no local configuration at all — it resolves any
+# name ending in an embedded address to that address — so the routes work
+# wherever the cluster is reachable from.
+#
+# On macOS `crc ip` is 127.0.0.1, because CRC forwards 80 and 443 into the VM
+# rather than exposing it; on Linux it is the VM's own address. Both are right
+# for the machine they are read on, which is why this is read rather than
+# written down.
+ingress_ip() {
+	if [ -n "${PLAYGROUND_INGRESS_IP:-}" ]; then
+		printf '%s' "$PLAYGROUND_INGRESS_IP"
+		return
+	fi
+	if command -v crc >/dev/null 2>&1 && crc ip >/dev/null 2>&1; then
+		crc ip
+		return
+	fi
+	echo "!! Could not read the cluster's address from crc." >&2
+	echo "   Set PLAYGROUND_INGRESS_IP to the address the ingress answers on." >&2
+	exit 1
+}
+
+# render prints the manifests with the address substituted in. The files carry a
+# placeholder rather than an address so that nothing in the repository claims to
+# know where somebody else's cluster lives.
+render() {
+	local ip
+	ip=$(ingress_ip)
+	local f
+	for f in "$here"/manifests/*.yaml; do
+		sed "s/__INGRESS_IP__/$ip/g" "$f"
+		echo "---"
+	done
+}
+
 guard_cluster() {
 	local server
 	server=$(oc whoami --show-server 2>/dev/null || true)
@@ -50,7 +89,7 @@ guard_cluster() {
 case "${1:-apply}" in
 apply)
 	guard_cluster
-	oc apply -f "$here/manifests/"
+	render | oc apply -f -
 
 	# What PortCloak's Kubernetes adapter needs, and no more: it reads the
 	# workload it is capturing, creates one clone pod, execs into it, streams a
@@ -114,7 +153,7 @@ urls)
 
 delete)
 	guard_cluster
-	oc delete -f "$here/manifests/" --ignore-not-found
+	render | oc delete -f - --ignore-not-found
 	;;
 
 *)

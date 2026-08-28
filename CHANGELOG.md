@@ -11,6 +11,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Tags prefixed `spec-` mark the design
 record; unprefixed `v` tags mark shipped binaries.
 
+## [Unreleased]
+
+### Development
+- The OpenShift playground's routes answer on `nip.io` hostnames carrying the cluster's own
+  address — `kc-a.127.0.0.1.nip.io` and its two siblings — rather than on the `apps-crc.testing`
+  names OpenShift generates. The generated ones resolve only where something has been taught to
+  resolve them, and CRC teaches a fixed list: `/etc/hosts` gets the console, the API and a handful
+  of others, and `/etc/resolver` gets nothing, so there is no wildcard and a route named after a
+  namespace is not on the list. Two of these three were unreachable from the host for exactly that
+  reason. nip.io needs no local configuration at all, and says which cluster a hostname points at,
+  which `apps-crc.testing` does not. `apply.sh` substitutes the address from `crc ip` — 127.0.0.1
+  on macOS, where CRC forwards 80 and 443 rather than exposing the VM; the VM's own on Linux — and
+  `PLAYGROUND_INGRESS_IP` overrides it for a cluster that is not CRC.
+
 ## [0.0.2] — 2026-08-29
 
 The release that came out of one failure. A capture of a realm federated to a slow LDAP directory
