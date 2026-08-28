@@ -47,7 +47,7 @@ assertion — "does this error message actually help me?" has no assertion form
 | UC-S2 | Add SSH storage | P1 · P3 | `TestSFTP_Contract` *(integration)* |
 | UC-S3 | Add S3-compatible storage | P1 · P5 | `TestS3_Contract` *(integration)* |
 | UC-S4 | Add Azure Blob / Azurite storage | P1 · P5 | `TestAzure_Contract` *(integration)* |
-| UC-S5 | Test a storage | P1 | `TestDisk_ProbeDistinguishesMissingFromUnwritable`; `TestDisk_ProbeReportsReadOnlyRatherThanFailing` |
+| UC-S5 | Test a storage | P1 | `TestDisk_ProbeCreatesMissingFolder`; `TestDisk_ProbeReportsAFolderItCannotCreate`; `TestDisk_ProbeReportsReadOnlyRatherThanFailing` |
 | UC-S6 | Edit or delete a storage | P1 | `TestConfig_DeleteStorageKeepsTheDataAndGuardsTheDefault` |
 | UC-S7 | Set the default storage | P1 | `TestConfig_DefaultStorageIsExclusive` |
 | UC-S8 | Browse the contents of a storage | P5 | `TestGroup_SeparatesSnapshotsFromForeignObjects`; `TestDisk_LayoutIsBrowsable` |
