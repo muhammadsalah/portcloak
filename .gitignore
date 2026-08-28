@@ -29,6 +29,9 @@ frontend/node_modules/
 frontend/dist/*
 !frontend/dist/.gitkeep
 frontend/.vite/
+# Vitest's coverage report. The number belongs in the CI job summary, where
+# every run publishes it; the HTML tree behind it is a local artefact.
+frontend/coverage/
 
 # IDE and agent tooling
 .idea/
