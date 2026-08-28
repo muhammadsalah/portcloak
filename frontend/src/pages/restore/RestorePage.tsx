@@ -44,16 +44,7 @@ import { DestinationStep } from "./DestinationStep";
 import { PreconditionsStep } from "./PreconditionsStep";
 import { SnapshotStep } from "./SnapshotStep";
 import { StrategyStep } from "./StrategyStep";
-
-type Step = "snapshot" | "destination" | "preconditions" | "strategy" | "apply";
-
-const steps: { key: Step; label: string }[] = [
-  { key: "snapshot", label: "Snapshot" },
-  { key: "destination", label: "Destination" },
-  { key: "preconditions", label: "Preconditions" },
-  { key: "strategy", label: "Strategy & dry run" },
-  { key: "apply", label: "Apply" },
-];
+import { advanceable, steps, type Step } from "./wizard";
 
 interface Loaded {
   entries: LibraryEntry[];
@@ -321,60 +312,4 @@ function Restore({ loaded, snapshotId }: { loaded: Loaded; snapshotId?: string }
       </Card>
     </div>
   );
-}
-
-/** Whether the current step has been answered, and what is missing if not. */
-function advanceable({
-  step,
-  snapshot,
-  key,
-  storedKeys,
-  environment,
-  plan,
-  confirmRealm,
-}: {
-  step: Step;
-  snapshot: LibraryEntry | undefined;
-  key: SnapshotKey;
-  storedKeys: number;
-  environment: string;
-  plan: Plan | undefined;
-  confirmRealm: string;
-}): { ok: boolean; reason?: string } {
-  switch (step) {
-    case "snapshot":
-      return snapshot ? { ok: true } : { ok: false, reason: "Choose a snapshot." };
-
-    case "destination":
-      if (!environment) return { ok: false, reason: "Choose a destination environment." };
-      if (
-        snapshot?.encrypted &&
-        key.passphrase === "" &&
-        key.identities.length === 0 &&
-        storedKeys === 0
-      ) {
-        // Asked for here rather than discovered at Apply: without it the next
-        // step downloads the bundle only to fail on it. But it is only a gate
-        // when there is nothing stored to try — a key PortCloak already holds
-        // is a key the operator has already decided to trust it with, and
-        // demanding it again is the prompt that teaches people to turn
-        // encryption off.
-        return { ok: false, reason: "Enter the key this snapshot was sealed with." };
-      }
-      return { ok: true };
-
-    case "preconditions":
-      // Informative only. Next stays enabled even when every dependency is
-      // missing — the operator manages these environments.
-      return { ok: !plan?.blocked, reason: plan?.blockedNote };
-
-    case "strategy":
-      if (plan?.confirmationRequired && confirmRealm !== snapshot?.realm) {
-        return { ok: false, reason: "Type the realm name to confirm an overwrite." };
-      }
-      return { ok: true };
-
-    default:
-      return { ok: true };
-  }
 }

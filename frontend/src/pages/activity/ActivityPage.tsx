@@ -17,11 +17,11 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { JobsAPI, type ActivityView, type ProgressEvent } from "../../api";
+import { JobsAPI, type ActivityView } from "../../api";
 import { useProgress } from "../../app/ProgressContext";
 import { Notice, PageSubtitle, PageTitle, Spinner } from "../../design-system";
 import { JobCard } from "./JobCard";
-import { emptyLive, logTails, type Live } from "./live";
+import { applyEvent, logTails, structural, type Live } from "./live";
 
 /** How long a burst of events is allowed to coalesce into one refresh. */
 const coalesceMs = 400;
@@ -89,7 +89,7 @@ export function ActivityPage() {
   );
 
   useProgress((event) => {
-    apply(live.current, event);
+    applyEvent(live.current, event);
     dirty.current = true;
     if (structural(event.kind)) scheduleReload();
   });
@@ -143,88 +143,4 @@ export function ActivityPage() {
       )}
     </div>
   );
-}
-
-/** Kinds that change what the engine would say about a job, not just its text. */
-function structural(kind: string): boolean {
-  return (
-    kind === "phaseStarted" ||
-    kind === "phaseCompleted" ||
-    kind === "phaseFailed" ||
-    kind === "jobState" ||
-    kind === "cloneCreated" ||
-    kind === "cloneDestroyed"
-  );
-}
-
-/** Folds one event into the overlay for the job it belongs to. */
-function apply(all: Map<string, Live>, event: ProgressEvent): void {
-  const current = all.get(event.jobId) ?? emptyLive();
-  all.set(event.jobId, current);
-
-  switch (event.kind) {
-    case "log":
-      if (event.message) remember(event.jobId, event.message);
-      break;
-
-    case "progress":
-      if (event.total && event.total > 0 && event.current !== undefined) {
-        current.percent = Math.min(100, Math.round((event.current / event.total) * 100));
-        current.warn = false;
-        current.note = `${current.percent}% · ${event.item ?? ""}`;
-      } else if (event.current !== undefined) {
-        current.note = `${event.current.toLocaleString()} ${event.unit ?? ""} · ${event.item ?? ""}`;
-      }
-      break;
-
-    case "retry":
-      current.warn = true;
-      current.note = `Attempt ${event.attempt} failed — retrying in ${Math.round((event.retryIn ?? 0) / 1e9)}s. ${event.message ?? ""}`;
-      break;
-
-    case "breakerOpen":
-      current.warn = true;
-      current.note = `Paused — ${event.item} has been unreachable. Retrying in ${Math.round((event.retryIn ?? 0) / 1e9)}s. Nothing is lost.`;
-      break;
-
-    case "phaseStarted":
-      current.note = event.label ?? event.phase ?? "";
-      // Written here rather than waiting for the refresh: the tick is the one
-      // piece of feedback that has to feel immediate.
-      if (event.phase) {
-        for (const [phase, state] of current.steps) {
-          if (state === "live") current.steps.delete(phase);
-        }
-        current.steps.set(event.phase, "live");
-      }
-      break;
-
-    case "phaseCompleted":
-      if (event.phase) current.steps.set(event.phase, "done");
-      break;
-
-    case "phaseFailed":
-      if (event.phase) current.steps.set(event.phase, "failed");
-      current.warn = true;
-      if (event.message) current.note = event.message;
-      break;
-
-    case "cloneCreated":
-      remember(event.jobId, `Ephemeral clone ${event.item} is running.`, true);
-      break;
-
-    case "cloneDestroyed":
-      remember(event.jobId, `Ephemeral clone ${event.item} destroyed.`, true);
-      break;
-  }
-}
-
-/** How many lines of a job's output are kept. It is a log tail, not a log file. */
-const maxLogLines = 500;
-
-function remember(jobId: string, line: string, fromPortCloak = false): void {
-  const lines = logTails.get(jobId) ?? [];
-  lines.push({ text: line, fromPortCloak });
-  if (lines.length > maxLogLines) lines.splice(0, lines.length - maxLogLines);
-  logTails.set(jobId, lines);
 }

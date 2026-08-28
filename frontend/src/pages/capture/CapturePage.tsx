@@ -42,7 +42,7 @@ import { RealmsStep } from "./RealmsStep";
 import { ReviewStep } from "./ReviewStep";
 import { SourceStep } from "./SourceStep";
 import { StorageStep } from "./StorageStep";
-import { kindLabel, type CaptureDraft, type Step } from "./draft";
+import { advanceable, kindLabel, type CaptureDraft, type Step } from "./draft";
 
 const steps: { key: Step; label: string }[] = [
   { key: "source", label: "Source & probe" },
@@ -260,52 +260,4 @@ function subtitle(defaults: WizardDefaults, draft: CaptureDraft): string {
   if (!environment) return "Choose where Keycloak runs and where the snapshot should go.";
   const realms = draft.realms.length ? draft.realms.join(", ") : "no realm selected";
   return `Realm ${realms} · source “${environment.name}” · ${kindLabel(environment.kind)}`;
-}
-
-/** Whether the current step has been answered, and what is missing if not. */
-function advanceable(
-  step: Step,
-  draft: CaptureDraft,
-  probe: ProbeResult | undefined,
-): { ok: boolean; reason?: string } {
-  switch (step) {
-    case "source":
-      if (!draft.environment) return { ok: false, reason: "Choose an environment." };
-      if (!probe) {
-        return {
-          ok: false,
-          reason:
-            "Run Test first, so a failure is a sentence now rather than a surprise later.",
-        };
-      }
-      if (!probe.ok) {
-        return { ok: false, reason: "The probe found something that would stop a capture." };
-      }
-      return { ok: true };
-
-    case "realms":
-      return draft.realms.length > 0
-        ? { ok: true }
-        : { ok: false, reason: "Select at least one realm." };
-
-    case "options":
-      if (draft.encrypt && draft.encryptionMode === "passphrase" && !draft.passphrase) {
-        return { ok: false, reason: "Enter a passphrase, or switch to recipients." };
-      }
-      if (draft.encrypt && draft.encryptionMode === "recipients" && draft.recipients.length === 0) {
-        return { ok: false, reason: "Add at least one age recipient." };
-      }
-      if (!draft.encrypt && !draft.acknowledgedUnencrypted) {
-        return { ok: false, reason: "Confirm that this snapshot may be written unencrypted." };
-      }
-      return { ok: true };
-
-    case "storage":
-      return draft.storage
-        ? { ok: true }
-        : { ok: false, reason: "Choose where the snapshot should go." };
-
-    default:
-      return { ok: true };
-  }
 }
