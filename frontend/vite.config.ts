@@ -76,8 +76,12 @@ export default defineConfig({
       output: {
         // One bundle. A desktop app loads from disk, so splitting buys nothing
         // and makes the embedded asset tree harder to reason about.
-        manualChunks: undefined,
-        inlineDynamicImports: true,
+        //
+        // This was `inlineDynamicImports: true` plus an explicitly undefined
+        // `manualChunks`. Vite 8 bundles with Rolldown rather than Rollup and
+        // deprecated the first in favour of this one flag, which says the same
+        // thing plainly; the second was only ever restating the default.
+        codeSplitting: false,
       },
     },
   },

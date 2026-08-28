@@ -13,7 +13,12 @@
     "noEmit": true,
     "skipLibCheck": true,
     "isolatedModules": true,
-    "verbatimModuleSyntax": true
+    "verbatimModuleSyntax": true,
+    // Vite and Vitest strip types rather than compile them, so TypeScript
+    // syntax that has to emit code — enums, namespaces, parameter
+    // properties — would type-check here and be missing at runtime. This
+    // rejects it at the point it is written instead.
+    "erasableSyntaxOnly": true
   },
   "include": ["src"]
 }
