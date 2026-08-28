@@ -48,6 +48,15 @@ upgrading.
   export five minutes in. The range is enforced in the engine as well as the wizard.
 
 ### Fixed
+- An Azure endpoint that does not name the storage account said `ResourceNotFound (HTTP 404)` and
+  left the operator to work out the rest. Azure carries the account in the host name and an
+  emulator carries it as the first path segment, so an endpoint that stops at the port leaves the
+  container name sitting where the account name should be — and it is read as one. The container is
+  never looked for, which is why the 404 does not say `ContainerNotFound`, and why nothing is
+  created in response to it: PortCloak will make a container that is missing, but not one it has no
+  account to make it in. The message now says an account was not found at the endpoint, that the
+  container was therefore never looked up, and where the account belongs. `ResourceNotFound` also
+  joins the codes that are never retried, being a configuration error rather than a passing one.
 - A storage backend listed the folder above the one it was configured with. The scan fell back to
   the parent whenever the configured root could not be stat'd, which was meant for a prefix naming
   a key stem rather than a directory — every object store treats a prefix that way — but it fired

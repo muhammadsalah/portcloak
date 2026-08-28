@@ -241,6 +241,18 @@ func describeAzureError(err error, containerName string) string {
 	switch {
 	case bloberror.HasCode(err, bloberror.ContainerNotFound):
 		return fmt.Sprintf("There is no container called %q at this endpoint.", containerName)
+	case bloberror.HasCode(err, bloberror.ResourceNotFound):
+		// A 404 naming the resource rather than the container means the request
+		// never identified a storage account, so the container was not looked
+		// for at all. Azure carries the account in the host name and an
+		// emulator carries it as the first path segment, which is the way an
+		// endpoint that stops at the port goes wrong: the container name is
+		// left sitting where the account name should be, and is read as one.
+		// Reporting this as a missing container would send the operator to
+		// look at the one thing that is not the problem.
+		return fmt.Sprintf("No storage account was found at this endpoint, so %q was never looked up as a container. "+
+			"An account is named in the host by Azure itself and as the first path segment by an emulator, "+
+			"so the endpoint has to carry it rather than stopping at the host or the port.", containerName)
 	case bloberror.HasCode(err, bloberror.AuthenticationFailed):
 		return "The credential was rejected. Check the account key, connection string or SAS."
 	case bloberror.HasCode(err, bloberror.AuthorizationPermissionMismatch):
@@ -262,8 +274,8 @@ func classify(err error, containerName string) error {
 	}
 	switch {
 	case bloberror.HasCode(err, bloberror.ContainerNotFound, bloberror.BlobNotFound,
-		bloberror.AuthenticationFailed, bloberror.AuthorizationPermissionMismatch,
-		bloberror.InvalidBlockList):
+		bloberror.ResourceNotFound, bloberror.AuthenticationFailed,
+		bloberror.AuthorizationPermissionMismatch, bloberror.InvalidBlockList):
 		return resil.Fatal("talk to Azure Blob", describeAzureError(err, containerName), err)
 	case bloberror.HasCode(err, bloberror.ServerBusy, bloberror.InternalError, bloberror.OperationTimedOut):
 		return resil.Retry("talk to Azure Blob", "The container was briefly unavailable.", err)
