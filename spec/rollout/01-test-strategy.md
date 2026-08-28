@@ -174,6 +174,23 @@ The frontend holds no business logic, so it is tested narrowly and deliberately:
 - **Manual accessibility and clarity pass** per phase against the [design file](../lunacy/) —
   keyboard reachability, focus order, and whether the unencrypted-bundle warning is unmissable.
 
+The suite is Vitest over jsdom with Testing Library, run by `npm --prefix frontend test`, and
+each test file sits beside the module it covers. The engine is never reached: a test that needs
+an answer from it mocks `src/api.ts`, which is the frontend's only door to Go.
+
+That a module *is* view state, rather than something drawn, is the thing the tests depend on, so
+the three named above were moved out of their components to where they can be stated on their
+own — `pages/capture/draft.ts`, `pages/restore/wizard.ts`, and `pages/activity/live.ts`. Only the
+user table stayed in place, because paging and facets are held in the query it sends and the
+assertion worth making is which query that was.
+
+Coverage is measured with two floors, because one number cannot say both things
+([`vitest.config.ts`](../../frontend/vitest.config.ts)). The global figure is low and honestly
+so — most of what is left is a form wired to the engine, exactly as this section intends — and
+its only job is to stop the suite rotting. The per-file figure is the one that means something:
+every module that decides something is covered completely, and a change that stops covering one
+fails CI rather than being averaged away by the pages around it.
+
 ## 1.10 What "verified" means in the phase documents
 
 Each phase's *Verification* table maps a requirement to **evidence**: a named test, a produced

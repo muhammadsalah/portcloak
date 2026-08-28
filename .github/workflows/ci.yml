@@ -135,7 +135,23 @@ jobs:
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
       # No network, no Docker, no Keycloak. If a test in the engine needs one of
       # those, a fake is missing rather than the test being justified.
-      - run: go test -tags gtk3 ./internal/... -race -timeout 15m
+      #
+      # The suite runs through coverage.sh rather than directly, so every green
+      # run publishes a number instead of only the absence of a failure. The
+      # script owns the flags, the floor and the summary; see the comment at the
+      # top of it for why the measurement is not `go test -cover`.
+      - name: Unit tests, with coverage
+        run: ./build/ci/coverage.sh
+
+      # Kept so a run can be compared against an earlier one, and so a drop can
+      # be attributed to a file rather than argued about as a percentage.
+      - name: Keep the coverage profile
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-coverage
+          path: coverage.out
+          if-no-files-found: warn
 
   redaction:
     # A separate stage so a redaction failure is unmissable. Test output and
@@ -177,6 +193,30 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm --prefix frontend ci
       - run: npm --prefix frontend run check
+
+      # Two floors, one command: a low global figure that stops the suite
+      # rotting, and a 100% figure on each module that decides something —
+      # wizard step validity, the job progress reducer, the user table's paging
+      # and facets. vitest.config.ts says which, and why the global one is low.
+      - name: Frontend tests, with coverage
+        run: npm --prefix frontend run test:coverage
+
+      # The same reasoning as the Go job: a number nobody has to open a log to
+      # read is a metric, and one buried in the output is not.
+      - name: Report the frontend coverage
+        if: always()
+        run: |
+          node -e '
+            const summary = require("./frontend/coverage/coverage-summary.json").total;
+            const pct = (k) => `${summary[k].pct.toFixed(2)}% (${summary[k].covered}/${summary[k].total})`;
+            console.log(`### Frontend coverage: ${summary.statements.pct.toFixed(2)}%\n`);
+            console.log("| | Covered |");
+            console.log("|---|---|");
+            for (const k of ["statements", "branches", "functions", "lines"]) {
+              console.log(`| ${k} | ${pct(k)} |`);
+            }
+          ' >> "$GITHUB_STEP_SUMMARY"
+
       - run: npm --prefix frontend run build
 
   integration:

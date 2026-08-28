@@ -95,6 +95,17 @@ returning.
   clone outlives the run.
 - Every use case and requirement in the rollout matrix names the test that would fail if it
   stopped being met, and CI checks those names still resolve.
+- The frontend has a suite of its own — Vitest over jsdom, with the engine mocked at
+  `src/api.ts`, the frontend's only door to Go. It covers what
+  [`spec/rollout/01` §1.9](./spec/rollout/01-test-strategy.md) says is worth covering and no
+  more: wizard step validity for both wizards, the job progress reducer behind the Activity
+  screen, the user table's paging and facets, and the shared pieces every screen leans on — the
+  loading hook, the error boundary, the progress subscription and the formatters.
+- Both suites report coverage, so a green run says how much it exercised rather than only that
+  nothing failed. The Go figure is measured with `-coverpkg=./internal/...`, because
+  `go test -cover` grades each package against its own tests and reports 0.0% for one exercised
+  entirely through a sibling. Each has a floor set just under what it currently reaches: raising
+  one is a commit, and lowering one is a change a reviewer is meant to notice.
 
 ### Application
 - Wails v3 desktop shell with the eight screens from the design file. No sign-in, because there
@@ -102,6 +113,13 @@ returning.
   the OS keychain, referenced by handle.
 - Redacting `slog` handler from the first commit, with its own CI stage so a failure there is
   unmissable.
+- Vite 8, TypeScript 7 and Wails v3.0.0-beta.15 on both sides of the bridge. The Wails Go module
+  and its JavaScript runtime are bumped together and pinned to the same beta, because they are
+  two halves of one binding protocol and a version skew between them fails at the call rather
+  than at the build. `erasableSyntaxOnly` is on: Vite and Vitest strip types rather than compile
+  them, so TypeScript syntax that has to emit code would type-check and then be missing at
+  runtime. The Go module graph moved with it — current AWS and Azure SDKs among them — and the
+  suite, `go vet` and `golangci-lint` are green on the result.
 
 ### Licence
 - **Apache License 2.0.** `LICENSE` is the Apache Software Foundation's text byte-identical to
@@ -171,6 +189,11 @@ returning.
   options of neither `export` nor `import` on any Keycloak measured, and `--http-management-port`
   exists only between 25.0 and 26.3. The invocation is now built from what the binary reports,
   because that answer changed twice in three minor releases.
+- **A resume test read the previous attempt's result.** `ResumeUpload` starts a goroutine and
+  returns, and the harness counted `interrupted` as settled — which it has to, because that is
+  how a dropped upload legitimately ends — so the assertions ran against the job as it was
+  before the resume. It passed for the same reason it was wrong: the window was narrow. Coverage
+  instrumentation widened it enough to fail every time.
 - **The restore wizard asked for no decryption key.** It sent an empty one to both the pre-flight
   open and the apply. The key is collected on the step that promises decryption runs first, and
   carried to the import — which opens the bundle again on its own.

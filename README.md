@@ -94,6 +94,22 @@ the test being justified. Tests that genuinely need a service container are
 behind `-tags=integration`, so a missing MinIO reads as "not run" and never as a
 silent pass.
 
+The frontend has its own suite, which needs the Node toolchain but still nothing
+running:
+
+```bash
+npm --prefix frontend test
+```
+
+Either suite can report what it covered. Both floors are ratchets — they are set
+just under what the suites currently reach, so the number can only be argued
+upwards:
+
+```bash
+./build/ci/coverage.sh               # the engine, with a coverage profile
+npm --prefix frontend run test:coverage
+```
+
 ## Licence
 
 Apache License 2.0. See [`LICENSE`](./LICENSE) for the terms and

@@ -149,14 +149,22 @@ CI runs on every push. It is intentionally cheap enough to run on every push:
 |-------|---------|------|
 | Build | `go build ./...` for darwin/linux/windows | must pass |
 | Vet & lint | `go vet ./...`, `golangci-lint run` | must pass |
-| Unit | `go test ./... -race -short` | must pass, no network |
+| Unit | `build/ci/coverage.sh` — `go test ./internal/... -race` with a coverage profile | must pass, no network; coverage must not fall below the floor |
 | Redaction | `go test ./internal/engine/obs -run TestRedaction` | must pass — separate stage so a failure is unmissable |
 | Integration | `go test ./... -tags=integration` against the Keycloak fixture matrix and service containers (MinIO, Azurite, sshd) | must pass on `main` and on phase branches |
-| Frontend | `npm ci && npm run build && npm run check` | must pass |
+| Frontend | `npm ci && npm run check && npm run test:coverage && npm run build` | must pass; coverage must not fall below the floor |
 
 Integration tests are tagged, not skipped by a runtime probe, so a missing Docker daemon
 produces "not run" rather than a silent pass. The distinction matters: a green board that
 silently skipped every Keycloak test is worse than a red one.
+
+Both suites publish a coverage figure into the job summary, so a run says how much of the code it
+exercised rather than only that nothing failed. Both floors are ratchets set just under what the
+suite currently reaches: they can be raised in a commit that says why, and lowering one is a
+change a reviewer is meant to notice. The Go measurement uses `-coverpkg=./internal/...` rather
+than `go test -cover`, because the default grades each package against its own tests and reports
+0.0% for a package exercised entirely through a sibling — see the comment at the top of
+[`build/ci/coverage.sh`](../../build/ci/coverage.sh).
 
 ## 0.8 Versioning
 
