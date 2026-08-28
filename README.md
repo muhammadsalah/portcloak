@@ -110,6 +110,22 @@ upwards:
 npm --prefix frontend run test:coverage
 ```
 
+## Releases and signatures
+
+Releases are built only by [`.github/workflows/release.yml`](./.github/workflows/release.yml)
+from a signed tag, never on a laptop. The macOS bundle carries an Apple
+Developer ID signature and is notarised; the Windows executables are
+Authenticode-signed; and for every artifact on every platform, `SHA256SUMS` is
+signed with Sigstore and each file carries a build-provenance attestation
+binding it to this repository at that commit. Each release publishes the exact
+commands to check all of it.
+
+Who may sign, what has to be true first, and how to verify a download are in
+[`CODE_SIGNING.md`](./CODE_SIGNING.md).
+
+Free code signing provided by [SignPath.io](https://signpath.io), certificate by
+[SignPath Foundation](https://signpath.org).
+
 ## Licence
 
 Apache License 2.0. See [`LICENSE`](./LICENSE) for the terms and

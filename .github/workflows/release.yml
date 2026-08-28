@@ -493,6 +493,15 @@ jobs:
             echo "The macOS bundle is signed with a Developer ID and notarised; the Windows"
             echo "executables are Authenticode-signed. Neither replaces the two checks above,"
             echo "which are what tie these files to this repository at this commit."
+            echo
+            echo "Who may sign a release and what has to be true first:"
+            echo "[CODE_SIGNING.md](https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/CODE_SIGNING.md)."
+            echo
+            # SignPath Foundation requires this attribution on the download
+            # page, and a GitHub release page is the download page. It is
+            # generated rather than pasted so it cannot be forgotten on a
+            # release somebody writes notes for by hand.
+            echo "Free code signing provided by [SignPath.io](https://signpath.io), certificate by [SignPath Foundation](https://signpath.org)."
           } > "$notes"
 
           gh release create "$TAG" \
