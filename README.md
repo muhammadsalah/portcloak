@@ -113,18 +113,18 @@ npm --prefix frontend run test:coverage
 ## Releases and signatures
 
 Releases are built only by [`.github/workflows/release.yml`](./.github/workflows/release.yml)
-from a signed tag, never on a laptop. The macOS bundle carries an Apple
-Developer ID signature and is notarised; the Windows executables are
-Authenticode-signed; and for every artifact on every platform, `SHA256SUMS` is
-signed with Sigstore and each file carries a build-provenance attestation
-binding it to this repository at that commit. Each release publishes the exact
-commands to check all of it.
+from a signed tag, never on a laptop. For every artifact on every platform,
+`SHA256SUMS` is signed with Sigstore and each file carries a build-provenance
+attestation binding it to this repository at that commit. Each release publishes
+the exact commands to check both.
+
+Platform signatures — an Apple Developer ID with notarisation, and Authenticode
+on Windows — are not in place yet, so **0.0.1 carries neither**. Each release's
+notes state which signatures that particular build actually got, rather than
+describing what the pipeline is capable of.
 
 Who may sign, what has to be true first, and how to verify a download are in
 [`CODE_SIGNING.md`](./CODE_SIGNING.md).
-
-Free code signing provided by [SignPath.io](https://signpath.io), certificate by
-[SignPath Foundation](https://signpath.org).
 
 ## Licence
 

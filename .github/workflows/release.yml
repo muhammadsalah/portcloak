@@ -113,6 +113,10 @@ jobs:
     name: macOS (universal)
     needs: frontend
     runs-on: macos-latest
+    outputs:
+      # The release notes must describe what happened, not what the workflow
+      # is capable of. A build that skipped signing has to say so.
+      signed: ${{ steps.outcome.outputs.signed }}
     env:
       VERSION: ${{ needs.frontend.outputs.version }}
       # Read once here so the steps below can test whether signing is possible
@@ -227,6 +231,10 @@ jobs:
       - name: Archive
         run: ./build/package.sh --targets darwin --version "$VERSION" --archive-only
 
+      - name: Record whether this build was signed
+        id: outcome
+        run: echo "signed=${SIGNING_AVAILABLE}" >> "$GITHUB_OUTPUT"
+
       - uses: actions/upload-artifact@v7
         with:
           name: artifacts-macos
@@ -251,6 +259,8 @@ jobs:
       # which every other scope is none, and the action fails fetching the
       # artifact it was just handed the id of.
       actions: read
+    outputs:
+      signed: ${{ steps.outcome.outputs.signed }}
     env:
       VERSION: ${{ needs.frontend.outputs.version }}
     steps:
@@ -345,6 +355,10 @@ jobs:
 
       - name: Archive
         run: ./build/package.sh --targets windows --version "$VERSION" --archive-only
+
+      - name: Record whether this build was signed
+        id: outcome
+        run: echo "signed=${{ vars.SIGNPATH_ORGANIZATION_ID != '' }}" >> "$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@v7
         with:
@@ -551,6 +565,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.ref || github.ref_name }}
+          MACOS_SIGNED: ${{ needs.macos.outputs.signed }}
+          WINDOWS_SIGNED: ${{ needs.windows.outputs.signed }}
         run: |
           set -euo pipefail
           notes=$(mktemp)
@@ -569,18 +585,34 @@ jobs:
             echo "gh attestation verify PortCloak-${VERSION}-macos-universal.zip --repo ${GITHUB_REPOSITORY}"
             echo '```'
             echo
-            echo "The macOS bundle is signed with a Developer ID and notarised; the Windows"
-            echo "executables are Authenticode-signed. Neither replaces the two checks above,"
-            echo "which are what tie these files to this repository at this commit."
+            echo "Those two checks are what tie these files to this repository at this commit,"
+            echo "and they apply to every artifact here."
+            echo
+
+            # Each of these describes what this build actually got. Saying a
+            # bundle is notarised when no Apple credentials were configured
+            # would be a false claim about a security property, which is worse
+            # than saying nothing — the reader cannot tell it is wrong, and it
+            # is exactly the claim they are relying on.
+            echo "### Platform signatures"
+            echo
+            if [ "$MACOS_SIGNED" = "true" ]; then
+              echo "- **macOS** — signed with an Apple Developer ID, hardened runtime, notarised and stapled."
+            else
+              echo "- **macOS** — *not* signed or notarised. macOS will refuse to open it: right-click → Open,"
+              echo "  or \`xattr -d com.apple.quarantine PortCloak.app\`, and satisfy yourself with the checks"
+              echo "  above first."
+            fi
+            if [ "$WINDOWS_SIGNED" = "true" ]; then
+              echo "- **Windows** — Authenticode-signed."
+              echo "- Free code signing provided by [SignPath.io](https://signpath.io), certificate by [SignPath Foundation](https://signpath.org)."
+            else
+              echo "- **Windows** — *not* Authenticode-signed. SmartScreen will call it an unrecognised app."
+            fi
+            echo "- **Linux** — no platform signature exists; the two checks above are the verification."
             echo
             echo "Who may sign a release and what has to be true first:"
             echo "[CODE_SIGNING.md](https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/CODE_SIGNING.md)."
-            echo
-            # SignPath Foundation requires this attribution on the download
-            # page, and a GitHub release page is the download page. It is
-            # generated rather than pasted so it cannot be forgotten on a
-            # release somebody writes notes for by hand.
-            echo "Free code signing provided by [SignPath.io](https://signpath.io), certificate by [SignPath Foundation](https://signpath.org)."
           } > "$notes"
 
           gh release create "$TAG" \

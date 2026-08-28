@@ -47,11 +47,16 @@ split.
 
 ## What is signed, and how to verify it
 
-| Platform | Signature |
-|---|---|
-| macOS | Apple Developer ID, hardened runtime, notarised by Apple and stapled |
-| Windows | Authenticode, certificate by SignPath Foundation |
-| all platforms | `SHA256SUMS` signed with [Sigstore](https://www.sigstore.dev/) cosign in keyless mode, plus a build-provenance attestation per artifact |
+| Platform | Signature | In place |
+|---|---|---|
+| macOS | Apple Developer ID, hardened runtime, notarised by Apple and stapled | not yet |
+| Windows | Authenticode, certificate by SignPath Foundation | not yet — application pending |
+| all platforms | `SHA256SUMS` signed with [Sigstore](https://www.sigstore.dev/) cosign in keyless mode, plus a build-provenance attestation per artifact | **yes** |
+
+A release does not claim a signature it did not get. The pipeline skips a
+platform stage when its credentials are absent, and the release notes for that
+build say which signatures it actually carries — so "not yet" above is a
+statement about today, and the notes are the record per release.
 
 The last row is the one to check, and it is the one that answers the question
 worth asking. A Developer ID or Authenticode signature tells you a certificate
@@ -96,5 +101,8 @@ vulnerability reporting on this repository.
 
 ---
 
-Free code signing provided by [SignPath.io](https://signpath.io), certificate
-by [SignPath Foundation](https://signpath.org).
+Windows code signing is intended to be provided by
+[SignPath.io](https://signpath.io) with a certificate from
+[SignPath Foundation](https://signpath.org), whose free open-source programme
+this project has applied to. This line becomes an attribution rather than an
+intention once that application is approved and the first signed build ships.
