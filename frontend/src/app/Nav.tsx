@@ -4,15 +4,22 @@
 /**
  * The navigation rail.
  *
- * Two groups: what an operator does, and what they configure. An item that
- * cannot be used yet is dimmed rather than hidden, so the shape of the tool is
- * visible from the first launch.
+ * Two groups: what an operator does, and what they configure. Every item on it
+ * goes somewhere that stands on its own — which is why there is no dimming and
+ * no disabled state left here.
+ *
+ * The two that used to need it are reached from the thing they act on instead:
+ * a capture starts from the Snapshots screen, whose first-run state stands in
+ * for the table until there is an environment and a storage to capture between,
+ * and a restore starts from the row of the snapshot being restored. Both were
+ * items that could not act alone, and dimming them was the rail apologising for
+ * offering them at all.
  */
 import styled from "styled-components";
 
 import { Icon } from "../components/Icon";
 import { useShell } from "./ShellContext";
-import { routeKey, type Route } from "./routes";
+import { type Route, routeKey } from "./routes";
 
 interface NavItem {
   key: string;
@@ -24,10 +31,11 @@ const groups: { section: string; items: NavItem[] }[] = [
   {
     section: "Workspace",
     items: [
-      { key: "capture", label: "Capture", route: { name: "capture" } },
-      { key: "library", label: "Snapshots", route: { name: "library" } },
-      { key: "restore", label: "Restore", route: { name: "restore" } },
+      // Activity leads, because it is the screen an operator returns to. The
+      // other two start something; this one says what is happening now, which
+      // is the question being asked every time the window is opened again.
       { key: "activity", label: "Activity", route: { name: "activity" } },
+      { key: "library", label: "Snapshots", route: { name: "library" } },
     ],
   },
   {
@@ -51,32 +59,19 @@ export function Nav() {
       {groups.map((group) => (
         <div key={group.section}>
           <Section>{group.section}</Section>
-          {group.items.map((item) => {
-            // Until there is an environment and a storage, a capture cannot
-            // start; until something has been captured, there is nothing to
-            // restore.
-            const blocked =
-              item.key === "capture" && (shell.environments === 0 || shell.storages === 0);
-            const restoreBlocked = item.key === "restore" && !shell.hasSnapshots;
-            const disabled = blocked || restoreBlocked;
-
-            return (
-              <Item
-                key={item.key}
-                $active={active === item.key}
-                $disabled={disabled}
-                onClick={() => {
-                  if (!disabled) shell.navigate(item.route);
-                }}
-              >
-                <ItemLabel>
-                  <Icon name={item.key} />
-                  <span>{item.label}</span>
-                </ItemLabel>
-                <Trailing item={item} />
-              </Item>
-            );
-          })}
+          {group.items.map((item) => (
+            <Item
+              key={item.key}
+              $active={active === item.key}
+              onClick={() => shell.navigate(item.route)}
+            >
+              <ItemLabel>
+                <Icon name={item.key} />
+                <span>{item.label}</span>
+              </ItemLabel>
+              <Trailing item={item} />
+            </Item>
+          ))}
         </div>
       ))}
     </Rail>
@@ -111,28 +106,20 @@ const Section = styled.div`
   padding: 16px 16px 6px;
 `;
 
-const Item = styled.div<{ $active: boolean; $disabled: boolean }>`
+const Item = styled.div<{ $active: boolean }>`
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 8px 16px;
-  cursor: ${(p) => (p.$disabled ? "default" : "pointer")};
+  cursor: pointer;
   border-left: 3px solid ${(p) => (p.$active ? p.theme.color.primary : "transparent")};
   background: ${(p) => (p.$active ? p.theme.color.navActive : "transparent")};
   color: ${(p) => (p.$active ? "#fff" : p.theme.color.navText)};
-  opacity: ${(p) => (p.$disabled ? 0.45 : 1)};
   user-select: none;
 
   &:hover {
-    background: ${(p) =>
-      p.$disabled
-        ? p.$active
-          ? p.theme.color.navActive
-          : "transparent"
-        : p.$active
-          ? p.theme.color.navActive
-          : p.theme.color.navHover};
-    color: ${(p) => (p.$disabled && !p.$active ? p.theme.color.navText : "#fff")};
+    background: ${(p) => (p.$active ? p.theme.color.navActive : p.theme.color.navHover)};
+    color: #fff;
   }
 
   /*
@@ -140,6 +127,7 @@ const Item = styled.div<{ $active: boolean; $disabled: boolean }>`
    * with it on hover and when active. A line drawing at 16px reads as noise at
    * the same weight as its text.
    */
+
   svg {
     flex: none;
     opacity: ${(p) => (p.$active ? 1 : 0.75)};

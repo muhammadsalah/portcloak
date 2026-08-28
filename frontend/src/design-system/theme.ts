@@ -101,6 +101,7 @@ export const theme = {
   },
 
   z: {
+    dropdown: 30,
     modal: 40,
   },
 } as const;

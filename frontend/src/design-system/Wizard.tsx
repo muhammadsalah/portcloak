@@ -32,8 +32,7 @@ export const WizardStep = styled.div<{ $active?: boolean; $done?: boolean; $clic
   align-items: center;
   padding: 9px 16px;
   font-size: 14px;
-  color: ${(p) =>
-    p.$active || p.$done ? p.theme.color.text : p.theme.color.textSecondary};
+  color: ${(p) => (p.$active || p.$done ? p.theme.color.text : p.theme.color.textSecondary)};
   cursor: ${(p) => (p.$clickable ? "pointer" : "default")};
 
   ${(p) =>

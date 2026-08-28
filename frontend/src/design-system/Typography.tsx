@@ -18,7 +18,11 @@ export const PageSubtitle = styled.div<{ $mono?: boolean }>`
   color: ${(p) => p.theme.color.textSecondary};
   font-size: 13px;
   margin-bottom: 20px;
-  ${(p) => p.$mono && css`font-family: ${p.theme.font.mono};`}
+  ${(p) =>
+    p.$mono &&
+    css`
+      font-family: ${p.theme.font.mono};
+    `}
 `;
 
 /** Title on the left, the screen's primary action on the right. */

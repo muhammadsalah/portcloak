@@ -18,7 +18,7 @@ from its cause.
 | # | Note | Covers |
 |---|------|--------|
 | 01 | [`01-the-wails-bridge.md`](./01-the-wails-bridge.md) | Go ↔ frontend: bound method names, `null` lists, struct tags, dev server, views that never finish, secrets never collected, a screen that does not keep up with the run |
-| 02 | [`02-the-engine.md`](./02-the-engine.md) | Targets, clones, storage and resilience: silent success, leaked clones, checkpoints, kc.sh option drift and where kc.sh is, pushing into a clone, keys the tool refuses to keep, an index shared between snapshots |
+| 02 | [`02-the-engine.md`](./02-the-engine.md) | Targets, clones, storage and resilience: silent success, leaked clones, checkpoints, kc.sh option drift and where kc.sh is, pushing into a clone, keys the tool refuses to keep, an index shared between snapshots, a failure explained only in lines nobody parsed, a page size that is the operator's, a number that sorts as text, a clone in use swept as wreckage |
 
 ## Entry format
 

@@ -357,3 +357,162 @@ file underneath it. A session that is replaced is closed.
 both, and checks that each holds its own realm's users and that closing one does
 not break the other. `TestSessions_ReopeningASnapshotClosesTheOneItReplaces`
 (`internal/app/keys_test.go`) covers the session map.
+
+---
+
+## 14. A timestamp in front of the level hid every line that said why
+
+**Symptom** — A capture of a large realm dies inside the ephemeral clone after five minutes, and
+PortCloak reports `kc.sh export exited with code 1`. The log panel is full of Keycloak's own
+ERROR lines saying exactly what happened. The operator, with nothing else to go on, starts
+looking at disk space.
+
+**Cause** — Two faults stacked, and the second one hid the first.
+
+`ParseOutput` anchored its level regexes at the start of the line: `^\s*(?:ERROR|WARN)\b`. That
+matches the launcher's own bare `ERROR: ...`, printed before the server comes up. It matches
+nothing a *running* Keycloak logs, because every one of those lines opens with a timestamp:
+
+```
+2026-08-28 06:02:41,471 ERROR [org.keycloak...ExecutionExceptionHandler] (main) ERROR: Transaction was rolled back in a different thread
+```
+
+So `Outcome.Errors` and `Outcome.Warnings` were empty for every real failure, no kc.sh warning
+ever reached the ledger, and `ClassifyFailure` fell through every case it has to the exit code.
+
+Underneath it was a transaction timeout, not disk and not the clone. `kc.sh export` runs each
+page of users — `--users-per-file` of them — inside one transaction, and on a realm federated to
+LDAP it re-reads every user through the federation provider, one synchronous directory round trip
+each, inside that transaction. At 1,000 users a page against a slow directory, the page outruns
+the server's transaction limit, Narayana's reaper cancels it, and the export dies. The elapsed
+time is the tell: the reaper fires an exact interval after the export began, and the stack it
+prints is parked in `LdapRequest.getReplyBer`.
+
+**Rule** — A log level is read wherever the line puts it, after the prefix rather than at column
+zero, and the level is not left inside the message. A failure that a running Keycloak explained in
+prose must arrive as that prose; the exit code is the last resort, not the first answer.
+
+The transaction is bounded by the one thing the export chooses — the page size — so that number is
+the operator's, set per capture between 10 and 1,000 rather than fixed at the default. The range is
+held in the engine as well as the wizard: a hand-edited config or a job queued by an older build
+cannot put a page on the command line that no transaction finishes. The classified failure names
+the same setting, so the message and the control agree.
+
+Automatic detection was built and then removed. It asked the Admin API which user storage providers
+the realm had and shrank the page before the first attempt; it worked, and it was not worth what it
+cost — an extra Admin API round trip on every capture, a method on the `Verifier` interface, and a
+retry path that had to write into a fresh directory because the timed-out attempt had already
+written part of a snapshot and pages of two sizes overlap. A number the operator sets does the same
+job with none of it. The note is kept because the reasoning is the reusable part: prefer the
+setting to the inference where the operator knows something the tool would have to guess at.
+
+Where a realm cannot be read inside the limit at any page size, the limit itself can be lifted per
+capture — `QUARKUS_TRANSACTION_MANAGER_DEFAULT_TRANSACTION_TIMEOUT=0`, opt-in, never a default.
+It is written as lifting the limit rather than "disabling transactions" because the latter is not a
+thing that exists: the export is a sequence of transactions and no Keycloak option turns them off.
+The distinction matters at the point someone reads the checkbox and decides what it protects them
+from. What it costs is the bound on an export that has stopped making progress, which is why it is
+the operator's decision and appears in the logged command line. The restore carries the same option
+for the same reason — the import writes users a page at a time in the same way — with one difference
+worth stating where the operator decides: an export cancelled part-way leaves nothing behind, an
+import leaves a half-applied realm.
+
+A smaller page does not rescue a directory that has stopped answering: the reaper's sampled stacks
+were all parked in the same `getReplyBer`, which is a connection hanging rather than throughput
+accumulating.
+
+**Guard** — `TestParseOutput_ReadsTimestampedServerLines` and
+`TestClassifyFailure_NamesTheTransactionTimeout` (`internal/engine/kc/kc_test.go`) feed verbatim
+lines from the real failed export; the second asserts the advice does not send the operator to disk
+space. `TestClampUsersPerFile_HoldsTheRange` covers the bounds,
+`TestCapture_UsersPerFileIsTheOperatorsChoice` and
+`TestCapture_UsersPerFileIsClampedToTheSupportedRange`
+(`internal/engine/orchestrator/capture_test.go`) cover what reaches the command line, and
+`clampUsersPerFile` in `frontend/src/pages/capture/draft.test.ts` covers the wizard's copy of the
+same range. `TestBuildExport_LiftsTheTransactionLimitOnlyWhenAsked` and
+`TestCapture_TransactionLimitIsLiftedOnlyWhenAsked`, with
+`TestBuildImport_LiftsTheTransactionLimitOnlyWhenAsked` and
+`TestRestore_TransactionLimitIsLiftedOnlyWhenAsked` for the restore, keep the escape hatch opt-in
+and off the command line, and `TestExecArgv_CarriesTheEnvironment`
+(`internal/engine/target/k8s/argv_test.go`) keeps the fourth adapter honouring `Command.Env` — the
+contract table already asserted it, but only under a tag that needs a cluster.
+
+---
+
+## 15. A number in a filename sorts as text unless it is padded
+
+**Symptom** — An export's user files are `acme-users-0.json` … `acme-users-10.json`. Anything that
+orders them as names reads that as 0, 1, 10, 2.
+
+**Cause** — kc.sh numbers the files without padding, and a name is a name. The first instinct is
+that Keycloak's `import` must therefore read the pages out of order, which turns out to be wrong in
+both directions and is worth writing down because the wrong version is so plausible.
+
+Measured, not inferred — `DirImportProvider` pulled out of the images and read, on 24.0, 26.3 and
+26.5.0, all three identical:
+
+```
+file pattern:  -users-[0-9]+\.json     -federated-users-[0-9]+\.json
+sorting     :  none
+```
+
+It matches with a regex and iterates `File.listFiles` in whatever order the filesystem returns.
+There is no sort to get wrong, and nothing depends on the order anyway: each users file goes to
+`importUsersFromStream` as an independent batch. So padding fixes no ordering Keycloak imposes —
+and, more importantly, a padded name still matches `[0-9]+`, which is the thing that had to be true
+before renaming anything. A rename that stopped the destination finding the files would import a
+realm with no users and report success.
+
+**Rule** — Numbers in names that will be listed are padded to a fixed width at the point the
+snapshot is built, wide enough for the largest index in that export rather than a constant three, so
+one snapshot's files always sort together. The rename happens once, on the way into the bundle, and
+the layout is renamed in the same step: the manifest matches staged names against layout names, so a
+bundle renamed without its layout is a snapshot whose manifest reports no users. That is a
+complete-looking snapshot that is wrong, which costs more than any ordering it buys — so where a
+padded name would collide with one already present, nothing is renamed at all.
+
+**Guard** — `TestPadUserFiles_*` (`internal/engine/kc/kc_test.go`) covers the width, the floor, the
+federated prefix, the no-op and the collision — the collision case was written first and failed,
+because the guard was seeded only with names already renamed rather than with every name in the
+export. `TestCapture_UserFilesAreCarriedWithPaddedNumbers`
+(`internal/engine/orchestrator/capture_test.go`) opens the produced bundle, checks the padded names
+are in it and the unpadded ones are not, and checks the manifest still counts the users.
+
+---
+
+## 16. A clone in use and a clone left behind look the same
+
+**Symptom** — A capture is running. The orphan sweep in Settings lists its clone under "left behind
+when a session crashed mid-capture", and offers to remove it.
+
+**Cause** — `FindOrphans` selects on `portcloak.io/ephemeral`, which is the label every clone
+carries, because the label is how the sweep finds wreckage in the first place. Nothing else
+distinguishes the two cases: same image, same name, same labels, same namespace. The difference is
+not a property of the object at all — it is whether a process is still driving it — and the sweep
+never asked.
+
+Note 2 made sure a clone is never leaked. This is the same seam from the other side: a clone that is
+*not* leaked, being offered for deletion as though it were. The cost is worse than a wrong screen,
+because the button works — removing it kills the export part-way through a realm, and the snapshot
+that capture was building never exists.
+
+**Rule** — A clone belonging to a job this process is running is not an orphan, and the check
+happens twice: once when the list is built, and again inside the removal. The list an operator is
+looking at was accurate when it loaded, and a capture started since is driving a clone that was not
+on it. The reference cannot be reasoned about — on Docker it is `container/<id>`, so nothing in the
+string says which job owns it — so the second check reads the job label back from the platform,
+which is one list call before an irreversible act.
+
+Two edges, both decided in favour of the operator's realm rather than tidiness:
+
+- A clone with **no job label** is still reported. It cannot be tied to a run, and reporting nothing
+  whenever any job is in flight would hide real wreckage for the length of a capture.
+- When the platform **cannot be listed**, removal is refused if anything is running and allowed if
+  nothing is. With nothing running there is nothing to protect; with a job in flight an
+  unverifiable delete is a capture that dies mid-realm.
+
+**Guard** — `TestAbandoned_*` and `TestRefuseIfRunning_*` (`internal/app/orphans_test.go`) cover the
+filter, the unlabelled clone, the re-check at removal, a reference that is not in the listing, and
+the unlistable platform on both sides of "is anything running". The running set is a parameter
+rather than read inside, because `Orchestrator.running` is unexported and only a real job puts
+anything in it — logic that can only be tested by starting a capture is logic that will not be.

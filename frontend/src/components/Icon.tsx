@@ -41,6 +41,25 @@ const glyphs: Record<string, ReactElement> = {
   ),
   // A trace with something happening in it.
   activity: <path d="M1.25 8.5h3l1.75-4.75L9 12.25l1.75-3.75h4" />,
+  // A bin: lid, body, and the two lines down it.
+  trash: (
+    <>
+      <path d="M2.75 4.25h10.5" />
+      <path d="M6.25 4.25V2.75h3.5v1.5" />
+      <path d="M4.25 4.25 5 13.25h6l.75-9" />
+      <path d="M6.75 6.75v4M9.25 6.75v4" />
+    </>
+  ),
+  // A cross, for ending something rather than deleting it.
+  close: <path d="M4 4l8 8M12 4l-8 8" />,
+  // A clock, hands at ten past ten. Not a nav item — it labels the one fact on
+  // a job card that is a moment rather than a thing.
+  clock: (
+    <>
+      <circle cx="8" cy="8" r="6.25" />
+      <path d="M8 4.5V8l2.5 1.75" />
+    </>
+  ),
   // Two rack units, each with its indicator lit.
   environments: (
     <>

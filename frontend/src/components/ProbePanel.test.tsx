@@ -110,7 +110,12 @@ describe("the checks", () => {
   });
 
   it("renders a check with no advice without inventing one", () => {
-    renderApp(<ProbePanel facts={facts([{ name: "Reachable", value: "yes", status: "pass", blocking: false }])} ok />);
+    renderApp(
+      <ProbePanel
+        facts={facts([{ name: "Reachable", value: "yes", status: "pass", blocking: false }])}
+        ok
+      />,
+    );
     expect(screen.getByText("Reachable")).toBeInTheDocument();
   });
 });

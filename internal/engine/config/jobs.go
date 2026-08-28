@@ -108,6 +108,26 @@ type Provenance struct {
 	CaptureMode     string `json:"captureMode,omitempty"`
 }
 
+// SnapshotOrigin is what a restore is applying, in the terms the snapshot was
+// captured in.
+//
+// The job already names the realm, the storage it came from and the environment
+// it is going to. What it could not say is which snapshot of that realm: two
+// captures of corp-a a fortnight apart are the same realm, the same storage and
+// the same destination, and the difference between restoring one and the other
+// is a fortnight of user changes. So the moment it was captured, and where it
+// was captured from, are recorded on the job when the bundle is opened.
+//
+// A capture leaves this empty. The snapshot a capture is about is the one it is
+// producing, which the job already identifies.
+type SnapshotOrigin struct {
+	// CapturedAt is the manifest's own timestamp, carried as it was written.
+	CapturedAt string `json:"capturedAt,omitempty"`
+	// Environment is where the snapshot was captured from, which is not where
+	// it is being restored to.
+	Environment string `json:"environment,omitempty"`
+}
+
 // Job is the persisted record of one unit of work. It lives in its own file so
 // a stuck job can be inspected — and if necessary deleted — by hand.
 type Job struct {
@@ -122,6 +142,9 @@ type Job struct {
 	Storage     string `json:"storage,omitempty"`
 	SnapshotID  string `json:"snapshotId,omitempty"`
 	StorageKey  string `json:"storageKey,omitempty"`
+
+	// Origin is the snapshot a restore is applying. Nil on a capture.
+	Origin *SnapshotOrigin `json:"origin,omitempty"`
 
 	// Encrypted, and enough of how, to resume without asking again.
 	//

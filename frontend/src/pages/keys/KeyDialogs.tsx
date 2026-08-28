@@ -114,9 +114,8 @@ export function GenerateKeyForm({ modal, reload }: { modal: Modal; reload: () =>
         <p>
           <Muted>
             <Small>
-              PortCloak generates the keypair. The private half goes to this machine&apos;s
-              keychain and is shown once so you can keep a copy; the public half is what a capture
-              seals to.
+              PortCloak generates the keypair. The private half goes to this machine&apos;s keychain
+              and is shown once so you can keep a copy; the public half is what a capture seals to.
             </Small>
           </Muted>
         </p>

@@ -11,15 +11,7 @@
  * It reports the facts a capture depends on, not a green tick.
  */
 import type { TargetFacts } from "../api";
-import {
-  Badge,
-  KeyValue,
-  Muted,
-  NoticeBox,
-  NoticeTitle,
-  Small,
-  type Tone,
-} from "../design-system";
+import { Badge, KeyValue, Muted, NoticeBox, NoticeTitle, Small, type Tone } from "../design-system";
 
 export function ProbePanel({ facts, ok }: { facts: TargetFacts; ok: boolean }) {
   return (

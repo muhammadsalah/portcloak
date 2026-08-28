@@ -28,7 +28,13 @@ afterEach(() => {
   quiet.mockClear();
 });
 
-function Boom({ throws, message = "realms is not iterable" }: { throws: boolean; message?: string }) {
+function Boom({
+  throws,
+  message = "realms is not iterable",
+}: {
+  throws: boolean;
+  message?: string;
+}) {
   if (throws) throw new Error(message);
   return <p>The screen drew fine.</p>;
 }

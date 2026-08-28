@@ -1,0 +1,11 @@
+# Built output and dependencies are not ours to format.
+dist
+node_modules
+coverage
+
+# The embedded placeholder that keeps `go build ./...` working before npm has
+# ever run. It is committed as-is and is not source.
+dist/.gitkeep
+
+# Vite's dependency pre-bundle cache. Generated, gitignored, and not source.
+.vite

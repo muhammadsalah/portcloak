@@ -15,6 +15,7 @@ import {
   Card,
   CardHead,
   CardTitle,
+  Encryption,
   Link,
   Mono,
   Muted,
@@ -83,11 +84,7 @@ export function StorageBrowser({ storage }: { storage: string }) {
                   <td>{when(snapshot.createdAt)}</td>
                   <Numeric>{snapshot.metadataReadable ? count(snapshot.users) : "—"}</Numeric>
                   <td>
-                    {snapshot.encrypted ? (
-                      <Badge $tone="neutral">Encrypted</Badge>
-                    ) : (
-                      <Badge $tone="danger">Unencrypted</Badge>
-                    )}
+                    <Encryption encrypted={snapshot.encrypted} />
                   </td>
                   <td>
                     <Muted>

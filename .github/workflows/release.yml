@@ -88,6 +88,12 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "Releasing $version"
 
+          # The notes are assembled from the changelog at the end of this
+          # workflow. Checking now means a missing section costs a minute
+          # rather than three signed platform builds.
+          ./build/ci/changelog-section.sh "$version" > /dev/null
+          echo "CHANGELOG.md has a section for $version"
+
       - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -561,6 +567,17 @@ jobs:
             dist/*.zip
             dist/*.tar.gz
 
+      # The changelog is lifted rather than rewritten. It is the record already,
+      # kept in the same commit as the change it describes, and a second
+      # hand-written account of the same release is one that can disagree with
+      # it. A version with no section fails the step: a release published saying
+      # how it was verified and nothing about what is in it is worse than one
+      # that did not go out this afternoon.
+      - name: What changed, from the changelog
+        env:
+          VERSION: ${{ needs.frontend.outputs.version }}
+        run: ./build/ci/changelog-section.sh "$VERSION" > "$RUNNER_TEMP/changed.md"
+
       - name: Draft the release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -571,6 +588,25 @@ jobs:
           set -euo pipefail
           notes=$(mktemp)
           {
+            cat "$RUNNER_TEMP/changed.md"
+            echo
+
+            # A release page, where one was written, says what the changelog
+            # cannot: what to know before upgrading, and what the release still
+            # does not do. It is linked rather than inlined — the notes are
+            # already long, and this way the link keeps working from the tag.
+            page=""
+            for candidate in spec/rollout/*release-"${VERSION}".md; do
+              [ -f "$candidate" ] && page="$candidate" && break
+            done
+            if [ -n "$page" ]; then
+              echo "**[Release notes for ${VERSION}](https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/${page})** — what to know before upgrading, and what this release still does not do."
+              echo
+            fi
+            echo "[Full changelog](https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/CHANGELOG.md)"
+            echo
+            echo "---"
+            echo
             echo "## Verifying this release"
             echo
             echo '```bash'

@@ -53,6 +53,28 @@ export const Badge = styled.span<{ $tone: Tone }>`
   ${(p) => badgeTones[p.$tone]}
 `;
 
+/**
+ * Whether a snapshot is encrypted, said the same way wherever it is asked.
+ *
+ * It is a two-state answer and it is coloured like one: green for sealed, red
+ * for in the clear. Neutral was the wrong colour for the good case — a bundle
+ * holding unmasked client secrets and private signing keys is either protected
+ * or it is not, and "protected" should look like the answer an operator wants
+ * to see rather than like a fact with no opinion attached.
+ *
+ * Which mode sealed it — a passphrase, a set of age recipients — is not on the
+ * badge. It is a property of the bundle rather than something to compare rows
+ * by, it is on the snapshot's own screen, and it had already drifted: two of
+ * the five places that drew this appended it and three did not.
+ */
+export function Encryption({ encrypted }: { encrypted?: boolean }) {
+  return encrypted ? (
+    <Badge $tone="ok">Encrypted</Badge>
+  ) : (
+    <Badge $tone="danger">Unencrypted</Badge>
+  );
+}
+
 /* ── Dot ───────────────────────────────────────────────────────────────── */
 
 const dotColours = {

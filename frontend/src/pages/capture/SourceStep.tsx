@@ -11,14 +11,7 @@ import { useState } from "react";
 
 import { CaptureAPI, ConfigAPI, type ProbeResult, type WizardDefaults } from "../../api";
 import { ProbePanel } from "../../components/ProbePanel";
-import {
-  Button,
-  FailureNotice,
-  Field,
-  SectionTitle,
-  Select,
-  Spinner,
-} from "../../design-system";
+import { Button, FailureNotice, Field, SectionTitle, Select, Spinner } from "../../design-system";
 import { kindLabel, type CaptureDraft, type UpdateDraft } from "./draft";
 
 export function SourceStep({
@@ -61,17 +54,15 @@ export function SourceStep({
       >
         <Select
           value={draft.environment}
-          onChange={(e) => {
-            update({ environment: e.target.value, realms: [], discoveredRealms: [] });
+          onChange={(environment) => {
+            update({ environment, realms: [], discoveredRealms: [] });
             setProbe(undefined);
           }}
-        >
-          {defaults.environments.map((environment) => (
-            <option key={environment.name} value={environment.name}>
-              {`${environment.name} — ${kindLabel(environment.kind)} · ${environment.target}`}
-            </option>
-          ))}
-        </Select>
+          options={defaults.environments.map((environment) => ({
+            value: environment.name,
+            label: `${environment.name} — ${kindLabel(environment.kind)} · ${environment.target}`,
+          }))}
+        />
       </Field>
 
       <Button disabled={!draft.environment || probing} onClick={() => void test()}>

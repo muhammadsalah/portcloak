@@ -58,9 +58,7 @@ describe("the passphrase field", () => {
 describe("the identity field", () => {
   it("shows the identity already held, rather than starting blank", () => {
     ask({ passphrase: "", identities: ["AGE-SECRET-KEY-1EXAMPLE"] });
-    expect(screen.getByPlaceholderText("AGE-SECRET-KEY-1…")).toHaveValue(
-      "AGE-SECRET-KEY-1EXAMPLE",
-    );
+    expect(screen.getByPlaceholderText("AGE-SECRET-KEY-1…")).toHaveValue("AGE-SECRET-KEY-1EXAMPLE");
   });
 
   it("trims what was pasted", async () => {

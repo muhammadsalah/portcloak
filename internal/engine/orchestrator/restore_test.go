@@ -179,6 +179,32 @@ func TestRestore_AppliesAndValidates(t *testing.T) {
 	}
 }
 
+// The import gets the same escape hatch as the export, and the same default:
+// off. It matters more here than on a capture — an export cancelled part-way
+// leaves nothing behind, an import leaves a half-applied realm.
+func TestRestore_TransactionLimitIsLiftedOnlyWhenAsked(t *testing.T) {
+	rh := newRestoreHarness(t)
+	req := rh.restoreRequest()
+	req.ConfirmRealm = "acme"
+	rh.restore(t, req)
+
+	cmd, _ := rh.exec.LastCommand()
+	if _, ok := cmd.Env[kc.TransactionTimeoutVar]; ok {
+		t.Errorf("an ordinary restore lifted the transaction limit: %v", cmd.Env)
+	}
+
+	rh2 := newRestoreHarness(t)
+	req2 := rh2.restoreRequest()
+	req2.ConfirmRealm = "acme"
+	req2.NoTransactionTimeout = true
+	rh2.restore(t, req2)
+
+	cmd, _ = rh2.exec.LastCommand()
+	if cmd.Env[kc.TransactionTimeoutVar] != "0" {
+		t.Errorf("the restore asked for no transaction limit and got %v", cmd.Env)
+	}
+}
+
 // A restore that half-writes a corrupted realm is worse than one that never
 // starts, so the gate is unconditional and comes before any contact.
 func TestRestore_RefusesTamperedBundleBeforeContactingTarget(t *testing.T) {

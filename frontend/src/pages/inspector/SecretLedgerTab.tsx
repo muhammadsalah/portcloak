@@ -79,9 +79,7 @@ export function SecretLedgerTab({
 
         <CardFoot>
           <Small>{ledger.summary}</Small>
-          <Link onClick={() => onExport(emptyQuery(snapshotId))}>
-            Export ledger (redacted) ↓
-          </Link>
+          <Link onClick={() => onExport(emptyQuery(snapshotId))}>Export ledger (redacted) ↓</Link>
         </CardFoot>
       </Card>
     </div>

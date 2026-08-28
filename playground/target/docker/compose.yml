@@ -1,0 +1,150 @@
+# Copyright 2026 Muhammad Salah
+# SPDX-License-Identifier: Apache-2.0
+#
+# Three Keycloaks, one Postgres, two directories.
+#
+# Three, because the interesting operations need more than one: capture from
+# kc-a, restore into kc-merged, and compare against kc-b, which was captured the
+# same way and never touched. One instance can prove an export runs; it cannot
+# prove a realm arrived somewhere else intact.
+#
+# kc-a and kc-b federate their users to a directory each. That is what makes the
+# playground representative rather than convenient: a realm whose users come
+# from LDAP is re-read through the directory one user at a time inside the
+# transaction that exports each page of them, which is the shape of every
+# interesting failure PortCloak has had to classify.
+#
+# kc-merged has no directory. It is the destination, and a restore into a
+# Keycloak that has never seen these users is the case that matters.
+#
+#   docker compose -f playground/target/docker/compose.yml up -d
+#   playground/seed/seed.sh docker            # realms, users, LDAP entries
+#
+#   kc-a       http://127.0.0.1:8080   admin / admin
+#   kc-b       http://127.0.0.1:8081   admin / admin
+#   kc-merged  http://127.0.0.1:8082   admin / admin
+#
+# Development credentials on localhost, in the file on purpose.
+
+name: portcloak-target
+
+x-keycloak: &keycloak
+  image: quay.io/keycloak/keycloak:26.4
+  # start-dev, not start: this is a playground, and the production mode's
+  # hostname and TLS requirements are not what is being exercised here. The
+  # export path PortCloak drives is identical either way — kc.sh export does not
+  # care how the server was started, because it does not start the server.
+  command: start-dev --http-port=8080
+  environment: &keycloak-env
+    KC_BOOTSTRAP_ADMIN_USERNAME: admin
+    KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+    KC_DB: postgres
+    KC_DB_URL_HOST: postgres
+    KC_DB_USERNAME: keycloak
+    KC_DB_PASSWORD: keycloak
+    KC_HEALTH_ENABLED: "true"
+  depends_on:
+    postgres:
+      condition: service_healthy
+  healthcheck:
+    # The image has no curl and no wget. Keycloak 26 ships a management port on
+    # 9000 and the JVM can be asked to make one request, which is the check that
+    # works without adding a layer to the image.
+    test:
+      [
+        "CMD-SHELL",
+        "exec 3<>/dev/tcp/127.0.0.1/9000 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '\"UP\"' <&3",
+      ]
+    interval: 10s
+    timeout: 5s
+    retries: 30
+    start_period: 60s
+
+x-openldap: &openldap
+  image: bitnami/openldap:2.6
+  environment: &openldap-env
+    LDAP_ADMIN_USERNAME: admin
+    LDAP_ADMIN_PASSWORD: adminpassword
+    # Nothing is seeded from the image. The users come from playground/seed,
+    # because a fixed set of five is not a realm anybody has a problem with.
+    LDAP_SKIP_DEFAULT_TREE: "yes"
+  healthcheck:
+    test: ["CMD", "ldapsearch", "-x", "-H", "ldap://127.0.0.1:1389", "-b", "", "-s", "base"]
+    interval: 5s
+    timeout: 3s
+    retries: 20
+
+services:
+  # ── The database all three share ───────────────────────────────────────────
+  #
+  # One server, three databases. Separate servers would be more faithful and
+  # would cost three times the memory for a difference PortCloak cannot see: it
+  # reads the realm through kc.sh, which reads it through whatever datasource
+  # the instance was configured with.
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: keycloak
+      POSTGRES_DB: keycloak
+    volumes:
+      - postgres:/var/lib/postgresql/data
+      - ./postgres-init.sql:/docker-entrypoint-initdb.d/10-databases.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # ── Directories ────────────────────────────────────────────────────────────
+  ldap-a:
+    <<: *openldap
+    environment:
+      <<: *openldap-env
+      LDAP_ROOT: dc=corp-a,dc=example,dc=com
+    ports:
+      - "1389:1389"
+    volumes:
+      - ldap-a:/bitnami/openldap
+
+  ldap-b:
+    <<: *openldap
+    environment:
+      <<: *openldap-env
+      LDAP_ROOT: dc=corp-b,dc=example,dc=com
+    ports:
+      - "1390:1389"
+    volumes:
+      - ldap-b:/bitnami/openldap
+
+  # ── The three servers ──────────────────────────────────────────────────────
+  kc-a:
+    <<: *keycloak
+    environment:
+      <<: *keycloak-env
+      KC_DB_URL_DATABASE: kc_a
+    ports:
+      - "8080:8080"
+
+  kc-b:
+    <<: *keycloak
+    environment:
+      <<: *keycloak-env
+      KC_DB_URL_DATABASE: kc_b
+    ports:
+      - "8081:8080"
+
+  kc-merged:
+    <<: *keycloak
+    environment:
+      <<: *keycloak-env
+      KC_DB_URL_DATABASE: kc_merged
+    ports:
+      - "8082:8080"
+
+volumes:
+  postgres:
+  ldap-a:
+  ldap-b:

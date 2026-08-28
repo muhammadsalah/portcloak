@@ -26,48 +26,56 @@ export function count(n: number | undefined): string {
   return (n ?? 0).toLocaleString();
 }
 
-/** Renders a timestamp the way an operator reads one, not as an ISO string. */
+/**
+ * A timestamp, written out in full and naming the zone it is in.
+ *
+ * Every date in the interface goes through this or through [stamp], and both
+ * write the month as a word and end with the zone. That is not decoration. A
+ * capture is a record of a moment on someone else's server, and the two
+ * shortcuts a compact format takes are exactly the two that make a record
+ * ambiguous later: `03/04` is two different days depending on who is reading,
+ * and a time with no zone cannot be lined up against a Keycloak log without
+ * someone guessing the offset — including the guess that the laptop has not
+ * moved since.
+ *
+ * The zone is the reader's own rather than UTC. An operator reconciling what
+ * happened is working in local time, and naming the zone is what keeps that
+ * unambiguous without forcing a conversion in their head.
+ *
+ * The ordering of the parts is the reader's locale's, not ours: Intl is given
+ * the fields rather than a pattern, so a reader who writes the day first gets
+ * the day first. The clock is 24-hour everywhere, because this sits beside
+ * durations and log lines that are.
+ */
 export function when(iso: string | undefined): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-export function time(iso: string | undefined): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return format(iso, false) ?? "—";
 }
 
 /**
- * A full timestamp, to the second, naming the zone it is in.
+ * The same timestamp, to the second.
  *
- * The audit log is evidence, and the other two formatters are not good enough
- * for that. `when` drops the zone, so a record read on a laptop that has since
- * crossed a border cannot be lined up against a Keycloak server log without
- * someone guessing the offset. `time` drops the date and the seconds, so a row
- * cannot be ordered against its neighbours inside the same minute — and a
- * capture and the deletion that followed it can share a minute.
- *
- * The zone is the reader's own, not UTC: an operator reconciling what happened
- * is working in local time, and naming the zone is what keeps that unambiguous
- * without forcing a conversion in their head.
+ * The audit log is evidence, and minutes are not enough for it: a capture and
+ * the deletion that followed it can share a minute, and two rows that cannot be
+ * ordered against each other are two rows that cannot be read as a sequence.
  */
 export function stamp(iso: string | undefined): string {
-  if (!iso) return "—";
+  return format(iso, true) ?? "—";
+}
+
+function format(iso: string | undefined, seconds: boolean): string | undefined {
+  if (!iso) return undefined;
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
+  if (Number.isNaN(d.getTime())) return undefined;
   return new Intl.DateTimeFormat(undefined, {
+    // Two digits, not one: these sit in table columns, and the old compact
+    // format padded every field for exactly that reason. A column of dates
+    // that lines up is read down; one that does not is read row by row.
     day: "2-digit",
-    month: "short",
+    month: "long",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-    second: "2-digit",
+    ...(seconds ? { second: "2-digit" as const } : {}),
     hour12: false,
     timeZoneName: "short",
   }).format(d);

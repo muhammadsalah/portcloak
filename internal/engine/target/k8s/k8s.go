@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -566,11 +567,36 @@ func podReason(pod *corev1.Pod) string {
 
 // Exec runs a command in the clone over the same SPDY mechanism kubectl exec
 // uses.
-func (p *Platform) Exec(ctx context.Context, ref string, cmd target.Command) (target.ExecResult, error) {
+// execArgv renders a command as the argv the exec subresource takes.
+//
+// That subresource has no environment field — unlike Docker's exec, which takes
+// one, and unlike local and SSH, which set it on the process and in the command
+// prefix. Left unhandled this adapter would accept a Command carrying Env and
+// run it without: three adapters honouring a field and the fourth dropping it
+// quietly, which is the shape of note 1. env(1) applies it instead, and the
+// working directory wraps whatever came out of that.
+func execArgv(cmd target.Command) []string {
 	argv := append([]string{cmd.Path}, cmd.Args...)
-	if cmd.Dir != "" {
-		argv = []string{"/bin/sh", "-c", "cd " + shellQuote(cmd.Dir) + " && exec " + shellJoin(append([]string{cmd.Path}, cmd.Args...))}
+	if len(cmd.Env) > 0 {
+		keys := make([]string, 0, len(cmd.Env))
+		for k := range cmd.Env {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		prefix := []string{"env"}
+		for _, k := range keys {
+			prefix = append(prefix, k+"="+cmd.Env[k])
+		}
+		argv = append(prefix, argv...)
 	}
+	if cmd.Dir != "" {
+		argv = []string{"/bin/sh", "-c", "cd " + shellQuote(cmd.Dir) + " && exec " + shellJoin(argv)}
+	}
+	return argv
+}
+
+func (p *Platform) Exec(ctx context.Context, ref string, cmd target.Command) (target.ExecResult, error) {
+	argv := execArgv(cmd)
 
 	out := newLineWriter(cmd.OnStdout)
 	errW := newLineWriter(cmd.OnStderr)

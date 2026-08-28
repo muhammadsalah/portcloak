@@ -11,6 +11,123 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Tags prefixed `spec-` mark the design
 record; unprefixed `v` tags mark shipped binaries.
 
+## [0.0.2] — 2026-08-28
+
+The release that came out of one failure. A capture of a realm federated to a slow LDAP directory
+died after exactly five minutes and reported `kc.sh export exited with code 1` — which reads like a
+disk problem and is not one. Everything under *Fixed* is what that sentence turned out to be hiding,
+and most of what is under *Added* is what it needed in order not to happen again.
+
+Nothing changes about what a snapshot carries or how it is sealed, so a 0.0.1 bundle opens and
+restores under 0.0.2 unchanged. See
+[`spec/rollout/13-release-0.0.2.md`](./spec/rollout/13-release-0.0.2.md) for what to know before
+upgrading.
+
+### Added
+- The Activity screen re-reads a job's output from the engine on every refresh, rather than
+  showing only what it happened to hear on the event stream. It could not have heard the rest: the
+  output arrives over a Docker or Kubernetes exec stream, which neither platform stores, from a
+  clone that is usually destroyed by the time anyone reloads — so the engine records it as it goes
+  past and keeps the last 10,000 lines per job. The screen still folds the live stream so a line
+  appears the instant it is said, and reconciles against the engine by cursor, asking only for what
+  it has not already been given.
+- A capture option, and the same option on restore, that lets kc.sh's transactions run without a
+  time limit — for a realm too large or too slow to move inside the server's. Transactions
+  themselves cannot be turned off: Keycloak's export is written as a sequence of them, and
+  `--transaction-xa-enabled` chooses XA against local datasources rather than switching them off.
+  So the option lifts the limit that cancels one, through
+  `QUARKUS_TRANSACTION_MANAGER_DEFAULT_TRANSACTION_TIMEOUT=0` in the invocation's environment.
+  Off unless asked for, and shown in the logged command line: that limit is also what
+  bounds a run that has stopped making progress, and without it a stalled one holds a connection to
+  the database open until the clone is destroyed. It matters more on restore than on capture — an
+  export cancelled part-way leaves nothing behind, an import leaves a half-applied realm.
+- Users per file is set per capture, in the wizard, anywhere from 10 to 1,000. kc.sh exports one
+  page of users per transaction, so the number bounds both the file size and the transaction: a
+  realm whose users come from LDAP is re-read through the provider one user at a time inside that
+  transaction, and a page of a thousand can outrun the server's transaction limit and kill the
+  export five minutes in. The range is enforced in the engine as well as the wizard.
+
+### Fixed
+- An ephemeral clone belonging to a running job was reported as orphaned, with a button offering to
+  remove it. A clone a capture is exporting through and one a crashed session abandoned are
+  indistinguishable by inspection — same image, same labels, same name — and the only thing that
+  tells them apart is whether anything is still driving it. The sweep now excludes clones whose job
+  this process is running, and removal re-checks at the moment it is asked for, because the list an
+  operator is looking at was accurate when it loaded.
+- The job ledger's columns are laid out rather than left to the content. An outcome can be a whole
+  sentence — the restore path writes one into the field that usually holds `failed` — and inside a
+  pill, which does not wrap, it grew until it left the card and squeezed the error column into a
+  ribbon one word wide.
+- The snapshots a restore applies are recorded on the job. The Activity screen renders from the job
+  list alone and never opens a bundle, so a restore card could name the realm and the destination
+  but not which of two captures a fortnight apart it was applying.
+- The test buttons in the environment and storage editors no longer sit under a heading repeating
+  their own label, with the result panel flush against them.
+- The Kubernetes adapter ran commands without the environment they carried. The exec subresource
+  has no environment field, and unlike the other three adapters this one did nothing about it, so
+  a `Command` with `Env` set ran without it. It is applied with `env(1)` in front of the command.
+- Keycloak's own warnings and errors never reached the job ledger or the failure message. The log
+  levels were matched at the start of the line, which catches the launcher's bare `ERROR:` and
+  nothing a running server logs, because those lines all open with a timestamp. Every failure the
+  server explained in prose was therefore reported as its exit code — an export the transaction
+  reaper had rolled back arrived as `kc.sh export exited with code 1`, which reads like a disk
+  problem and is not one. That failure is now named, with the setting that addresses it.
+
+### Changed
+- Every date in the interface is written out in full, with the month as a word and the zone named —
+  `28 August 2026 at 15:52 GMT+3`. `03/04` is two different days depending on who is reading, and a
+  time with no zone cannot be lined up against a Keycloak server log without someone guessing the
+  offset. The ordering of the parts is the reader's locale's; the clock is 24-hour everywhere.
+- The Snapshots table is where a restore starts. Restore left the navigation rail — it was the one
+  item that could not act on its own, since every restore is *of a particular snapshot* — and is now
+  the filled button on each row, and in the inspector's header. The realm opens the snapshot; the
+  rest of the row's actions fold into a menu, with Delete in red and Close where there is a session
+  to close. Activity leads the rail, because it is the screen an operator returns to.
+- The environment and storage a snapshot names are links while they still exist. A snapshot is a
+  record of something that happened, not a foreign key: what it names can be renamed or removed
+  afterwards and the snapshot stays as true as it was, so the name is always shown and only the link
+  comes and goes. Where the engine says nothing about them, nothing is claimed in either direction.
+- Encryption is one component in one place, said the same way on all five screens that ask: green
+  for sealed, red for in the clear, and no mode appended. Two of the five had drifted into saying
+  `Encrypted · recipients` while three did not.
+- The Activity card says what a job is in the terms of the thing it moves: the kind as a glyph and a
+  word, then the facts, each labelled by its own icon rather than strung together with an arrow —
+  an arrow only works if the reader knows which side is the source, and that flips with the kind.
+  The phases are a numbered stepper down the left of the card rather than a wrapping row of ticks,
+  and a restore names which snapshot it is applying and when the run began.
+- Dropdowns are drawn by the app rather than by the operating system. A native `<select>` can be
+  styled down to its border and no further — the list it opens is an OS menu in the platform's
+  font at the platform's size, ignoring every design token — so it is a listbox PortCloak paints
+  and owns: keyboard operation including type-ahead, a combobox in the accessibility tree,
+  dismissal that leaves focus somewhere sensible, and flipping upwards rather than opening off the
+  bottom of the window. Form controls are taller with it, and the filters above a table wider.
+- A snapshot carries its user files under padded numbers — `acme-users-000.json` rather than
+  `acme-users-0.json` — all the same width, widened past three digits where the export needs it.
+  kc.sh numbers them 0, 1, … 10, which anything ordering names as text reads as 0, 1, 10, 2.
+  Keycloak's own `import` is indifferent either way: measured on 24.0, 26.3 and 26.5.0 it matches
+  `-users-[0-9]+\.json` and iterates in filesystem order, so padded names are found exactly as
+  unpadded ones were. It is everything that lists names alphabetically around it that this is for.
+- The Activity screen re-reads the job list once a second rather than every two, so the elapsed
+  time on a running job counts up evenly instead of advancing in jumps of one second and two.
+
+### Development
+- A playground: `playground/storage` runs the three storage backends that are not a folder, and
+  `playground/target` runs three Keycloaks with Postgres and two LDAP directories, in Docker and on
+  CRC. Capture from one, restore into another, compare against the third — one instance can prove
+  an export runs and cannot prove a realm arrived somewhere else intact. `playground/seed` generates
+  the realms: four client shapes, nested groups, composite roles, OTP and passkey enrolments, and
+  one user in forty carrying a quote, a plus, a backslash or a character outside ASCII — because the
+  realms this tool has trouble with are not big, they are various.
+- One formatter per language, both enforced in CI. `.editorconfig` settles indentation and endings
+  for every language, `frontend/.prettierrc` pins the TypeScript style at an exact prettier version,
+  and Go gets no configuration because gofmt takes none — CI runs `gofmt -l`, which it never did.
+  Nothing in the repository had decided, so an IDE and a formatter had been quietly reformatting the
+  same files back and forth.
+- The published release notes say what changed. `build/ci/changelog-section.sh` lifts a version's
+  section out of this file, and the release workflow fails when there is no section for the version
+  being cut — a release describing how it was verified and nothing about what is in it is worse than
+  one that goes out tomorrow.
+
 ## [0.0.1] — 2026-08-28
 
 The first version where the whole loop closes: capture a realm, put it somewhere, read it back,

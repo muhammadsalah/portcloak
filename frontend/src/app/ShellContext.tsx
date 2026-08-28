@@ -42,8 +42,6 @@ interface Shell {
   environments: number;
   storages: number;
   activeJobs: number;
-  hasSnapshots: boolean;
-  setHasSnapshots: (has: boolean) => void;
 }
 
 const ShellContext = createContext<Shell | null>(null);
@@ -56,7 +54,6 @@ export function ShellProvider({ children }: { children: ReactNode }) {
   const [environments, setEnvironments] = useState(0);
   const [storages, setStorages] = useState(0);
   const [activeJobs, setActiveJobs] = useState(0);
-  const [hasSnapshots, setHasSnapshots] = useState(true);
 
   const refreshCounters = useCallback(async () => {
     try {
@@ -100,10 +97,8 @@ export function ShellProvider({ children }: { children: ReactNode }) {
       environments,
       storages,
       activeJobs,
-      hasSnapshots,
-      setHasSnapshots,
     }),
-    [route, navigate, nonce, environments, storages, activeJobs, hasSnapshots],
+    [route, navigate, nonce, environments, storages, activeJobs],
   );
 
   return <ShellContext.Provider value={value}>{children}</ShellContext.Provider>;

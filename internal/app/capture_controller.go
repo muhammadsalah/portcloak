@@ -110,10 +110,13 @@ type CaptureOptions struct {
 	UsersPerFile       int      `json:"usersPerFile"`
 	Verify             bool     `json:"verify"`
 	DetectDependencies bool     `json:"detectDependencies"`
-	Encrypt            bool     `json:"encrypt"`
-	EncryptionMode     string   `json:"encryptionMode"`
-	Passphrase         string   `json:"passphrase"`
-	Recipients         []string `json:"recipients"`
+	// NoTransactionTimeout lets the export's transactions run without a time
+	// limit, for a realm too large or too slow to read inside the default one.
+	NoTransactionTimeout bool     `json:"noTransactionTimeout"`
+	Encrypt              bool     `json:"encrypt"`
+	EncryptionMode       string   `json:"encryptionMode"`
+	Passphrase           string   `json:"passphrase"`
+	Recipients           []string `json:"recipients"`
 	// AcknowledgedUnencrypted records that the operator saw and confirmed the
 	// decline notice. It is required rather than assumed, so declining is one
 	// deliberate action.
@@ -145,14 +148,15 @@ func (c *CaptureController) Start(opts CaptureOptions) (res StartResult) {
 	}
 
 	handle, err := c.eng.Orch.Capture(context.Background(), orchestrator.CaptureRequest{
-		Environment:        opts.Environment,
-		Realms:             opts.Realms,
-		Storage:            opts.Storage,
-		UsersMode:          opts.UsersMode,
-		UsersPerFile:       opts.UsersPerFile,
-		Verify:             opts.Verify,
-		DetectDependencies: opts.DetectDependencies,
-		Encryption:         enc,
+		Environment:          opts.Environment,
+		Realms:               opts.Realms,
+		Storage:              opts.Storage,
+		UsersMode:            opts.UsersMode,
+		UsersPerFile:         opts.UsersPerFile,
+		Verify:               opts.Verify,
+		DetectDependencies:   opts.DetectDependencies,
+		NoTransactionTimeout: opts.NoTransactionTimeout,
+		Encryption:           enc,
 	})
 	if err != nil {
 		return StartResult{Failure: Fail(err)}

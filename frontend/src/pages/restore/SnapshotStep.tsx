@@ -4,10 +4,10 @@
 /** Step one: which snapshot. */
 import type { LibraryEntry } from "../../api";
 import {
-  Badge,
   Card,
   CardHead,
   CardTitle,
+  Encryption,
   Muted,
   Numeric,
   NumericHeader,
@@ -62,11 +62,7 @@ export function SnapshotStep({
                   <td>{when(entry.createdAt)}</td>
                   <Numeric>{entry.metadataReadable ? count(entry.users) : "—"}</Numeric>
                   <td>
-                    {entry.encrypted ? (
-                      <Badge $tone="neutral">Encrypted</Badge>
-                    ) : (
-                      <Badge $tone="danger">Unencrypted</Badge>
-                    )}
+                    <Encryption encrypted={entry.encrypted} />
                   </td>
                   <td>
                     <Muted>

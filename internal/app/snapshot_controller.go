@@ -31,6 +31,23 @@ type LibraryView struct {
 	Storages []inspect.StorageStatus `json:"storages"`
 	Summary  string                  `json:"summary"`
 	Realms   []string                `json:"realms"`
+	// Open lists the snapshots with an inspection session on this machine.
+	//
+	// An open snapshot has a decrypted working directory and, above the
+	// threshold, an index file — realm material sitting unencrypted on disk
+	// until it is closed. The list is what lets the library say which ones
+	// those are and offer to close them, rather than leaving an operator to
+	// remember which screens they visited.
+	Open []string `json:"open"`
+	// Environments names the environments that are still configured.
+	//
+	// A snapshot records the environment it was captured from, and that
+	// environment can since have been renamed or removed — the snapshot is a
+	// record of something that happened, not a foreign key. The list is what
+	// lets the screen offer a link to the ones that are still there and say
+	// plainly that the others are gone, rather than offering a link that leads
+	// nowhere.
+	Environments []string `json:"environments"`
 	// FirstRun is what an empty library shows instead of an empty grid.
 	FirstRun *FirstRun `json:"firstRun,omitempty"`
 }
@@ -62,6 +79,16 @@ func (s *SnapshotController) Library() (res LibraryView) {
 		Storages: lib.Storages,
 		Summary:  lib.Summary(),
 	}
+
+	for id := range s.eng.OpenSessionIDs() {
+		view.Open = append(view.Open, id)
+	}
+	sort.Strings(view.Open)
+
+	for _, env := range cfg.Environments {
+		view.Environments = append(view.Environments, env.Name)
+	}
+	sort.Strings(view.Environments)
 
 	seen := map[string]bool{}
 	for _, e := range lib.Entries {

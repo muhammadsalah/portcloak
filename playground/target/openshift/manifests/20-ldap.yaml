@@ -1,0 +1,127 @@
+# Copyright 2026 Muhammad Salah
+# SPDX-License-Identifier: Apache-2.0
+#
+# A directory for kc-a and one for kc-b.
+#
+# Two rather than one, because a federated realm's users are re-read through
+# their provider during an export and the two realms must not be able to answer
+# for each other. kc-merged has none: it is the restore destination, and a
+# restore into a Keycloak that has never seen these users is the case worth
+# rehearsing.
+#
+# Ports are 1389 and not 389: the image runs unprivileged, which is also what
+# lets OpenShift assign it an arbitrary uid.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ldap
+  namespace: kc
+type: Opaque
+stringData:
+  LDAP_ADMIN_USERNAME: admin
+  LDAP_ADMIN_PASSWORD: adminpassword
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ldap-a
+  namespace: kc
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ldap-a
+  template:
+    metadata:
+      labels:
+        app: ldap-a
+    spec:
+      containers:
+        - name: openldap
+          image: bitnami/openldap:2.6
+          envFrom:
+            - secretRef:
+                name: ldap
+          env:
+            - name: LDAP_ROOT
+              value: dc=corp-a,dc=example,dc=com
+            # Nothing is seeded from the image; playground/seed writes the tree.
+            - name: LDAP_SKIP_DEFAULT_TREE
+              value: "yes"
+          ports:
+            - containerPort: 1389
+          readinessProbe:
+            tcpSocket:
+              port: 1389
+            initialDelaySeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ldap-a
+  namespace: kc
+spec:
+  selector:
+    app: ldap-a
+  ports:
+    - port: 1389
+      targetPort: 1389
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ldap-b
+  namespace: kc
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ldap-b
+  template:
+    metadata:
+      labels:
+        app: ldap-b
+    spec:
+      containers:
+        - name: openldap
+          image: bitnami/openldap:2.6
+          envFrom:
+            - secretRef:
+                name: ldap
+          env:
+            - name: LDAP_ROOT
+              value: dc=corp-b,dc=example,dc=com
+            - name: LDAP_SKIP_DEFAULT_TREE
+              value: "yes"
+          ports:
+            - containerPort: 1389
+          readinessProbe:
+            tcpSocket:
+              port: 1389
+            initialDelaySeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ldap-b
+  namespace: kc
+spec:
+  selector:
+    app: ldap-b
+  ports:
+    - port: 1389
+      targetPort: 1389

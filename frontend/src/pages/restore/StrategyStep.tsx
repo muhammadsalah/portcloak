@@ -68,7 +68,12 @@ export function StrategyStep({
           >
             <CardBody>
               <Row>
-                <input type="radio" checked={strategy === option.value} readOnly style={{ width: "auto" }} />
+                <input
+                  type="radio"
+                  checked={strategy === option.value}
+                  readOnly
+                  style={{ width: "auto" }}
+                />
                 <Strong>{option.label}</Strong>
                 {option.needsAdminApi ? <Badge $tone="info">Admin API</Badge> : null}
               </Row>

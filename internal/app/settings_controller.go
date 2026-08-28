@@ -173,11 +173,18 @@ type UncheckedEnvironment struct {
 //
 // Removal is offered, never automatic — the operator's cluster is not ours to
 // garbage-collect without asking.
+//
+// A clone belonging to a job this process is running is not an orphan. It is
+// the clone that job is exporting through, and the only thing distinguishing it
+// from an abandoned one is whether anything is still driving it. Listing it here
+// described a working capture as wreckage, and offered a button that would have
+// destroyed the export mid-realm.
 func (s *SettingsController) Orphans() (res OrphanReport) {
 	defer func() { res = lists(res) }()
 	cfg := s.eng.Config.Config()
 	report := OrphanReport{}
 	now := time.Now()
+	running := s.runningJobs()
 
 	for _, env := range cfg.Environments {
 		if env.Kind != config.EnvDocker && env.Kind != config.EnvKubernetes {
@@ -208,7 +215,7 @@ func (s *SettingsController) Orphans() (res OrphanReport) {
 			})
 			continue
 		}
-		for _, o := range found {
+		for _, o := range abandoned(found, running) {
 			report.Orphans = append(report.Orphans, OrphanView{
 				Orphan:      o,
 				Age:         renderAge(o.Age(now)),
@@ -233,6 +240,73 @@ func (s *SettingsController) Orphans() (res OrphanReport) {
 	return report
 }
 
+// abandoned drops the clones that belong to a job this process is driving.
+//
+// Those are not orphans. They are the clones those jobs are exporting through,
+// and the only thing that distinguishes one from an abandoned clone is whether
+// anything is still driving it.
+//
+// A clone with no job label is kept. It cannot be tied to a run, and the
+// alternative — reporting nothing whenever anything is running — would hide
+// real wreckage for the length of a capture.
+func abandoned(found []target.Orphan, running map[string]bool) []target.Orphan {
+	out := make([]target.Orphan, 0, len(found))
+	for _, o := range found {
+		if o.JobID != "" && running[o.JobID] {
+			continue
+		}
+		out = append(out, o)
+	}
+	return out
+}
+
+// refuseIfRunning stops a clone being destroyed out from under the job using it.
+//
+// Where the platform cannot be listed, the answer depends on what is at stake:
+// with nothing running there is nothing to protect and the removal goes ahead,
+// and with a job in flight it does not, because an unverifiable delete of a
+// clone is a capture that dies mid-realm and a snapshot that never existed.
+func refuseIfRunning(
+	ctx context.Context, sweeper target.Sweeper, running map[string]bool, ref string,
+) *Failure {
+	if len(running) == 0 {
+		return nil
+	}
+
+	found, err := sweeper.FindOrphans(ctx)
+	if err != nil {
+		return &Failure{
+			Message: fmt.Sprintf("PortCloak could not check whether that clone belongs to a running job, and %d job%s in flight.",
+				len(running), isAre(len(running))),
+			Hint: "A clone that a capture is exporting through must not be removed underneath it. Wait for the job to finish, or cancel it from Activity, and try again.",
+		}
+	}
+
+	for _, o := range found {
+		if o.Ref != ref {
+			continue
+		}
+		if o.JobID != "" && running[o.JobID] {
+			return &Failure{
+				Message: "That clone belongs to a job that is running now, so it is not an orphan.",
+				Hint:    "Cancel the job from Activity if you want it stopped. Cancelling destroys the clone as part of the teardown, which is the path that also cleans up what it wrote.",
+			}
+		}
+		return nil
+	}
+	// Not in the listing: already gone, or never there. Removal is harmless.
+	return nil
+}
+
+// runningJobs is the set of jobs this process is driving right now.
+func (s *SettingsController) runningJobs() map[string]bool {
+	out := map[string]bool{}
+	for _, id := range s.eng.Orch.Running() {
+		out[id] = true
+	}
+	return out
+}
+
 // RemoveOrphan deletes one clone, on the operator's say-so.
 func (s *SettingsController) RemoveOrphan(environment, ref string) *Failure {
 	cfg := s.eng.Config.Config()
@@ -253,6 +327,16 @@ func (s *SettingsController) RemoveOrphan(environment, ref string) *Failure {
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
+
+	// Checked again here, not only when the list was drawn. The panel an
+	// operator is looking at was accurate when it loaded; a capture started
+	// since is driving a clone that was not on it, and on Docker the reference
+	// is a container id, so nothing about the string itself says which job it
+	// belongs to. The label does, and reading it costs one list call before an
+	// irreversible act.
+	if fail := refuseIfRunning(ctx, sweeper, s.runningJobs(), ref); fail != nil {
+		return fail
+	}
 
 	if err := sweeper.RemoveOrphan(ctx, ref); err != nil {
 		return Fail(err)

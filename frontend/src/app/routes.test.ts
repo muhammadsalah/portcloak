@@ -17,7 +17,6 @@ describe("routeKey", () => {
     const listed: Route[] = [
       { name: "capture" },
       { name: "library" },
-      { name: "restore" },
       { name: "activity" },
       { name: "environments" },
       { name: "storage" },
@@ -29,6 +28,13 @@ describe("routeKey", () => {
     for (const route of listed) {
       expect(routeKey(route)).toBe(route.name);
     }
+  });
+
+  it("lights up Snapshots while one is being restored", () => {
+    // A restore starts from a row on the snapshot list and has no rail item of
+    // its own. A rail with nothing selected reads as being lost.
+    expect(routeKey({ name: "restore" })).toBe("library");
+    expect(routeKey({ name: "restore", snapshotId: "snap-1" })).toBe("library");
   });
 
   it("lights up Library while a snapshot is being inspected", () => {
@@ -51,7 +57,6 @@ describe("routeKey", () => {
     // Selecting a storage and browsing one are different routes; the rail
     // cannot start distinguishing them by their payload.
     expect(routeKey({ name: "storage", select: "archive" })).toBe("storage");
-    expect(routeKey({ name: "restore", snapshotId: "snap-1" })).toBe("restore");
     expect(
       routeKey({
         name: "inspect",

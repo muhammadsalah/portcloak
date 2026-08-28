@@ -13,29 +13,21 @@
 import type { ReactNode } from "react";
 import styled from "styled-components";
 
-const controlSurface = `
+// The size every control shares. The old 6px of padding left a box barely taller
+// than its own text, which reads as a field squeezed into a table row rather
+// than something to click; the line height is pinned alongside it so the height
+// does not depend on the platform's idea of "normal". The radius comes up with
+// the padding, because a 3px corner on a taller box looks clipped rather than
+// square.
+export const controlSurface = `
   font-size: 14px;
-  padding: 6px 10px;
-  border-radius: 3px;
+  line-height: 1.4;
+  padding: 9px 12px;
+  border-radius: 6px;
   width: 100%;
 `;
 
 export const Input = styled.input`
-  font-family: ${(p) => p.theme.font.body};
-  ${controlSurface}
-  border: 1px solid ${(p) => p.theme.color.border};
-  border-bottom-color: ${(p) => p.theme.color.borderInput};
-  background: ${(p) => p.theme.color.surface};
-  color: ${(p) => p.theme.color.text};
-
-  &:focus {
-    outline: none;
-    border-color: ${(p) => p.theme.color.primary};
-    box-shadow: inset 0 -1px 0 0 ${(p) => p.theme.color.primary};
-  }
-`;
-
-export const Select = styled.select`
   font-family: ${(p) => p.theme.font.body};
   ${controlSurface}
   border: 1px solid ${(p) => p.theme.color.border};
@@ -130,14 +122,7 @@ const ToggleTrack = styled.div<{ $on: boolean }>`
 `;
 
 export function Toggle({ on, onChange }: { on: boolean; onChange: (value: boolean) => void }) {
-  return (
-    <ToggleTrack
-      $on={on}
-      role="switch"
-      aria-checked={on}
-      onClick={() => onChange(!on)}
-    />
-  );
+  return <ToggleTrack $on={on} role="switch" aria-checked={on} onClick={() => onChange(!on)} />;
 }
 
 /* ── Checkbox ──────────────────────────────────────────────────────────── */

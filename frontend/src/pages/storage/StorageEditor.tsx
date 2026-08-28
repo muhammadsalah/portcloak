@@ -7,12 +7,7 @@
  */
 import { useState } from "react";
 
-import {
-  ConfigAPI,
-  type ConfigSnapshot,
-  type Storage,
-  type StorageProbeResult,
-} from "../../api";
+import { ConfigAPI, type ConfigSnapshot, type Storage, type StorageProbeResult } from "../../api";
 import { useNavigate } from "../../app/ShellContext";
 import {
   Badge,
@@ -33,11 +28,11 @@ import {
   Notice,
   NoticeBox,
   NoticeTitle,
-  Right,
   Row,
   Select,
   Small,
   Spinner,
+  Stack,
   Strong,
   Tabs,
   Toggle,
@@ -143,9 +138,7 @@ export function StorageEditor({
             <Input
               type="password"
               value={secret}
-              placeholder={
-                draft.credentialRef ? "•••••••• (stored)" : credentialLabel(draft.kind)
-              }
+              placeholder={draft.credentialRef ? "•••••••• (stored)" : credentialLabel(draft.kind)}
               onChange={(e) => setSecret(e.target.value)}
             />
           </Field>
@@ -165,34 +158,34 @@ export function StorageEditor({
         />
       </CardBody>
 
+      {/* The button is the heading here too — see EnvironmentEditor. */}
       <CardBody $divided>
-        <Row>
-          <Strong>Test storage</Strong>
-          <Right>
+        <Stack $gap={12}>
+          <Row>
             <Button disabled={!originalName || probing} onClick={() => void test()}>
               {probing ? "Testing…" : "Test storage"}
             </Button>
-          </Right>
-        </Row>
-        {!originalName ? (
-          <Muted>
-            <Small>Save the storage first, then test it.</Small>
-          </Muted>
-        ) : null}
-        {probing ? (
-          <Spinner>Listing, writing a probe object, verifying, removing it…</Spinner>
-        ) : null}
-        {probe?.failure ? <FailureNotice failure={probe.failure} /> : null}
-        {probe && !probe.failure ? (
-          <ReachPanel
-            probe={probe}
-            draft={draft}
-            onCreateFolder={async () => {
-              await ConfigAPI.createStorageFolder(originalName);
-              setProbe(await ConfigAPI.testStorage(originalName));
-            }}
-          />
-        ) : null}
+          </Row>
+          {!originalName ? (
+            <Muted>
+              <Small>Save the storage first, then test it.</Small>
+            </Muted>
+          ) : null}
+          {probing ? (
+            <Spinner>Listing, writing a probe object, verifying, removing it…</Spinner>
+          ) : null}
+          {probe?.failure ? <FailureNotice failure={probe.failure} /> : null}
+          {probe && !probe.failure ? (
+            <ReachPanel
+              probe={probe}
+              draft={draft}
+              onCreateFolder={async () => {
+                await ConfigAPI.createStorageFolder(originalName);
+                setProbe(await ConfigAPI.testStorage(originalName));
+              }}
+            />
+          ) : null}
+        </Stack>
       </CardBody>
 
       <CardFoot>
@@ -276,12 +269,13 @@ function KindFields({ draft, set }: { draft: Storage; set: Setter }) {
             <Field label="Authentication">
               <Select
                 value={draft.auth ?? "key"}
-                onChange={(e) => set("auth", e.target.value as Storage["auth"])}
-              >
-                <option value="key">Private key</option>
-                <option value="agent">SSH agent</option>
-                <option value="password">Password</option>
-              </Select>
+                onChange={(auth) => set("auth", auth as Storage["auth"])}
+                options={[
+                  { value: "key", label: "Private key" },
+                  { value: "agent", label: "SSH agent" },
+                  { value: "password", label: "Password" },
+                ]}
+              />
             </Field>
           </FieldRow>
           <Field label="Remote folder">

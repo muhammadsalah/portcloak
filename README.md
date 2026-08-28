@@ -15,7 +15,7 @@ settings.
 Named after the product it serves. Go + [Wails v3](https://wails.io), single binary, no server
 component, no account.
 
-> **Status: 0.0.1 implemented.** The whole loop closes — capture a realm, put it somewhere,
+> **Status: 0.0.2.** The whole loop closes — capture a realm, put it somewhere,
 > read it back, and restore it — across all four target kinds and all four storage backends.
 > The [rollout plan](./spec/rollout/README.md) describes how it was built; the
 > [release notes](./spec/rollout/11-release-0.0.1.md#what-001-does-not-do) are honest about
@@ -79,7 +79,7 @@ The frontend is embedded in the binary, so it is built first:
 ```bash
 npm --prefix frontend ci
 npm --prefix frontend run build
-go build -ldflags "-X main.version=0.0.1" -o portcloak ./cmd/portcloak
+go build -ldflags "-X main.version=0.0.2" -o portcloak ./cmd/portcloak
 ```
 
 The engine is testable without any of that — no network, no Docker, no Keycloak,
@@ -119,7 +119,7 @@ attestation binding it to this repository at that commit. Each release publishes
 the exact commands to check both.
 
 Platform signatures — an Apple Developer ID with notarisation, and Authenticode
-on Windows — are not in place yet, so **0.0.1 carries neither**. Each release's
+on Windows — are not in place yet, so **no release carries either**. Each release's
 notes state which signatures that particular build actually got, rather than
 describing what the pipeline is capable of.
 

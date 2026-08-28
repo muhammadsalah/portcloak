@@ -60,6 +60,18 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+      # gofmt takes no options, which is the point of it: there is nothing to
+      # argue about and nothing to configure. Listing the files it would change
+      # is the whole check.
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l . | grep -v '^frontend/node_modules' || true)
+          if [ -n "$unformatted" ]; then
+            echo "not gofmt'd:" >&2
+            echo "$unformatted" >&2
+            exit 1
+          fi
+
       - run: go vet -tags gtk3 ./internal/... ./frontend/...
       # v6 installs a golangci-lint v1 binary built with go1.24, which refuses
       # to load a module whose go directive is newer than its own toolchain:
@@ -149,6 +161,12 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm --prefix frontend ci
       - run: npm --prefix frontend run check
+
+      # The frontend's gofmt. It is checked rather than left to whoever
+      # remembers, because the alternative is what the tree had: an IDE and a
+      # formatter disagreeing, and every file either touched flipping between
+      # two styles with nothing in the repository deciding which was right.
+      - run: npm --prefix frontend run format:check
 
       # Two floors, one command: a low global figure that stops the suite
       # rotting, and a 100% figure on each module that decides something —

@@ -56,6 +56,11 @@ type Engine struct {
 	// that refused to open.
 	LoadError error
 
+	// logs is every running job's output, kept so the Activity screen can ask
+	// for it again rather than depending on having been listening. See
+	// logStore for why nothing else can be asked.
+	logs *logStore
+
 	mu sync.RWMutex
 	// home is guarded because it is the one thing about a running engine that
 	// can change: the operator can move the PortCloak folder from Settings.
@@ -112,6 +117,7 @@ func NewEngine(version string) (*Engine, error) {
 		LoadError: loadErr,
 		sink:      obs.NopSink{},
 		sessions:  map[string]*inspect.Session{},
+		logs:      newLogStore(),
 	}
 
 	prefs := store.Preferences()
@@ -130,6 +136,11 @@ func NewEngine(version string) (*Engine, error) {
 			Destination: eng.destinationFor,
 		},
 	})
+
+	// The store is wired before anything can run, not when the window attaches
+	// its bridge: a job started by a headless caller says just as much, and its
+	// output is just as gone once it has been said.
+	eng.AttachSink(obs.NopSink{})
 
 	if loadErr != nil {
 		logger.Error("configuration could not be loaded", "err", loadErr)
@@ -279,12 +290,23 @@ func (d *destination) PartialImport(ctx context.Context, realmName string, body 
 }
 
 // AttachSink points engine progress events at a destination.
+//
+// Whatever is attached, the log store sees the events first: the output has to
+// be recorded whether the frontend is listening, replaced by a test recorder,
+// or not attached at all.
 func (e *Engine) AttachSink(s obs.Sink) {
 	e.mu.Lock()
 	e.sink = s
+	wrapped := recordingSink{store: e.logs, next: s}
 	e.mu.Unlock()
-	e.Orch.SetSink(s)
+	e.Orch.SetSink(wrapped)
 }
+
+// Logs returns what a job has said since the caller's cursor.
+func (e *Engine) Logs(jobID string, after int) LogView { return e.logs.tail(jobID, after) }
+
+// ForgetLogs drops a job's output, for a job that no longer exists.
+func (e *Engine) ForgetLogs(jobID string) { e.logs.forget(jobID) }
 
 // Sink returns the current event destination.
 func (e *Engine) Sink() obs.Sink {

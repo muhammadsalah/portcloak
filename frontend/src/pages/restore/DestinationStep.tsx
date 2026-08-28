@@ -7,11 +7,11 @@ import { useState } from "react";
 import type { EnvironmentView, LibraryEntry } from "../../api";
 import { SnapshotKeyFields, type SnapshotKey } from "../../components/SnapshotKeyFields";
 import {
-  Badge,
   Card,
   CardBody,
   CardHead,
   CardTitle,
+  Encryption,
   FieldBox,
   FieldHint,
   Label,
@@ -56,13 +56,14 @@ export function DestinationStep({
       <CardBody>
         <FieldBox>
           <Label>Environment</Label>
-          <Select value={environment} onChange={(e) => onEnvironment(e.target.value)}>
-            {destinations.map((destination) => (
-              <option key={destination.name} value={destination.name}>
-                {`${destination.name} — ${destination.kind} · ${destination.target}`}
-              </option>
-            ))}
-          </Select>
+          <Select
+            value={environment}
+            onChange={onEnvironment}
+            options={destinations.map((destination) => ({
+              value: destination.name,
+              label: `${destination.name} — ${destination.kind} · ${destination.target}`,
+            }))}
+          />
           <FieldHint>
             Keep capture and restore environments separate where you can: a restore target carries
             the higher privilege, and defining it as its own entry means that credential is only
@@ -136,7 +137,7 @@ function KeySection({
   const head = (
     <Row style={{ marginBottom: 6 }}>
       <Strong>Decryption key</Strong>
-      <Badge $tone="neutral">Encrypted</Badge>
+      <Encryption encrypted />
     </Row>
   );
 

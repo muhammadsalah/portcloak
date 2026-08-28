@@ -12,6 +12,8 @@
  */
 import styled, { css } from "styled-components";
 
+import { SelectRoot } from "./Select";
+
 /** Things side by side on one line, evenly spaced and vertically centred. */
 export const Row = styled.div<{ $gap?: number; $wrap?: boolean; $align?: string }>`
   display: flex;
@@ -93,9 +95,12 @@ export const Toolbar = styled.div`
   margin-bottom: 16px;
   flex-wrap: wrap;
 
-  select {
+  // A filter sits to its content rather than filling the row, but not so
+  // tightly that the label and the value crowd each other. The list it opens
+  // starts at the trigger's width, so this is what sizes the menu too.
+  ${SelectRoot} {
     width: auto;
-    min-width: 140px;
+    min-width: 220px;
   }
 `;
 

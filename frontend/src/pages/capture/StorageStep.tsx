@@ -25,13 +25,14 @@ export function StorageStep({
         label="Storage"
         hint="A capture writes to exactly one storage. The bundle is checksummed before it reaches any of them, so corruption is caught on retrieval whichever you choose."
       >
-        <Select value={draft.storage} onChange={(e) => update({ storage: e.target.value })}>
-          {defaults.storages.map((storage) => (
-            <option key={storage.name} value={storage.name}>
-              {`${storage.name} — ${storage.kind} · ${storage.root}${storage.default ? " (default)" : ""}`}
-            </option>
-          ))}
-        </Select>
+        <Select
+          value={draft.storage}
+          onChange={(storage) => update({ storage })}
+          options={defaults.storages.map((storage) => ({
+            value: storage.name,
+            label: `${storage.name} — ${storage.kind} · ${storage.root}${storage.default ? " (default)" : ""}`,
+          }))}
+        />
       </Field>
 
       {chosen?.encryptionRequired && !draft.encrypt ? (

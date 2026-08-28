@@ -134,6 +134,9 @@ type ApplyRequest struct {
 	Passphrase   string   `json:"passphrase"`
 	Identities   []string `json:"identities"`
 	ConfirmRealm string   `json:"confirmRealm"`
+	// NoTransactionTimeout lets the import's transactions run without a time
+	// limit, for a realm too large to write inside the destination's.
+	NoTransactionTimeout bool `json:"noTransactionTimeout"`
 }
 
 // ApplyResult is the handle a started restore hands back.
@@ -150,16 +153,17 @@ func (r *RestoreController) Apply(req ApplyRequest) ApplyResult {
 	r.eng.rememberKey(req.Passphrase, req.Identities)
 
 	res, err := r.eng.Orch.Restore(context.Background(), orchestrator.RestoreRequest{
-		Environment:  req.Environment,
-		Storage:      req.Storage,
-		BundleKey:    req.BundleKey,
-		SnapshotID:   req.SnapshotID,
-		Realm:        req.Realm,
-		Strategy:     kc.ImportStrategy(req.Strategy),
-		Passphrase:   req.Passphrase,
-		Identities:   req.Identities,
-		Candidates:   r.eng.keyCandidates(),
-		ConfirmRealm: req.ConfirmRealm,
+		Environment:          req.Environment,
+		Storage:              req.Storage,
+		BundleKey:            req.BundleKey,
+		SnapshotID:           req.SnapshotID,
+		Realm:                req.Realm,
+		Strategy:             kc.ImportStrategy(req.Strategy),
+		Passphrase:           req.Passphrase,
+		Identities:           req.Identities,
+		Candidates:           r.eng.keyCandidates(),
+		ConfirmRealm:         req.ConfirmRealm,
+		NoTransactionTimeout: req.NoTransactionTimeout,
 	})
 	if err != nil {
 		return ApplyResult{Failure: Fail(err)}

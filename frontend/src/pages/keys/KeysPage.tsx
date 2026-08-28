@@ -183,9 +183,9 @@ function EmptyState({ onGenerate, onImport }: { onGenerate: () => void; onImport
       <CardBody>
         <CardTitle>No keys yet</CardTitle>
         <p>
-          A key is how a snapshot gets sealed and opened again. Create one and PortCloak keeps it
-          in this machine&apos;s keychain: captures can seal to it by name, and a restore opens
-          the snapshot without asking you to remember anything.
+          A key is how a snapshot gets sealed and opened again. Create one and PortCloak keeps it in
+          this machine&apos;s keychain: captures can seal to it by name, and a restore opens the
+          snapshot without asking you to remember anything.
         </p>
         <p>
           <Muted>

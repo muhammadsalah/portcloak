@@ -18,7 +18,15 @@
 import { describe, expect, it } from "vitest";
 
 import type { ProbeResult } from "../../api";
-import { advanceable, kindLabel, type CaptureDraft } from "./draft";
+import {
+  advanceable,
+  clampUsersPerFile,
+  kindLabel,
+  usersPerFileDefault,
+  usersPerFileMax,
+  usersPerFileMin,
+  type CaptureDraft,
+} from "./draft";
 
 function draft(patch: Partial<CaptureDraft> = {}): CaptureDraft {
   return {
@@ -31,6 +39,7 @@ function draft(patch: Partial<CaptureDraft> = {}): CaptureDraft {
     storage: "archive",
     usersMode: "different_files",
     usersPerFile: 1000,
+    noTransactionTimeout: false,
     verify: true,
     detectDependencies: true,
     encrypt: true,
@@ -196,5 +205,22 @@ describe("kindLabel", () => {
   it("shows an unknown kind rather than hiding it", () => {
     // A config written by a newer version should read oddly, not read blank.
     expect(kindLabel("podman")).toBe("podman");
+  });
+});
+
+// The engine holds the same range. This is the wizard keeping a typed number
+// sensible, and an emptied field returning to the default rather than to the
+// floor — clearing a box is not a request for ten users per file.
+describe("clampUsersPerFile", () => {
+  it("keeps a number inside the supported range", () => {
+    expect(clampUsersPerFile(100)).toBe(100);
+    expect(clampUsersPerFile(5)).toBe(usersPerFileMin);
+    expect(clampUsersPerFile(50_000)).toBe(usersPerFileMax);
+  });
+
+  it("treats an empty or nonsense field as the default", () => {
+    expect(clampUsersPerFile(0)).toBe(usersPerFileDefault);
+    expect(clampUsersPerFile(Number.NaN)).toBe(usersPerFileDefault);
+    expect(clampUsersPerFile(-20)).toBe(usersPerFileDefault);
   });
 });

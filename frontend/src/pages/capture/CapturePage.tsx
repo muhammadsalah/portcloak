@@ -95,6 +95,7 @@ function Capture({
     storage: defaults.defaultStorage || defaults.storages[0]?.name || "",
     usersMode: defaults.preferences.usersMode ?? "different_files",
     usersPerFile: defaults.preferences.usersPerFile ?? 1000,
+    noTransactionTimeout: false,
     verify: defaults.preferences.verifyByDefault !== false,
     detectDependencies: defaults.preferences.verifyByDefault !== false,
     encrypt: defaults.preferences.encryptByDefault !== false,
@@ -122,6 +123,7 @@ function Capture({
       storage: draft.storage,
       usersMode: draft.usersMode,
       usersPerFile: draft.usersPerFile,
+      noTransactionTimeout: draft.noTransactionTimeout,
       verify: draft.verify,
       detectDependencies: draft.detectDependencies,
       encrypt: draft.encrypt,
@@ -208,9 +210,7 @@ function Capture({
               storedKeys={storedKeys}
             />
           )}
-          {step === "storage" && (
-            <StorageStep defaults={defaults} draft={draft} update={update} />
-          )}
+          {step === "storage" && <StorageStep defaults={defaults} draft={draft} update={update} />}
           {step === "review" && (
             <ReviewStep defaults={defaults} draft={draft} storedKeys={storedKeys} />
           )}

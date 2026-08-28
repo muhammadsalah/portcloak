@@ -216,11 +216,7 @@ function ProbeLine({ storage }: { storage: StorageView }) {
 
   const writable = storage.lastProbe.writable !== false;
   const bad = storage.stale || !storage.lastProbe.ok;
-  const detail = storage.lastProbe.ok
-    ? writable
-      ? "writable"
-      : "read-only"
-    : "not reachable";
+  const detail = storage.lastProbe.ok ? (writable ? "writable" : "read-only") : "not reachable";
 
   return (
     <ProbeText $bad={bad}>

@@ -19,6 +19,7 @@ import {
   Badge,
   Breadcrumb,
   Button,
+  Encryption,
   FailureNotice,
   Link,
   Notice,
@@ -184,11 +185,7 @@ export function InspectorPage({ route }: { route: InspectRoute }) {
           <Badge $tone={overview.completeness?.verdict === "Complete" ? "ok" : "warn"}>
             {overview.completeness?.verdict ?? "—"}
           </Badge>
-          {overview.encrypted ? (
-            <Badge $tone="neutral">{`Encrypted · ${overview.encryptionMode}`}</Badge>
-          ) : (
-            <Badge $tone="danger">Unencrypted</Badge>
-          )}
+          <Encryption encrypted={overview.encrypted} />
           {/*
             A key used without being asked for is still named. Silence would be
             the one thing worse than the prompt it replaces.
@@ -202,14 +199,14 @@ export function InspectorPage({ route }: { route: InspectRoute }) {
             <Badge $tone="danger">Integrity failed</Badge>
           )}
         </Row>
+        {/*
+          Restoring is what a snapshot is for, here as on the list it came from,
+          so it is the filled one and it anchors the right edge. The other two
+          are things done *to* the snapshot on this machine — proving it, and
+          ending the session that decrypted it — and both stay outlined.
+        */}
         <Row>
           <Button onClick={() => void verify(route.snapshotId, modal)}>Verify</Button>
-          <Button
-            disabled={overview.degraded}
-            onClick={() => navigate({ name: "restore", snapshotId: overview.snapshotId })}
-          >
-            Restore…
-          </Button>
           <Button
             $variant="danger"
             onClick={() =>
@@ -219,6 +216,13 @@ export function InspectorPage({ route }: { route: InspectRoute }) {
             }
           >
             Close snapshot
+          </Button>
+          <Button
+            $variant="primary"
+            disabled={overview.degraded}
+            onClick={() => navigate({ name: "restore", snapshotId: overview.snapshotId })}
+          >
+            Restore
           </Button>
         </Row>
       </PageHead>

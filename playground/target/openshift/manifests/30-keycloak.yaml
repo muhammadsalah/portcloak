@@ -1,0 +1,295 @@
+# Copyright 2026 Muhammad Salah
+# SPDX-License-Identifier: Apache-2.0
+#
+# kc-a, kc-b and kc-merged: capture from one, restore into another, compare
+# against the third.
+#
+# Each is a Deployment rather than the Keycloak operator's custom resource. The
+# operator would be more faithful to a production cluster and would hide the one
+# thing this playground exists to exercise: PortCloak derives its ephemeral
+# clone from the pod spec of the workload it is capturing, and a Deployment's
+# spec is the thing an operator can read beside the clone that came out of it.
+#
+# Nothing sets runAsUser. OpenShift assigns a uid from the namespace's range,
+# the Keycloak image is built for it, and a pod that asks for its own is a pod
+# the SCC rejects — which is a failure PortCloak's clone derivation had to learn
+# to avoid inheriting.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: keycloak-admin
+  namespace: kc
+type: Opaque
+stringData:
+  KC_BOOTSTRAP_ADMIN_USERNAME: admin
+  KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kc-a
+  namespace: kc
+  labels:
+    app: kc-a
+    app.kubernetes.io/part-of: portcloak-playground
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kc-a
+  template:
+    metadata:
+      labels:
+        app: kc-a
+    spec:
+      containers:
+        - name: keycloak
+          image: quay.io/keycloak/keycloak:26.4
+          args: ["start-dev", "--http-port=8080"]
+          envFrom:
+            - secretRef:
+                name: keycloak-admin
+          env:
+            - name: KC_DB
+              value: postgres
+            - name: KC_DB_URL_HOST
+              value: postgres
+            - name: KC_DB_URL_DATABASE
+              value: kc_a
+            - name: KC_DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: postgres
+                  key: POSTGRES_USER
+            - name: KC_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres
+                  key: POSTGRES_PASSWORD
+            - name: KC_HEALTH_ENABLED
+              value: "true"
+          ports:
+            - containerPort: 8080
+              name: http
+            - containerPort: 9000
+              name: management
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 9000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 30
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              # An export of a large federated realm is the heaviest thing this
+              # pod does, and it happens in a clone derived from this spec —
+              # so the limit here is also the clone's limit.
+              cpu: "2"
+              memory: 3Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kc-a
+  namespace: kc
+spec:
+  selector:
+    app: kc-a
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: kc-a
+  namespace: kc
+spec:
+  to:
+    kind: Service
+    name: kc-a
+  port:
+    targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kc-b
+  namespace: kc
+  labels:
+    app: kc-b
+    app.kubernetes.io/part-of: portcloak-playground
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kc-b
+  template:
+    metadata:
+      labels:
+        app: kc-b
+    spec:
+      containers:
+        - name: keycloak
+          image: quay.io/keycloak/keycloak:26.4
+          args: ["start-dev", "--http-port=8080"]
+          envFrom:
+            - secretRef:
+                name: keycloak-admin
+          env:
+            - name: KC_DB
+              value: postgres
+            - name: KC_DB_URL_HOST
+              value: postgres
+            - name: KC_DB_URL_DATABASE
+              value: kc_b
+            - name: KC_DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: postgres
+                  key: POSTGRES_USER
+            - name: KC_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres
+                  key: POSTGRES_PASSWORD
+            - name: KC_HEALTH_ENABLED
+              value: "true"
+          ports:
+            - containerPort: 8080
+              name: http
+            - containerPort: 9000
+              name: management
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 9000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 30
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: "2"
+              memory: 3Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kc-b
+  namespace: kc
+spec:
+  selector:
+    app: kc-b
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: kc-b
+  namespace: kc
+spec:
+  to:
+    kind: Service
+    name: kc-b
+  port:
+    targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kc-merged
+  namespace: kc
+  labels:
+    app: kc-merged
+    app.kubernetes.io/part-of: portcloak-playground
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kc-merged
+  template:
+    metadata:
+      labels:
+        app: kc-merged
+    spec:
+      containers:
+        - name: keycloak
+          image: quay.io/keycloak/keycloak:26.4
+          args: ["start-dev", "--http-port=8080"]
+          envFrom:
+            - secretRef:
+                name: keycloak-admin
+          env:
+            - name: KC_DB
+              value: postgres
+            - name: KC_DB_URL_HOST
+              value: postgres
+            - name: KC_DB_URL_DATABASE
+              value: kc_merged
+            - name: KC_DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: postgres
+                  key: POSTGRES_USER
+            - name: KC_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres
+                  key: POSTGRES_PASSWORD
+            - name: KC_HEALTH_ENABLED
+              value: "true"
+          ports:
+            - containerPort: 8080
+              name: http
+            - containerPort: 9000
+              name: management
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 9000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 30
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: "2"
+              memory: 3Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kc-merged
+  namespace: kc
+spec:
+  selector:
+    app: kc-merged
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: kc-merged
+  namespace: kc
+spec:
+  to:
+    kind: Service
+    name: kc-merged
+  port:
+    targetPort: http

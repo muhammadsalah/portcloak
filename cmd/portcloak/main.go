@@ -24,7 +24,7 @@ import (
 // app.NewBuild recovers both from the VCS information the Go toolchain embeds
 // on its own, and marks the build dirty if the tree had uncommitted changes.
 var (
-	version = "0.0.1-dev"
+	version = "0.0.2-dev"
 	commit  = ""
 	date    = ""
 )

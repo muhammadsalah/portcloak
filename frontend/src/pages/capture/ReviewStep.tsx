@@ -3,13 +3,7 @@
 
 /** Step five: every decision the other four made, in one list, before it runs. */
 import type { KeyRecipient, WizardDefaults } from "../../api";
-import {
-  Card,
-  CardBody,
-  KeyValue,
-  Notice,
-  SectionTitle,
-} from "../../design-system";
+import { Card, CardBody, KeyValue, Notice, SectionTitle } from "../../design-system";
 import { kindLabel, type CaptureDraft } from "./draft";
 
 export function ReviewStep({
@@ -33,7 +27,16 @@ export function ReviewStep({
     ],
     ["Realms", draft.realms.join(", ") || "—"],
     ["Snapshots produced", String(draft.realms.length)],
-    ["Users mode", draft.usersMode],
+    [
+      "Users mode",
+      draft.usersMode === "different_files"
+        ? `${draft.usersMode} · ${draft.usersPerFile} per file`
+        : draft.usersMode,
+    ],
+    [
+      "Transaction limit",
+      draft.noTransactionTimeout ? "lifted — export may run unbounded" : "server default",
+    ],
     ["Verify secrets", draft.verify ? "yes" : "no"],
     ["Detect dependencies", draft.detectDependencies ? "yes" : "no"],
     [

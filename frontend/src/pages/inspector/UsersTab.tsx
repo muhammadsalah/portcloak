@@ -47,13 +47,7 @@ import { showUser } from "./UserDetail";
 
 const pageSize = 25;
 
-export function UsersTab({
-  snapshotId,
-  indexNote,
-}: {
-  snapshotId: string;
-  indexNote: string;
-}) {
+export function UsersTab({ snapshotId, indexNote }: { snapshotId: string; indexNote: string }) {
   const modal = useModal();
 
   const [query, setQuery] = useState<UsersQuery>({

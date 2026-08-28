@@ -2,20 +2,27 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /** The library is Tier 0: every snapshot, across every backend, with no key. */
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
-import { SnapshotAPI, type LibraryEntry, type LibraryView } from "../../api";
-import { useNavigate, useShell } from "../../app/ShellContext";
+import { InspectAPI, SnapshotAPI, type LibraryEntry, type LibraryView } from "../../api";
+import { useNavigate } from "../../app/ShellContext";
+import { Icon } from "../../components/Icon";
 import {
   Badge,
   Button,
   Card,
+  Encryption,
+  Input,
   Link,
+  Menu,
   Muted,
   Notice,
+  Numeric,
+  NumericHeader,
   PageHead,
   PageSubtitle,
   PageTitle,
+  Right,
   Row,
   Search,
   Select,
@@ -26,17 +33,19 @@ import {
   Toolbar,
   Tr,
   useModal,
-  Input,
-  NumericHeader,
-  Numeric,
-  Right,
 } from "../../design-system";
 import { useAsync } from "../../hooks/useAsync";
 import { bytes, count, when } from "../../utils/format";
 import { FirstRun } from "./FirstRun";
 
 export function LibraryPage() {
-  const { state } = useAsync(() => SnapshotAPI.library().then((view) => ({ view })).catch((error) => ({ error })), []);
+  const { state, reload } = useAsync(
+    () =>
+      SnapshotAPI.library()
+        .then((view) => ({ view }))
+        .catch((error) => ({ error })),
+    [],
+  );
 
   if (state.status === "failed") throw state.error;
   if (state.status === "loading") return <Spinner>Reading storage…</Spinner>;
@@ -50,16 +59,36 @@ export function LibraryPage() {
       />
     );
   }
-  return <Library view={state.value.view} />;
+  return <Library view={state.value.view} reload={reload} />;
 }
 
-function Library({ view }: { view: LibraryView }) {
+function Library({ view, reload }: { view: LibraryView; reload: () => void }) {
   const navigate = useNavigate();
-  const { setHasSnapshots } = useShell();
 
-  useEffect(() => {
-    setHasSnapshots(view.entries.length > 0);
-  }, [view.entries.length, setHasSnapshots]);
+  // What a snapshot names and what still exists are two different things: a
+  // snapshot records where it was captured from and written to, and either can
+  // have been renamed or removed since. Offering a link to something that is
+  // gone is worse than not offering one.
+  //
+  // Undefined rather than empty when the engine did not send the list: "I was
+  // not told" and "there are none" are different answers, and collapsing them
+  // is what made every row claim its environment had been removed. A screen may
+  // decline to offer a link it cannot justify; it may not tell an operator
+  // their environments are gone on the strength of a field it never received.
+  const configuredEnvironments = useMemo(
+    () => (view.environments ? new Set(view.environments) : undefined),
+    [view.environments],
+  );
+  // An open snapshot is one with decrypted realm material on this machine. The
+  // list is the engine's, not a guess from which screens were visited: a
+  // session survives navigating away, and closing the window is not what ends
+  // it.
+  const openSnapshots = useMemo(() => new Set(view.open ?? []), [view.open]);
+
+  const configuredStorages = useMemo(
+    () => (view.storages ? new Set(view.storages.map((storage) => storage.name)) : undefined),
+    [view.storages],
+  );
 
   const [query, setQuery] = useState("");
   const [realm, setRealm] = useState("");
@@ -118,22 +147,24 @@ function Library({ view }: { view: LibraryView }) {
             onChange={(e) => setQuery(e.target.value)}
           />
         </Search>
-        <Select value={realm} onChange={(e) => setRealm(e.target.value)}>
-          <option value="">Realm: all</option>
-          {view.realms.map((r) => (
-            <option key={r} value={r}>
-              {r}
-            </option>
-          ))}
-        </Select>
-        <Select value={storage} onChange={(e) => setStorage(e.target.value)}>
-          <option value="">Storage: all</option>
-          {view.storages.map((s) => (
-            <option key={s.name} value={s.name}>
-              {s.name}
-            </option>
-          ))}
-        </Select>
+        <Select
+          aria-label="Filter by realm"
+          value={realm}
+          onChange={setRealm}
+          options={[
+            { value: "", label: "Realm: all" },
+            ...view.realms.map((r) => ({ value: r, label: r })),
+          ]}
+        />
+        <Select
+          aria-label="Filter by storage"
+          value={storage}
+          onChange={setStorage}
+          options={[
+            { value: "", label: "Storage: all" },
+            ...view.storages.map((s) => ({ value: s.name, label: s.name })),
+          ]}
+        />
       </Toolbar>
 
       <Card>
@@ -159,7 +190,16 @@ function Library({ view }: { view: LibraryView }) {
                   </td>
                 </tr>
               ) : (
-                rows.map((entry) => <SnapshotRow key={entry.snapshotId} entry={entry} />)
+                rows.map((entry) => (
+                  <SnapshotRow
+                    key={entry.snapshotId}
+                    entry={entry}
+                    environments={configuredEnvironments}
+                    storages={configuredStorages}
+                    open={openSnapshots.has(entry.snapshotId)}
+                    reload={reload}
+                  />
+                ))
               )}
             </tbody>
           </Table>
@@ -169,7 +209,21 @@ function Library({ view }: { view: LibraryView }) {
   );
 }
 
-function SnapshotRow({ entry }: { entry: LibraryEntry }) {
+function SnapshotRow({
+  entry,
+  environments,
+  storages,
+  open: isOpen,
+  reload,
+}: {
+  entry: LibraryEntry;
+  /** Undefined where the engine did not say, which is not the same as empty. */
+  environments?: Set<string>;
+  storages?: Set<string>;
+  /** This snapshot has an inspection session, and decrypted files on disk. */
+  open: boolean;
+  reload: () => void;
+}) {
   const navigate = useNavigate();
   const modal = useModal();
 
@@ -182,49 +236,157 @@ function SnapshotRow({ entry }: { entry: LibraryEntry }) {
     });
 
   return (
-    <Tr $selectable>
+    <Tr>
+      {/* Not a link: Inspect is on this row and is the same destination. Two
+          ways to reach one screen from one row is one of them going unnoticed. */}
       <td>
-        <Link onClick={open}>{entry.realm || "(unknown)"}</Link>
+        <Row $gap={8}>
+          {/* The realm is how a snapshot is opened. It was a link, then it was
+              not because Inspect sat in the same row saying the same thing, and
+              now Inspect has gone into the menu — so the name carries it. */}
+          <Link onClick={open} title="Open this snapshot">
+            {entry.realm || "(unknown)"}
+          </Link>
+          {isOpen ? (
+            <Badge $tone="info" title="Decrypted working files are on this machine.">
+              Open
+            </Badge>
+          ) : null}
+        </Row>
       </td>
       <td>{when(entry.createdAt)}</td>
       <td>
-        <Small>
-          {entry.environment
-            ? `${entry.environment}${entry.executionMode ? ` · ${describeMode(entry.executionMode)}` : ""}`
-            : "—"}
-        </Small>
+        <Gone
+          name={entry.environment}
+          exists={environments && environments.has(entry.environment ?? "")}
+          missing="This environment is no longer configured."
+          // How the export ran is provenance, not identity. Appended to the
+          // name it read as part of what the environment is called, and every
+          // row said the same thing. It is on hover, and in full on the
+          // snapshot's own screen.
+          title={entry.executionMode ? `Captured ${describeMode(entry.executionMode)}` : undefined}
+          onOpen={() => navigate({ name: "environments", select: entry.environment })}
+        />
       </td>
       <Numeric>{entry.metadataReadable ? count(entry.users) : "—"}</Numeric>
       <td>
         <Completeness entry={entry} />
       </td>
       <td>
-        {entry.encrypted ? (
-          <Muted>
-            <Small>
-              🔒 Encrypted{entry.encryptionMode ? ` · ${entry.encryptionMode}` : ""}
-            </Small>
-          </Muted>
-        ) : (
-          <Badge $tone="danger">Unencrypted</Badge>
-        )}
+        <Encryption encrypted={entry.encrypted} />
       </td>
       <td>
-        <Muted>
-          <Small>{`${entry.storage} · ${bytes(entry.bytes)}`}</Small>
-        </Muted>
+        <Gone
+          name={entry.storage}
+          exists={storages && storages.has(entry.storage)}
+          missing="This storage is no longer configured."
+          note={bytes(entry.bytes)}
+          onOpen={() => navigate({ name: "storage", select: entry.storage })}
+        />
       </td>
       <td>
         <Right>
-          <Row>
-            <Link onClick={open}>Inspect</Link>
-            <Link $tone="muted" onClick={() => confirmDelete(entry, modal, navigate)}>
-              Delete
-            </Link>
+          <Row $gap={8}>
+            {/*
+              Restoring is what a snapshot is for, so it is the one action that
+              looks like an action — anchoring the right edge of every row, the
+              way the page's own primary sits at its top right.
+
+              It is always a restore *of a particular snapshot*, which is why it
+              starts here rather than from a rail item that could only have
+              asked which one. The wizard opens on the destination when it
+              arrives already knowing.
+            */}
+            <Button
+              $variant="primary"
+              onClick={() => navigate({ name: "restore", snapshotId: entry.snapshotId })}
+            >
+              Restore
+            </Button>
+            <Menu
+              label={`More actions for ${entry.realm || "this snapshot"}`}
+              items={[
+                {
+                  label: isOpen ? "Open" : "Inspect",
+                  icon: <Icon name="library" />,
+                  onSelect: open,
+                },
+                // Closing appears only when there is something to close: an
+                // inspection session, holding decrypted realm material on this
+                // machine until it ends.
+                ...(isOpen
+                  ? [
+                      {
+                        label: "Close snapshot",
+                        icon: <Icon name="close" />,
+                        onSelect: async () => {
+                          await InspectAPI.close(entry.snapshotId);
+                          reload();
+                        },
+                      },
+                    ]
+                  : []),
+                {
+                  label: "Delete",
+                  icon: <Icon name="trash" />,
+                  tone: "danger" as const,
+                  onSelect: () => confirmDelete(entry, modal, navigate),
+                },
+              ]}
+            />
           </Row>
         </Right>
       </td>
     </Tr>
+  );
+}
+
+/**
+ * A name that is a link while the thing it names still exists.
+ *
+ * A snapshot is a record of something that happened, not a foreign key: the
+ * environment it was captured from and the storage it was written to can both
+ * be renamed or removed afterwards, and the snapshot stays exactly as true as
+ * it was. So the name is always shown — losing it would lose the record — and
+ * only the link comes and goes.
+ */
+function Gone({
+  name,
+  exists,
+  missing,
+  title,
+  note,
+  onOpen,
+}: {
+  name?: string;
+  /** True: still configured. False: gone. Undefined: not known either way. */
+  exists?: boolean;
+  missing: string;
+  title?: string;
+  note?: string;
+  onOpen: () => void;
+}) {
+  if (!name) return <Small>—</Small>;
+  return (
+    <div>
+      {exists === true ? (
+        <Link title={title} onClick={onOpen}>
+          {name}
+        </Link>
+      ) : exists === false ? (
+        <Muted title={missing}>
+          <Small>{`${name} (removed)`}</Small>
+        </Muted>
+      ) : (
+        // Not known: the name, and no claim about it in either direction.
+        <Small title={title}>{name}</Small>
+      )}
+      {note ? (
+        <Muted>
+          <Small>{` · ${note}`}</Small>
+        </Muted>
+      ) : null}
+    </div>
   );
 }
 
@@ -241,7 +403,7 @@ function Completeness({ entry }: { entry: LibraryEntry }) {
 }
 
 function describeMode(mode: string): string {
-  return mode === "ephemeral-clone" ? "clone" : "in place";
+  return mode === "ephemeral-clone" ? "via a clone" : "in place";
 }
 
 function confirmDelete(

@@ -255,6 +255,7 @@ export interface CaptureOptions {
   storage: string;
   usersMode: string;
   usersPerFile: number;
+  noTransactionTimeout: boolean;
   verify: boolean;
   detectDependencies: boolean;
   encrypt: boolean;
@@ -323,6 +324,10 @@ export interface FirstRun {
 export interface LibraryView {
   entries: LibraryEntry[];
   storages: StorageStatus[];
+  /** The environments still configured, so a link can be offered only for those. */
+  environments: string[];
+  /** Snapshots with an open inspection session, holding decrypted files on disk. */
+  open: string[];
   summary: string;
   realms: string[];
   firstRun?: FirstRun;
@@ -697,6 +702,7 @@ export const RestoreAPI = {
     passphrase: string;
     identities: string[];
     confirmRealm: string;
+    noTransactionTimeout: boolean;
   }) => call<ApplyResult>("RestoreController", "Apply", req),
   outOfScopeNote: () => call<string[]>("RestoreController", "OutOfScopeNote"),
 };
@@ -731,8 +737,16 @@ export interface JobView {
   storage?: string;
   snapshotId?: string;
   storageKey?: string;
+  /**
+   * Which snapshot a restore is applying — when it was captured and from where.
+   * Absent on a capture, and on a restore that failed before the bundle opened.
+   */
+  origin?: { capturedAt?: string; environment?: string };
   encrypted: boolean;
   createdAt: string;
+  /** When the run actually began, and when it ended. Absent until each happens. */
+  startedAt?: string;
+  endedAt?: string;
   message?: string;
   hint?: string;
   retryable?: boolean;
@@ -761,8 +775,26 @@ export interface DiscardResult extends MaybeFailed {
   note: string;
 }
 
+export interface LogLine {
+  text: string;
+  /** Written by PortCloak rather than said by the subprocess, and coloured for it. */
+  fromPortCloak: boolean;
+}
+
+export interface LogView {
+  jobId: string;
+  lines: LogLine[];
+  /** The cursor to ask from next time, counted over the whole run. */
+  next: number;
+  /** These lines replace what the caller holds rather than extending it. */
+  reset: boolean;
+  /** The tail is not the whole run: older lines were dropped by the cap. */
+  truncated: boolean;
+}
+
 export const JobsAPI = {
   list: () => call<ActivityView>("JobsController", "List"),
+  log: (jobId: string, after = 0) => call<LogView>("JobsController", "Log", jobId, after),
   cancel: (jobId: string) => call<Failure | null>("JobsController", "Cancel", jobId),
   discard: (jobId: string) => call<DiscardResult>("JobsController", "Discard", jobId),
   resume: (jobId: string, passphrase = "") =>

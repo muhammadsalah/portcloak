@@ -62,9 +62,7 @@ function Environments({
     (e) => e.name === (select ?? snapshot.environments[0]?.name),
   );
   const [selected, setSelected] = useState<string | undefined>(initial?.name);
-  const [draft, setDraft] = useState<Environment | undefined>(
-    initial ? { ...initial } : undefined,
-  );
+  const [draft, setDraft] = useState<Environment | undefined>(initial ? { ...initial } : undefined);
   // Empty while adding: it is the name the engine is asked to replace, and a
   // new environment replaces nothing.
   const [originalName, setOriginalName] = useState(initial?.name ?? "");
@@ -163,7 +161,9 @@ function ConfigProblems({ snapshot, reload }: { snapshot: ConfigSnapshot; reload
       </Small>
       <ul style={{ fontSize: 12, margin: "8px 0 0", paddingLeft: 18 }}>
         {(snapshot.loadProblems ?? []).map((problem, i) => (
-          <li key={i}>{problem.line > 0 ? `Line ${problem.line}: ${problem.message}` : problem.message}</li>
+          <li key={i}>
+            {problem.line > 0 ? `Line ${problem.line}: ${problem.message}` : problem.message}
+          </li>
         ))}
       </ul>
       <Button

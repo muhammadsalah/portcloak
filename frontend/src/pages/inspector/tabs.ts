@@ -4,14 +4,7 @@
 /** The eight views over an opened snapshot, in the order they are read in. */
 
 export type Tab =
-  | "overview"
-  | "users"
-  | "clients"
-  | "keys"
-  | "federations"
-  | "flows"
-  | "deps"
-  | "secrets";
+  "overview" | "users" | "clients" | "keys" | "federations" | "flows" | "deps" | "secrets";
 
 export const tabs: { key: Tab; label: string }[] = [
   { key: "overview", label: "Overview" },

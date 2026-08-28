@@ -145,6 +145,32 @@ Sources are the two SVGs in `icons/`, both built from the same geometry as
 librsvg or ImageMagick; run the script only when the mark changes, then commit
 what it produces.
 
+## Release notes
+
+The published notes are assembled by the workflow, not written into the draft by
+hand. Two halves, and they come from different places for the same reason:
+
+- **What changed** is lifted out of `CHANGELOG.md` by
+  [`ci/changelog-section.sh`](./ci/changelog-section.sh), which prints one
+  version's section. The changelog is already the record and it travels in the
+  same commit as the change it describes; a second hand-written account of the
+  same release is one that can disagree with it.
+- **How to verify it, and what it was signed with** is generated from what the
+  build actually did — which is why it is generated rather than written. A note
+  claiming notarisation on a build that had no Apple credentials is a false
+  claim about a security property, and the reader cannot tell it is wrong.
+
+A version with no changelog section fails the release, in the first job rather
+than after three platforms have been signed:
+
+```bash
+build/ci/changelog-section.sh 0.0.2      # what the workflow will publish
+```
+
+Where `spec/rollout/*release-<version>.md` exists, the notes link it too — that
+page is for what a changelog cannot carry: what to know before upgrading, and
+what the release still does not do.
+
 ## Signing and notarisation
 
 Automated, in [`.github/workflows/release.yml`](../.github/workflows/release.yml), and

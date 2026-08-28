@@ -71,8 +71,8 @@ export function AuditPage() {
     <div>
       <PageTitle>Audit log</PageTitle>
       <PageSubtitle>
-        Everything PortCloak has done, in the order it did it. Append-only, and never cleared
-        from here.
+        Everything PortCloak has done, in the order it did it. Append-only, and never cleared from
+        here.
       </PageSubtitle>
 
       {state.status === "loading" ? (
@@ -86,20 +86,18 @@ export function AuditPage() {
               {`${state.value.entries.length} entr${state.value.entries.length === 1 ? "y" : "ies"}`}
             </CardTitle>
             <Row>
-              <Select value={action} onChange={(e) => setAction(e.target.value)}>
-                {actions.map((a) => (
-                  <option key={a.value} value={a.value}>
-                    {a.label}
-                  </option>
-                ))}
-              </Select>
-              <Select value={String(days)} onChange={(e) => setDays(Number(e.target.value))}>
-                {ranges.map((r) => (
-                  <option key={r.value} value={r.value}>
-                    {r.label}
-                  </option>
-                ))}
-              </Select>
+              <Select
+                aria-label="Filter by action"
+                value={action}
+                onChange={setAction}
+                options={actions}
+              />
+              <Select
+                aria-label="Filter by period"
+                value={String(days)}
+                onChange={(range) => setDays(Number(range))}
+                options={ranges.map((r) => ({ value: String(r.value), label: r.label }))}
+              />
               <Muted>
                 <Mono>{state.value.path}</Mono>
               </Muted>
@@ -109,9 +107,7 @@ export function AuditPage() {
           <CardBody>
             {state.value.entries.length === 0 ? (
               <Muted>
-                {action || days
-                  ? "Nothing matches that filter."
-                  : "Nothing has been recorded yet."}
+                {action || days ? "Nothing matches that filter." : "Nothing has been recorded yet."}
               </Muted>
             ) : (
               state.value.entries.map((entry, i) => <AuditRow key={i} entry={entry} />)

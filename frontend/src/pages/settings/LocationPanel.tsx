@@ -10,7 +10,7 @@
  */
 import { useEffect, useState } from "react";
 
-import { SettingsAPI, type LocationView } from "../../api";
+import { type LocationView, SettingsAPI } from "../../api";
 import {
   Badge,
   Button,
@@ -28,9 +28,9 @@ import {
   PathBox,
   Row,
   Small,
+  type Tone,
   useModal,
   useModalControls,
-  type Tone,
 } from "../../design-system";
 
 type Modal = ReturnType<typeof useModal>;
@@ -94,7 +94,7 @@ export function LocationPanel({
             disabled={!location.movable || Boolean(location.blocked)}
             onClick={() => confirmMove(location, modal, reload)}
           >
-            Move to another folder…
+            Move to another folder
           </Button>
           {!location.atDefault ? (
             <Button
@@ -112,7 +112,9 @@ export function LocationPanel({
         {missing.length > 0 ? (
           <Notice
             tone="warn"
-            title={`${missing.length} credential${missing.length === 1 ? "" : "s"} not on this machine`}
+            title={`${missing.length} credential${
+              missing.length === 1 ? "" : "s"
+            } not on this machine`}
             body={
               "Configuration is portable between machines; the secrets deliberately are not. " +
               missing.map((m) => m.name).join(", ")

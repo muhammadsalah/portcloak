@@ -34,6 +34,7 @@ storage, then all UI) would defer every one of those discoveries to the end.
 | **P7** | Restore | A bundle becomes a live realm on a target of the operator's choosing. | [P7](./09-phase-p7-restore.md) |
 | **P8** | Verification & dependencies | Secrets are proven unmasked; themes and provider JARs are reported. | [P8](./10-phase-p8-verification.md) |
 | **R** | Release 0.0.1 | Signed binaries, a tagged commit, and an honest list of what 0.0.1 does not do. | [Release](./11-release-0.0.1.md) |
+| **R2** | Release 0.0.2 | What the first maintenance release changes, and the one option in it that carries a trade. | [Release](./13-release-0.0.2.md) |
 
 Supporting documents:
 

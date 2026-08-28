@@ -57,10 +57,37 @@ type ExportRequest struct {
 	// Optimized asks Keycloak to skip the build step where the installation is
 	// already built, which most container images are.
 	Optimized bool
+	// NoTransactionTimeout removes the limit on how long the export's own
+	// transactions may run. See TransactionTimeoutVar for what that does and
+	// what it costs.
+	NoTransactionTimeout bool
 	// ExtraArgs are passed through verbatim for a version quirk an operator
 	// needs to work around.
 	ExtraArgs []string
 }
+
+// TransactionTimeoutVar is how the export's transaction limit is lifted.
+//
+// There is no way to run the export without transactions. Keycloak's export is
+// written as a sequence of them — one per page of users, with the JPA batch
+// entity manager inside — and no Keycloak option turns that off:
+// `--transaction-xa-enabled` chooses XA against local datasources, which is a
+// different thing, and it is the only transaction option any measured version
+// exposes (see testdata/kc-help). What can be changed is how long one is
+// allowed to run before Narayana's reaper cancels it, and that is not a
+// Keycloak option either: it belongs to Quarkus, which reads it from this
+// variable through SmallRye's environment mapping.
+//
+// Zero is Narayana's "never reap". The variable is only set when the operator
+// asks for it, because the limit is the only thing bounding an export that has
+// stopped making progress: without it, an export whose directory stopped
+// answering holds its database connection open until someone kills the clone —
+// and that connection is the serving instance's.
+//
+// Keycloak does not publish this as a supported option, so a release may stop
+// honouring it. That is why it is opt-in and reported in the command line
+// PortCloak logs, rather than something the tool sets on its own.
+const TransactionTimeoutVar = "QUARKUS_TRANSACTION_MANAGER_DEFAULT_TRANSACTION_TIMEOUT"
 
 // Ports mirrors the target port set without importing it, so kc stays a leaf
 // package the target adapters can depend on freely.
@@ -105,6 +132,10 @@ func (s OptionSet) Known() bool { return len(s) > 0 }
 type ExportCommand struct {
 	Path string
 	Args []string
+	// Env is what has to be set for this invocation, and nothing else. It is
+	// applied on top of the environment the execution context already has, so
+	// an empty map leaves the clone's own settings alone.
+	Env map[string]string
 	// PortsPassed records whether any port option made it onto the command
 	// line. Where none did, a bind conflict cannot be resolved by reallocating
 	// ports, so retrying one would be a loop with no exit.
@@ -173,8 +204,21 @@ func portArgs(supported OptionSet, p Ports) []string {
 }
 
 // String renders the command as it would be typed, for the streamed log panel.
+// The environment is rendered in front of it, the way it would be typed too: an
+// operator reading the log has to be able to see that the transaction limit was
+// lifted on this run.
 func (c ExportCommand) String() string {
-	return c.Path + " " + strings.Join(c.Args, " ")
+	var b strings.Builder
+	keys := make([]string, 0, len(c.Env))
+	for k := range c.Env {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		fmt.Fprintf(&b, "%s=%s ", k, c.Env[k])
+	}
+	b.WriteString(c.Path + " " + strings.Join(c.Args, " "))
+	return b.String()
 }
 
 // BuildExport produces the invocation from [03 §3.8].
@@ -206,7 +250,7 @@ func BuildExport(r ExportRequest) (ExportCommand, error) {
 	if mode == UsersDifferentFiles {
 		n := r.UsersPerFile
 		if n <= 0 {
-			n = 1000
+			n = UsersPerFileDefault
 		}
 		args = append(args, "--users-per-file", strconv.Itoa(n))
 	}
@@ -218,7 +262,21 @@ func BuildExport(r ExportRequest) (ExportCommand, error) {
 	}
 	args = append(args, r.ExtraArgs...)
 
-	return ExportCommand{Path: r.KcPath, Args: args, PortsPassed: len(ports) > 0}, nil
+	return ExportCommand{
+		Path: r.KcPath, Args: args,
+		Env:         transactionEnv(r.NoTransactionTimeout),
+		PortsPassed: len(ports) > 0,
+	}, nil
+}
+
+// transactionEnv is the environment an invocation needs, which is nothing at
+// all unless the transaction limit was lifted. A nil map leaves the execution
+// context's own environment exactly as it is.
+func transactionEnv(noTimeout bool) map[string]string {
+	if !noTimeout {
+		return nil
+	}
+	return map[string]string{TransactionTimeoutVar: "0"}
 }
 
 // ImportStrategy is what happens to a resource that already exists.
@@ -246,7 +304,17 @@ type ImportRequest struct {
 	// assumption this whole mechanism exists to stop making.
 	Supported OptionSet
 	Optimized bool
-	ExtraArgs []string
+	// NoTransactionTimeout removes the limit on how long the import's own
+	// transactions may run. See TransactionTimeoutVar.
+	//
+	// The import needs it at least as often as the export does: it writes the
+	// users a page at a time in the same way, and a destination federated to
+	// the same directory validates them on the way in. Where it differs is what
+	// a cancelled transaction leaves behind — Keycloak's import is not
+	// transactional as a whole, so a rolled-back page is a half-applied realm
+	// rather than nothing at all.
+	NoTransactionTimeout bool
+	ExtraArgs            []string
 }
 
 // BuildImport produces the offline import invocation.
@@ -289,7 +357,11 @@ func BuildImport(r ImportRequest) (ExportCommand, error) {
 	}
 	args = append(args, r.ExtraArgs...)
 
-	return ExportCommand{Path: r.KcPath, Args: args, PortsPassed: len(ports) > 0}, nil
+	return ExportCommand{
+		Path: r.KcPath, Args: args,
+		Env:         transactionEnv(r.NoTransactionTimeout),
+		PortsPassed: len(ports) > 0,
+	}, nil
 }
 
 // StrategyExplanation says what a strategy does to an existing resource, in
@@ -340,6 +412,12 @@ type Outcome struct {
 	// BindConflict marks the one failure that is worth retrying with fresh
 	// ports rather than reporting.
 	BindConflict bool
+	// TransactionTimeout marks an export the server rolled back for outrunning
+	// its transaction limit. It is a flag rather than a phrase the caller
+	// re-matches, because the export retry has to act on it: the work inside
+	// one transaction is bounded by the page size, and the page size is
+	// PortCloak's to choose.
+	TransactionTimeout bool
 	// RejectedOption and RejectedCommand name an option this kc.sh does not
 	// take on that subcommand. It is captured separately because the wording
 	// matches neither "unknown option" nor "unrecognized option", so it used to
@@ -356,7 +434,7 @@ func ParseOutput(stdout, stderr string) Outcome {
 	seen := map[string]bool{}
 	for _, stream := range []string{stdout, stderr} {
 		for _, line := range strings.Split(stream, "\n") {
-			line = strings.TrimRight(line, "\r")
+			line = normaliseLevel(strings.TrimRight(line, "\r"))
 			if m := warnRe.FindStringSubmatch(line); m != nil {
 				msg := strings.TrimSpace(m[1])
 				if msg != "" && !seen["w:"+msg] {
@@ -375,11 +453,43 @@ func ParseOutput(stdout, stderr string) Outcome {
 		}
 	}
 	out.BindConflict = looksLikeBindConflict(stdout) || looksLikeBindConflict(stderr)
+	// Read from the raw streams rather than from the parsed lines: the reaper
+	// announces the cancellation in warnings and the rollback in errors, and
+	// either one alone is the same fault.
+	out.TransactionTimeout = looksLikeTransactionTimeout(stdout) || looksLikeTransactionTimeout(stderr)
 	// Both streams, because kc.sh puts this one on stdout on some releases.
 	if m := rejectedOptionRe.FindStringSubmatch(stdout + "\n" + stderr); m != nil {
 		out.RejectedOption, out.RejectedCommand = m[1], m[2]
 	}
 	return out
+}
+
+// serverLineRe strips the prefix a running Keycloak puts in front of every line
+// it logs, so the level can be seen at all:
+//
+//	2026-08-28 06:02:41,471 ERROR [org.keycloak...ExecutionExceptionHandler] (main) ERROR: Database operation failed
+//
+// Matching the level at the start of the line only ever caught the launcher's
+// own bare `ERROR: ...`, which is what kc.sh prints before the server comes up.
+// Everything the server itself logged arrived timestamped and was silently
+// discarded — every warning that should have reached the ledger, and the three
+// error lines that say why an export died. A failed export therefore reported
+// its exit code and nothing else, which is exactly the case ClassifyFailure
+// exists to prevent.
+var serverLineRe = regexp.MustCompile(`^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}\s+(WARN(?:ING)?|ERROR|SEVERE|FATAL|INFO|DEBUG|TRACE)\s+\[[^\]]*\]\s*(?:\([^)]*\)\s*)?(.*)$`)
+
+// repeatedLevelRe drops the level Keycloak's exception handler repeats inside
+// the message, so the operator is not shown "ERROR: ERROR: ...".
+var repeatedLevelRe = regexp.MustCompile(`(?i)^(?:WARN(?:ING)?|ERROR|SEVERE|FATAL)\s*:\s*`)
+
+// normaliseLevel rewrites a server log line into the bare `LEVEL: message`
+// shape the level regexes read, and leaves every other line exactly as it was.
+func normaliseLevel(line string) string {
+	m := serverLineRe.FindStringSubmatch(line)
+	if m == nil {
+		return line
+	}
+	return m[1] + ": " + repeatedLevelRe.ReplaceAllString(strings.TrimSpace(m[2]), "")
 }
 
 // rejectedOptionRe matches how Keycloak reports an option the subcommand does
@@ -399,6 +509,62 @@ func looksLikeBindConflict(s string) bool {
 		}
 	}
 	return false
+}
+
+// looksLikeTransactionTimeout recognises the server rolling back the export's
+// own transaction.
+//
+// ARJUNA012 is Narayana's transaction reaper, which is the only thing that
+// cancels a transaction for running too long; the rollback message is what
+// kc.sh prints when the export's thread discovers what happened to it.
+func looksLikeTransactionTimeout(s string) bool {
+	lower := strings.ToLower(s)
+	for _, needle := range []string{
+		"transaction was rolled back",
+		"transaction timeout",
+		"transactionreaper",
+		"arjuna012",
+	} {
+		if strings.Contains(lower, needle) {
+			return true
+		}
+	}
+	return false
+}
+
+// UsersPerFileDefault is the page size an export uses unless the operator sets
+// another one.
+//
+// It is a page in two senses, and the second one is the one that bites: kc.sh
+// writes one file per page, and it exports each page inside one transaction. A
+// realm whose users come from a federation provider is re-read through that
+// provider one user at a time inside that transaction, so a thousand of them
+// against a slow directory can outrun the server's transaction limit. That is
+// what the setting is for.
+const UsersPerFileDefault = 1000
+
+// UsersPerFileMin and UsersPerFileMax bound what the operator can ask for.
+//
+// The floor is not arbitrary: below ten the file count stops buying anything
+// and the per-page overhead starts to dominate. The ceiling is the default,
+// because a page larger than that is the transaction that fails.
+const (
+	UsersPerFileMin = 10
+	UsersPerFileMax = UsersPerFileDefault
+)
+
+// ClampUsersPerFile brings a chosen page size inside the supported range. Zero
+// or less means unset, which is the default rather than the floor.
+func ClampUsersPerFile(n int) int {
+	switch {
+	case n <= 0:
+		return UsersPerFileDefault
+	case n < UsersPerFileMin:
+		return UsersPerFileMin
+	case n > UsersPerFileMax:
+		return UsersPerFileMax
+	}
+	return n
 }
 
 // ExportLayout is what an export directory turned out to contain.
@@ -450,7 +616,101 @@ func ReadLayout(realm string, names []string) ExportLayout {
 	return l
 }
 
-// ClassifyFailure turns a non-zero exit into the sentence an operator can act
+// UserFileDigits is the narrowest a user file's number is written.
+//
+// kc.sh numbers its user files 0, 1, … 10, …, which sorts as 0, 1, 10, 2 in
+// anything that orders names as text. Nothing in Keycloak's own `import`
+// depends on that order — it matches the files with `-users-[0-9]+\.json` and
+// iterates them in whatever order the filesystem returned, measured on 24.0,
+// 26.3 and 26.5.0 — but plenty of things around it list names alphabetically:
+// a startup import scanning its directory, an operator's ls, a listing in the
+// inspector. Padding costs nothing and takes the question away.
+const UserFileDigits = 3
+
+// PadUserFiles renames an export's user files so every number is the same
+// width, and returns the layout as it will be carried plus what has to be
+// renamed on the way in.
+//
+// The width is the widest number in this export, never less than
+// [UserFileDigits], so one snapshot's files all sort together — a realm with
+// 1,200 pages needs four digits and gets them, rather than getting three and
+// reintroducing the problem at file 1,000.
+//
+// The padded name still matches the pattern Keycloak's import looks for:
+// leading zeroes are ordinary digits to `[0-9]+`, and the number is only ever
+// read back through strconv.Atoi. Federated user files pad on the same rule,
+// because the prefix is whatever came before "-users-".
+//
+// A rename that would collide with a name already in the layout leaves the
+// whole layout untouched. Two files staged under one name is a snapshot that
+// silently lost a page of users, which is worse than one that sorts oddly.
+func PadUserFiles(l ExportLayout) (ExportLayout, map[string]string) {
+	if len(l.UserFiles) == 0 {
+		return l, nil
+	}
+
+	width := UserFileDigits
+	for _, name := range l.UserFiles {
+		if _, n, ok := splitUserFile(name); ok {
+			if d := len(strconv.Itoa(n)); d > width {
+				width = d
+			}
+		}
+	}
+
+	// Every name already in the export counts as taken, including the user
+	// files themselves. Seeding only the ones already renamed would miss the
+	// case the guard exists for: a directory holding both users-0.json and
+	// users-000.json, where padding the first lands on the second.
+	taken := map[string]bool{l.RealmFile: true}
+	for _, name := range l.Other {
+		taken[name] = true
+	}
+	for _, name := range l.UserFiles {
+		taken[name] = true
+	}
+	renames := map[string]string{}
+	padded := make([]string, 0, len(l.UserFiles))
+	for _, name := range l.UserFiles {
+		prefix, n, ok := splitUserFile(name)
+		if !ok {
+			padded = append(padded, name)
+			taken[name] = true
+			continue
+		}
+		next := fmt.Sprintf("%s-users-%0*d.json", prefix, width, n)
+		if next != name {
+			if taken[next] {
+				return l, nil
+			}
+			renames[name] = next
+		}
+		taken[next] = true
+		padded = append(padded, next)
+	}
+	if len(renames) == 0 {
+		return l, nil
+	}
+	l.UserFiles = padded
+	return l, renames
+}
+
+// splitUserFile separates a user file into everything before its number and the
+// number itself, keeping any directory the name carried.
+func splitUserFile(name string) (prefix string, n int, ok bool) {
+	dir, base := path.Split(name)
+	m := userFileRe.FindStringSubmatch(base)
+	if m == nil {
+		return "", 0, false
+	}
+	n, err := strconv.Atoi(m[2])
+	if err != nil {
+		return "", 0, false
+	}
+	return dir + m[1], n, true
+}
+
+// ClassifyFailure turns a non-zero exit into the sentence an operator can act// ClassifyFailure turns a non-zero exit into the sentence an operator can act
 // on, rather than "exit status 1".
 func ClassifyFailure(realm string, o Outcome, stderr string) (message, advice string, retryable bool) {
 	if o.RejectedOption != "" {
@@ -466,6 +726,10 @@ func ClassifyFailure(realm string, o Outcome, stderr string) (message, advice st
 	}
 	joined := strings.ToLower(stderr + " " + strings.Join(o.Errors, " "))
 	switch {
+	case o.TransactionTimeout:
+		return "The export took longer than this Keycloak allows a single transaction to run, so the server rolled it back partway through the realm's users.",
+			"This is a time limit, not disk space and not connectivity. It shows up on large realms whose users come from a federated store: the export re-reads every user through the federation provider one at a time, so one page of users can sit on a slow directory for minutes. Capture again with a smaller users-per-file — the export writes one page per transaction, so that is what bounds the work inside one. A hundred is a reasonable place to start.",
+			false
 	case strings.Contains(joined, "realm") && strings.Contains(joined, "not found"):
 		return fmt.Sprintf("Keycloak does not have a realm called %q.", realm),
 			"Check the realm name against the list the probe found on this environment.", false

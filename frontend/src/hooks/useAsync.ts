@@ -14,9 +14,7 @@
 import { useCallback, useEffect, useRef, useState, type DependencyList } from "react";
 
 export type Async<T> =
-  | { status: "loading" }
-  | { status: "ready"; value: T }
-  | { status: "failed"; error: unknown };
+  { status: "loading" } | { status: "ready"; value: T } | { status: "failed"; error: unknown };
 
 export interface AsyncResult<T> {
   state: Async<T>;

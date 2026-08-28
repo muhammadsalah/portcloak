@@ -16,6 +16,7 @@ import (
 
 	"portcloak/internal/engine/config"
 	"portcloak/internal/engine/crypto"
+	"portcloak/internal/engine/kc"
 	"portcloak/internal/engine/manifest"
 	"portcloak/internal/engine/obs"
 	"portcloak/internal/engine/orchestrator"
@@ -485,6 +486,71 @@ func TestCapture_SucceedsWithoutAdminAPI(t *testing.T) {
 	}
 }
 
+// The page size is the operator's, and it reaches the command line as chosen.
+// It is the knob for a realm whose users come from a directory: kc.sh exports
+// one page per transaction, and a federated user is re-read through its
+// provider inside that transaction.
+func TestCapture_UsersPerFileIsTheOperatorsChoice(t *testing.T) {
+	h := newHarness(t)
+	req := defaultRequest()
+	req.UsersPerFile = 100
+
+	h.capture(req)
+
+	cmd, ok := h.exec.LastCommand()
+	if !ok {
+		t.Fatal("no command was run")
+	}
+	if joined := strings.Join(cmd.Args, " "); !strings.Contains(joined, "--users-per-file 100") {
+		t.Errorf("the chosen page size did not reach the command: %q", joined)
+	}
+}
+
+// The range is held in the engine, not only in the wizard: a hand-edited config
+// or a job queued by an older build cannot put a page size on the command line
+// that no transaction finishes.
+func TestCapture_UsersPerFileIsClampedToTheSupportedRange(t *testing.T) {
+	for _, c := range []struct {
+		asked int
+		want  string
+	}{
+		{asked: 50000, want: "--users-per-file 1000"},
+		{asked: 2, want: "--users-per-file 10"},
+	} {
+		h := newHarness(t)
+		req := defaultRequest()
+		req.UsersPerFile = c.asked
+
+		h.capture(req)
+
+		cmd, _ := h.exec.LastCommand()
+		if joined := strings.Join(cmd.Args, " "); !strings.Contains(joined, c.want) {
+			t.Errorf("%d exported with %q, want %q", c.asked, joined, c.want)
+		}
+	}
+}
+
+// The transaction limit is lifted only on the captures that asked for it. It is
+// the one setting that trades a bounded failure for an unbounded run, so it
+// cannot arrive by default.
+func TestCapture_TransactionLimitIsLiftedOnlyWhenAsked(t *testing.T) {
+	h := newHarness(t)
+	h.capture(defaultRequest())
+	cmd, _ := h.exec.LastCommand()
+	if _, ok := cmd.Env[kc.TransactionTimeoutVar]; ok {
+		t.Errorf("an ordinary capture lifted the transaction limit: %v", cmd.Env)
+	}
+
+	h2 := newHarness(t)
+	req := defaultRequest()
+	req.NoTransactionTimeout = true
+	h2.capture(req)
+	cmd, _ = h2.exec.LastCommand()
+	if cmd.Env[kc.TransactionTimeoutVar] != "0" {
+		t.Errorf("the capture asked for no transaction limit and got %v", cmd.Env)
+	}
+}
+
 // The invocation carries the options this kc.sh said it takes, and only those.
 // It used to carry --http-port and --https-port unconditionally, which no
 // Keycloak accepts on export: the command exits before it reads the realm.
@@ -663,6 +729,51 @@ func TestCapture_RecordsProvenanceAndAudit(t *testing.T) {
 	// The choice to write in the clear is recorded, every time.
 	if !declined {
 		t.Error("declining encryption was not recorded in the audit log")
+	}
+}
+
+// The snapshot carries the user files under padded names, and the manifest
+// still finds them under those names. A rename applied to the bundle but not to
+// the layout would produce a snapshot whose manifest reports no users at all —
+// which is the one failure mode worth more than the ordering it buys.
+func TestCapture_UserFilesAreCarriedWithPaddedNumbers(t *testing.T) {
+	h := newHarness(t)
+	jobs := h.capture(defaultRequest())
+	j := jobs[0]
+
+	bundlePath := filepath.Join(h.storageRoot, filepath.FromSlash(j.StorageKey))
+	f, err := os.Open(bundlePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+
+	dir := filepath.Join(t.TempDir(), "open")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	opened, err := snapshot.Open(context.Background(), f, snapshot.OpenOptions{Dir: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = opened.Close() }()
+
+	// The fixture is exported as acme-users-0.json and acme-users-1.json.
+	for _, name := range []string{"acme-users-000.json", "acme-users-001.json"} {
+		if _, err := os.Stat(opened.Path(snapshot.RealmDir + name)); err != nil {
+			t.Errorf("%s is not in the bundle: %v", name, err)
+		}
+	}
+	if _, err := os.Stat(opened.Path(snapshot.RealmDir + "acme-users-0.json")); err == nil {
+		t.Error("the unpadded name was carried as well as the padded one")
+	}
+
+	var m manifest.Manifest
+	if err := opened.Document(snapshot.ManifestPath, &m); err != nil {
+		t.Fatal(err)
+	}
+	if m.Counts.Users != 5 {
+		t.Errorf("the manifest lost sight of the users it renamed: %d", m.Counts.Users)
 	}
 }
 

@@ -20,9 +20,13 @@ const ProgressContext = createContext<((listener: Listener) => () => void) | nul
 export function ProgressProvider({ children }: { children: ReactNode }) {
   const listeners = useRef(new Set<Listener>());
 
-  useEffect(() => onProgress((event) => {
-    for (const listener of listeners.current) listener(event);
-  }), []);
+  useEffect(
+    () =>
+      onProgress((event) => {
+        for (const listener of listeners.current) listener(event);
+      }),
+    [],
+  );
 
   const subscribe = useMemo(
     () => (listener: Listener) => {

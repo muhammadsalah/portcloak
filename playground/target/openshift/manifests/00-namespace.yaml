@@ -1,0 +1,14 @@
+# Copyright 2026 Muhammad Salah
+# SPDX-License-Identifier: Apache-2.0
+#
+# One namespace for the whole playground, named for what it holds.
+#
+# PortCloak's Kubernetes adapter creates an ephemeral clone in the namespace of
+# the workload it is capturing, so this is also the namespace those clones
+# appear in — labelled portcloak.io/ephemeral, and swept from Settings.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kc
+  labels:
+    app.kubernetes.io/part-of: portcloak-playground

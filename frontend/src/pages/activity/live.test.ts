@@ -16,7 +16,18 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import type { ProgressEvent } from "../../api";
-import { applyEvent, emptyLive, logTails, maxLogLines, structural, type Live } from "./live";
+import {
+  applyEvent,
+  applyTail,
+  clearTails,
+  emptyLive,
+  hasLogTail,
+  logCursor,
+  logTail,
+  maxLogLines,
+  structural,
+  type Live,
+} from "./live";
 
 const job = "job-1";
 
@@ -32,7 +43,7 @@ function fold(...events: ProgressEvent[]): Live {
 }
 
 beforeEach(() => {
-  logTails.clear();
+  clearTails();
 });
 
 describe("structural", () => {
@@ -195,7 +206,7 @@ describe("phases", () => {
 describe("the log tail", () => {
   it("keeps what the export said, attributed to the export", () => {
     fold(event({ kind: "log", message: "Exporting realm acme" }));
-    expect(logTails.get(job)).toEqual([{ text: "Exporting realm acme", fromPortCloak: false }]);
+    expect(logTail(job)).toEqual([{ text: "Exporting realm acme", fromPortCloak: false }]);
   });
 
   it("marks PortCloak's own lines as its own, so they read differently", () => {
@@ -203,7 +214,7 @@ describe("the log tail", () => {
       event({ kind: "cloneCreated", item: "portcloak-clone-1" }),
       event({ kind: "cloneDestroyed", item: "portcloak-clone-1" }),
     );
-    expect(logTails.get(job)).toEqual([
+    expect(logTail(job)).toEqual([
       { text: "Ephemeral clone portcloak-clone-1 is running.", fromPortCloak: true },
       { text: "Ephemeral clone portcloak-clone-1 destroyed.", fromPortCloak: true },
     ]);
@@ -211,7 +222,7 @@ describe("the log tail", () => {
 
   it("drops an empty log line rather than pushing a blank row", () => {
     fold(event({ kind: "log", message: "" }));
-    expect(logTails.has(job)).toBe(false);
+    expect(hasLogTail(job)).toBe(false);
   });
 
   it("is a tail, not a file — it keeps the last lines and discards the first", () => {
@@ -221,7 +232,7 @@ describe("the log tail", () => {
       applyEvent(all, event({ kind: "log", message: `line ${i}` }));
     }
 
-    const lines = logTails.get(job)!;
+    const lines = logTail(job);
     expect(lines).toHaveLength(maxLogLines);
     expect(lines[0].text).toBe("line 50");
     expect(lines[lines.length - 1].text).toBe(`line ${maxLogLines + 49}`);
@@ -232,8 +243,8 @@ describe("the log tail", () => {
     applyEvent(all, { jobId: "capture", kind: "log", message: "one", at: "" });
     applyEvent(all, { jobId: "restore", kind: "log", message: "two", at: "" });
 
-    expect(logTails.get("capture")).toHaveLength(1);
-    expect(logTails.get("restore")).toHaveLength(1);
+    expect(logTail("capture")).toHaveLength(1);
+    expect(logTail("restore")).toHaveLength(1);
     expect(all.size).toBe(2);
   });
 });
@@ -296,5 +307,67 @@ describe("a whole run", () => {
     expect(live.percent).toBe(100);
     expect(live.warn).toBe(false);
     expect(live.steps.get("upload")).toBe("done");
+  });
+});
+
+// The screen folds the event stream so a line appears the instant it is said,
+// and reconciles against the engine on every refresh. The engine is the
+// authority; the fold is an approximation of it. What has to hold is that the
+// two never show a line twice and never lose one between them.
+describe("reconciling with the engine", () => {
+  const page = (
+    lines: string[],
+    next: number,
+    reset = false,
+  ): { lines: { text: string; fromPortCloak: boolean }[]; next: number; reset: boolean } => ({
+    lines: lines.map((text) => ({ text, fromPortCloak: false })),
+    next,
+    reset,
+  });
+
+  it("replaces the streamed copy with the engine's, without showing a line twice", () => {
+    fold(event({ kind: "log", message: "one" }), event({ kind: "log", message: "two" }));
+    expect(logTail(job)).toHaveLength(2);
+
+    // The engine recorded the same two, plus one the stream never delivered.
+    applyTail(job, page(["one", "two", "three"], 3, true), 2);
+
+    expect(logTail(job).map((l) => l.text)).toEqual(["one", "two", "three"]);
+    expect(logCursor(job)).toBe(3);
+  });
+
+  it("keeps a line that arrived while the request was in flight", () => {
+    fold(event({ kind: "log", message: "one" }));
+    const heardBefore = 1;
+    // The stream delivers another line before the answer comes back.
+    fold(event({ kind: "log", message: "two" }));
+
+    applyTail(job, page(["one"], 1, true), heardBefore);
+
+    expect(logTail(job).map((l) => l.text)).toEqual(["one", "two"]);
+  });
+
+  it("extends rather than replaces when the engine continues from the cursor", () => {
+    applyTail(job, page(["one"], 1, true), 0);
+    applyTail(job, page(["two"], 2), 0);
+
+    expect(logTail(job).map((l) => l.text)).toEqual(["one", "two"]);
+    expect(logCursor(job)).toBe(2);
+  });
+
+  it("moves the cursor on an answer with nothing in it", () => {
+    applyTail(job, page(["one"], 1, true), 0);
+    expect(applyTail(job, page([], 1), 0)).toBe(false);
+    expect(logCursor(job)).toBe(1);
+    expect(logTail(job)).toHaveLength(1);
+  });
+
+  it("keeps the whole tail inside the cap", () => {
+    const many = Array.from({ length: maxLogLines + 20 }, (_, i) => String(i));
+    applyTail(job, page(many, many.length, true), 0);
+
+    const kept = logTail(job);
+    expect(kept).toHaveLength(maxLogLines);
+    expect(kept[0].text).toBe("20");
   });
 });

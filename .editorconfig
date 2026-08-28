@@ -1,0 +1,50 @@
+# Copyright 2026 Muhammad Salah
+# SPDX-License-Identifier: Apache-2.0
+#
+# The one formatting file both editors read.
+#
+# It exists because two formatters were quietly disagreeing: an IDE reformatting
+# on save produced `{x}` and `<Foo/>`, prettier produced `{ x }` and `<Foo />`,
+# and nothing in the repository said which was right — so every file either of
+# them touched flipped back and forth.
+#
+# This settles what an editor can settle: indentation, endings, encoding. What
+# it cannot settle is settled per language, by the tool that owns that language:
+#
+#   Go          gofmt. Not configurable, on purpose — the absence of options is
+#               the feature, and CI runs `gofmt -l` so the tree stays in it.
+#   TypeScript  prettier, configured in frontend/.prettierrc. Point the IDE at
+#               it rather than at its own formatter; `npm run format` is the
+#               same thing from a terminal.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+# Tabs, and no width: gofmt writes tabs and every Go reader renders them at
+# whatever width they prefer, which is the point of tabs.
+[*.go]
+indent_style = tab
+
+[Makefile]
+indent_style = tab
+
+[*.{yml,yaml,json,ts,tsx,js,jsx,css,md}]
+indent_style = space
+indent_size = 2
+
+# Shell scripts in build/ are written with tabs, matching the Go side of the
+# repository rather than the frontend's.
+[*.sh]
+indent_style = tab
+
+# Trailing whitespace is significant in Markdown (two spaces is a line break),
+# so it is not stripped there.
+[*.md]
+trim_trailing_whitespace = false

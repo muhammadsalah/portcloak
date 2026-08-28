@@ -35,14 +35,15 @@ export type RouteName = Route["name"];
 /**
  * Which navigation item a route lights up.
  *
- * Inspecting a snapshot is reached from the snapshot list, and browsing a
- * storage from the storage editor, so neither has an item of its own — they
- * highlight the one they came from rather than leaving the rail with nothing
- * selected.
+ * Inspecting a snapshot is reached from the snapshot list, restoring one from
+ * the same list, and browsing a storage from the storage editor, so none of
+ * them has an item of its own — they highlight the one they came from rather
+ * than leaving the rail with nothing selected.
  */
 export function routeKey(route: Route): string {
   switch (route.name) {
     case "inspect":
+    case "restore":
       return "library";
     case "browse":
       return "storage";

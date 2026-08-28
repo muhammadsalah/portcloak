@@ -33,7 +33,13 @@ import {
   useModal,
 } from "../../design-system";
 import { bytes } from "../../utils/format";
-import type { CaptureDraft, UpdateDraft } from "./draft";
+import {
+  clampUsersPerFile,
+  usersPerFileMax,
+  usersPerFileMin,
+  type CaptureDraft,
+  type UpdateDraft,
+} from "./draft";
 
 export function OptionsStep({
   defaults,
@@ -58,14 +64,38 @@ export function OptionsStep({
         label="Users export mode"
         hint="Bounded file sizes let PortCloak checkpoint per file — better behaviour on flaky links, and what makes a very large realm survivable."
       >
-        <Select value={draft.usersMode} onChange={(e) => update({ usersMode: e.target.value })}>
-          <option value="different_files">
-            {`different_files — ${draft.usersPerFile} users per file`}
-          </option>
-          <option value="realm_file">realm_file — users inside the realm document</option>
-        </Select>
+        <Select
+          value={draft.usersMode}
+          onChange={(usersMode) => update({ usersMode })}
+          options={[
+            { value: "different_files", label: "different_files — users in numbered files" },
+            { value: "realm_file", label: "realm_file — users inside the realm document" },
+          ]}
+        />
       </Field>
 
+      {draft.usersMode === "different_files" ? (
+        <Field
+          label={`Users per file (${usersPerFileMin}–${usersPerFileMax})`}
+          hint="kc.sh exports one file per transaction, so this bounds both. Lower it for a realm whose users come from LDAP or another federation provider: those users are re-read through the provider one at a time inside that transaction, and a large page can outrun the server's transaction limit and fail the export."
+        >
+          <Input
+            type="number"
+            min={usersPerFileMin}
+            max={usersPerFileMax}
+            value={draft.usersPerFile ? String(draft.usersPerFile) : ""}
+            onChange={(e) => update({ usersPerFile: Number(e.target.value) })}
+            onBlur={(e) => update({ usersPerFile: clampUsersPerFile(Number(e.target.value)) })}
+          />
+        </Field>
+      ) : null}
+
+      <Checkbox
+        checked={draft.noTransactionTimeout}
+        label="Let the export's transactions run without a time limit"
+        hint="For a realm too large or too slow to read inside the server's limit. Transactions cannot be turned off — Keycloak's export is written as a sequence of them — so this lifts the limit that cancels one. That limit is also what bounds an export that has stopped making progress: without it, an export whose directory stopped answering holds a connection to the serving database open until the clone is destroyed. Keycloak does not publish this as a supported setting, so a future release may ignore it."
+        onChange={(value) => update({ noTransactionTimeout: value })}
+      />
       <Checkbox
         checked={draft.verify}
         label="Verify secrets are unmasked (Admin API)"
@@ -140,9 +170,9 @@ function EncryptionSection({
           <p>{defaults.declineNotice}</p>
           <p>
             <Small>
-              This is a supported choice and PortCloak will not nag about it again for this
-              capture. It will label the snapshot in the library, the manifest and the completeness
-              report, and record the decision in the audit log.
+              This is a supported choice and PortCloak will not nag about it again for this capture.
+              It will label the snapshot in the library, the manifest and the completeness report,
+              and record the decision in the audit log.
             </Small>
           </p>
         </div>
@@ -177,13 +207,14 @@ function EncryptionSection({
             <Select
               style={{ maxWidth: 200 }}
               value={draft.encryptionMode}
-              onChange={(e) =>
-                update({ encryptionMode: e.target.value as CaptureDraft["encryptionMode"] })
+              onChange={(mode) =>
+                update({ encryptionMode: mode as CaptureDraft["encryptionMode"] })
               }
-            >
-              <option value="passphrase">Passphrase</option>
-              <option value="recipients">Recipients (age)</option>
-            </Select>
+              options={[
+                { value: "passphrase", label: "Passphrase" },
+                { value: "recipients", label: "Recipients (age)" },
+              ]}
+            />
             <Grow>
               {draft.encryptionMode === "passphrase" ? (
                 <Input
@@ -302,8 +333,8 @@ function RecipientsEditor({
 
       {storedKeys.length === 0 ? (
         <FieldHint>
-          There are no keys on this machine yet. Create one under Keys and it appears here by name
-          — and opens this snapshot again without being asked for.
+          There are no keys on this machine yet. Create one under Keys and it appears here by name —
+          and opens this snapshot again without being asked for.
         </FieldHint>
       ) : null}
     </div>
@@ -318,13 +349,7 @@ function RecipientsEditor({
  * where a restore finds it without asking. Leaving the name empty keeps the old
  * behaviour exactly: PortCloak holds nothing and cannot recover it.
  */
-function RememberPassphrase({
-  draft,
-  update,
-}: {
-  draft: CaptureDraft;
-  update: UpdateDraft;
-}) {
+function RememberPassphrase({ draft, update }: { draft: CaptureDraft; update: UpdateDraft }) {
   return (
     <div style={{ marginTop: 10 }}>
       <Field

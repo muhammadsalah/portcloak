@@ -65,3 +65,7 @@ Thumbs.db
 # Lunacy autosave / lock files
 *.sketch.lock
 *~
+
+# Generated playground fixtures: realm documents and LDAP trees.
+playground/.seed/
+playground/seed/seed

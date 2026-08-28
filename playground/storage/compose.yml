@@ -1,0 +1,97 @@
+# Copyright 2026 Muhammad Salah
+# SPDX-License-Identifier: Apache-2.0
+#
+# Every storage backend PortCloak supports, on one machine.
+#
+# Disk needs nothing, so it is not here — a folder is a folder. The other three
+# are real servers with real protocols, and the failures worth catching only
+# happen against them: a multipart upload resumed from an offset, a container
+# that exists but is not writable, an SFTP stream that has to fall back to
+# reading back what it already sent.
+#
+# The images and the credentials are the ones .github/workflows/ci.yml uses, and
+# deliberately so. A playground that authenticates differently from CI is a
+# playground that proves something CI does not.
+#
+#   docker compose -f playground/storage/compose.yml up -d
+#   docker compose -f playground/storage/compose.yml down -v
+#
+# These credentials are development credentials for a stack that listens on
+# localhost. They are in the file on purpose: nothing here should ever hold a
+# secret worth protecting, and inventing a .env would only suggest otherwise.
+
+name: portcloak-storage
+
+services:
+  # ── S3 ─────────────────────────────────────────────────────────────────────
+  #
+  # MinIO treats each top-level directory under its data dir as a bucket, which
+  # is why the bucket is a mkdir rather than a provisioning step: the image has
+  # no MINIO_DEFAULT_BUCKETS, and the one that did is no longer published.
+  minio:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    entrypoint: ["/bin/sh", "-c"]
+    command: >-
+      "mkdir -p /data/portcloak && exec minio server /data --console-address :9001"
+    environment:
+      MINIO_ROOT_USER: portcloak
+      MINIO_ROOT_PASSWORD: portcloak-test-secret
+    ports:
+      - "9000:9000" # S3 API
+      - "9001:9001" # console, http://127.0.0.1:9001
+    volumes:
+      - minio:/data
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:9000/minio/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # ── Azure Blob ─────────────────────────────────────────────────────────────
+  #
+  # Azurite's well-known development account. The key is published by Microsoft
+  # and is the same one every Azurite in the world uses.
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:latest
+    command: >-
+      azurite --blobHost 0.0.0.0 --queueHost 0.0.0.0 --tableHost 0.0.0.0
+      --location /data --skipApiVersionCheck
+    ports:
+      - "10000:10000" # blob
+      - "10001:10001" # queue
+      - "10002:10002" # table
+    volumes:
+      - azurite:/data
+    healthcheck:
+      test: ["CMD", "nc", "-z", "127.0.0.1", "10000"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # ── SFTP over SSH ──────────────────────────────────────────────────────────
+  #
+  # The same image CI uses. Password access is on because the point is to
+  # exercise both credential paths PortCloak offers; drop a public key into
+  # ./keys and it is picked up as an authorized key as well.
+  sshd:
+    image: lscr.io/linuxserver/openssh-server:latest
+    environment:
+      PASSWORD_ACCESS: "true"
+      USER_NAME: portcloak
+      USER_PASSWORD: portcloak-test-secret
+      SUDO_ACCESS: "false"
+      PUID: "1000"
+      PGID: "1000"
+      TZ: Etc/UTC
+    ports:
+      - "2222:2222"
+    volumes:
+      - sshd-config:/config
+      # Anything here becomes an authorized key, for testing key auth beside
+      # password auth. The directory is committed empty.
+      - ./keys:/config/.ssh/authorized_keys_dir:ro
+
+volumes:
+  minio:
+  azurite:
+  sshd-config:

@@ -41,7 +41,15 @@ type CaptureRequest struct {
 	Verify bool
 	// DetectDependencies enumerates themes and provider JARs.
 	DetectDependencies bool
-	Encryption         crypto.Config
+	// NoTransactionTimeout lets the export's transactions run without a time
+	// limit. Transactions themselves cannot be turned off — Keycloak's export
+	// is written as a sequence of them — so this lifts the limit that cancels
+	// one, which is what kills a long export of a federated realm. It is the
+	// operator's call per capture, never a default: the limit is also what
+	// stops an export that has stopped making progress from holding a
+	// connection to the serving database open indefinitely.
+	NoTransactionTimeout bool
+	Encryption           crypto.Config
 }
 
 // CaptureHandle is what a queued run hands back.
@@ -97,6 +105,11 @@ func (o *Orchestrator) Capture(ctx context.Context, req CaptureRequest) (Capture
 	if req.UsersPerFile <= 0 {
 		req.UsersPerFile = prefs.UsersPerFile
 	}
+	// The range is enforced here rather than only in the wizard, so a config
+	// edited by hand or a job queued by an older build cannot put a page size
+	// on the command line that kc.sh will choke on or that no transaction
+	// finishes.
+	req.UsersPerFile = kc.ClampUsersPerFile(req.UsersPerFile)
 
 	handle := CaptureHandle{Realms: req.Realms}
 	jobs := make([]*config.Job, 0, len(req.Realms))
@@ -388,7 +401,14 @@ func (o *Orchestrator) collect(ctx context.Context, cc captureContext, j *config
 	}
 	j.CompletePhase(string(obs.PhaseExport))
 
-	staged, err := o.fetch(ctx, cc, j, rep, builder, realmDir)
+	// The user files are renamed on the way into the bundle so their numbers
+	// are all the same width. kc.sh numbers them 0, 1, … 10, which anything
+	// ordering names as text reads as 0, 1, 10, 2. What the snapshot carries is
+	// the padded name, so a listing anywhere downstream — a startup import
+	// scanning its directory, an operator's ls — is in the order the pages were
+	// written.
+	layout, renames := kc.PadUserFiles(layout)
+	staged, err := o.fetch(ctx, cc, j, rep, builder, realmDir, renames)
 	if err != nil {
 		_ = builder.Cleanup()
 		return nil, o.fail(j, rep, obs.PhaseFetch, err)
@@ -471,13 +491,14 @@ func (o *Orchestrator) export(ctx context.Context, cc captureContext, j *config.
 		}
 
 		cmd, err := kc.BuildExport(kc.ExportRequest{
-			KcPath:       cc.facts.KcPath,
-			Dir:          realmDir,
-			Realm:        j.Realm,
-			UsersMode:    kc.UsersMode(cc.req.UsersMode),
-			UsersPerFile: cc.req.UsersPerFile,
-			Ports:        kc.Ports{HTTP: portSet.HTTP, HTTPS: portSet.HTTPS, Management: portSet.Management},
-			Supported:    cc.exportOptions,
+			KcPath:               cc.facts.KcPath,
+			Dir:                  realmDir,
+			Realm:                j.Realm,
+			UsersMode:            kc.UsersMode(cc.req.UsersMode),
+			UsersPerFile:         cc.req.UsersPerFile,
+			Ports:                kc.Ports{HTTP: portSet.HTTP, HTTPS: portSet.HTTPS, Management: portSet.Management},
+			Supported:            cc.exportOptions,
+			NoTransactionTimeout: cc.req.NoTransactionTimeout,
 		})
 		if err != nil {
 			return kc.ExportLayout{}, resil.Fatal("build the export command", err.Error(), err)
@@ -485,7 +506,7 @@ func (o *Orchestrator) export(ctx context.Context, cc captureContext, j *config.
 		rep.Log(cmd.String())
 
 		result, err := cc.exec.Run(ctx, target.Command{
-			Path: cmd.Path, Args: cmd.Args, Sudo: cc.env.Sudo,
+			Path: cmd.Path, Args: cmd.Args, Env: cmd.Env, Sudo: cc.env.Sudo,
 			OnStdout: rep.Log, OnStderr: rep.Log,
 		})
 		if err != nil {
@@ -562,13 +583,17 @@ func (o *Orchestrator) readLayout(ctx context.Context, cc captureContext, realmN
 
 // fetch streams the export back into the snapshot builder, hashing as bytes
 // pass rather than in a second read.
-func (o *Orchestrator) fetch(ctx context.Context, cc captureContext, j *config.Job, rep *obs.Reporter, builder *snapshot.Builder, realmDir string) ([]string, error) {
+func (o *Orchestrator) fetch(ctx context.Context, cc captureContext, j *config.Job, rep *obs.Reporter, builder *snapshot.Builder, realmDir string, renames map[string]string) ([]string, error) {
 	rep.StartPhase(obs.PhaseFetch)
 
 	var staged []string
 	var bytesSeen int64
 	err := cc.exec.FetchDir(ctx, realmDir, target.SinkFunc(func(fctx context.Context, a target.Artifact, r io.Reader) error {
-		name := snapshot.RealmDir + a.Name
+		carried := a.Name
+		if to, ok := renames[carried]; ok {
+			carried = to
+		}
+		name := snapshot.RealmDir + carried
 		d, err := builder.Stage(fctx, name, r)
 		if err != nil {
 			return err
@@ -584,7 +609,9 @@ func (o *Orchestrator) fetch(ctx context.Context, cc captureContext, j *config.J
 			UpdatedAt:        o.opts.Now(),
 		}
 		o.saveJob(j)
-		rep.Progress(bytesSeen, 0, "bytes", a.Name)
+		// The name reported is the one the snapshot holds, not the one kc.sh
+		// wrote, so the log and the bundle agree.
+		rep.Progress(bytesSeen, 0, "bytes", carried)
 		return nil
 	}))
 	if err != nil {

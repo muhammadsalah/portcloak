@@ -21,13 +21,7 @@ import {
 } from "../../design-system";
 import type { CaptureDraft, UpdateDraft } from "./draft";
 
-export function RealmsStep({
-  draft,
-  update,
-}: {
-  draft: CaptureDraft;
-  update: UpdateDraft;
-}) {
+export function RealmsStep({ draft, update }: { draft: CaptureDraft; update: UpdateDraft }) {
   return (
     <div>
       <SectionTitle style={{ marginBottom: 6 }}>Realms</SectionTitle>
@@ -47,9 +41,7 @@ export function RealmsStep({
                 label={realm}
                 onChange={(on) =>
                   update({
-                    realms: on
-                      ? [...draft.realms, realm]
-                      : draft.realms.filter((r) => r !== realm),
+                    realms: on ? [...draft.realms, realm] : draft.realms.filter((r) => r !== realm),
                   })
                 }
               />

@@ -88,8 +88,8 @@ export function OrphanPanel({ report, reload }: { report: OrphanReport; reload: 
         <p>
           <Muted>
             <Small>
-              Found by PortCloak&apos;s own label on launch. Offered, never removed without asking
-              — your cluster is not ours to garbage-collect.
+              Found by PortCloak&apos;s own label on launch. Offered, never removed without asking —
+              your cluster is not ours to garbage-collect.
             </Small>
           </Muted>
         </p>

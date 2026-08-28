@@ -18,6 +18,87 @@ export const Pipeline = styled.div`
   flex-wrap: wrap;
 `;
 
+/**
+ * The phases of a run, down the page rather than across it.
+ *
+ * Across the page they wrapped: nine phases on one line, then one on the next,
+ * with no relationship between a step's position and how far the run had got.
+ * Down the page every step is in the same place every time, which is what makes
+ * "where is it now" a glance rather than a read — and a numbered step can be
+ * named out loud, which the ticks could not be.
+ */
+export const Stepper = styled.ol`
+  list-style: none;
+  margin: 0;
+  padding: 0;
+`;
+
+export type StepState = "pending" | "done" | "live" | "failed";
+
+const stepColour = (p: { $state: StepState; theme: { color: Record<string, string> } }) =>
+  p.$state === "live"
+    ? p.theme.color.primary
+    : p.$state === "failed"
+      ? p.theme.color.danger
+      : p.$state === "done"
+        ? p.theme.color.success
+        : p.theme.color.textMuted;
+
+export const Step = styled.li<{ $state: StepState; $last?: boolean }>`
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding-bottom: ${(p) => (p.$last ? 0 : 10)}px;
+
+  /* The line joins a step to the one after it, and is drawn in the colour of
+     the step it leaves — so the run's progress reads as a filled thread rather
+     than as a column of unrelated marks. */
+  &::before {
+    content: "";
+    position: absolute;
+    left: 10px;
+    top: 21px;
+    bottom: 0;
+    width: 2px;
+    background: ${(p) =>
+      p.$last
+        ? "transparent"
+        : p.$state === "done"
+          ? p.theme.color.success
+          : p.theme.color.borderSubtle};
+  }
+`;
+
+/** The numbered circle: where this step sits in the run, and how it went. */
+export const StepMarker = styled.span<{ $state: StepState }>`
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  border: 2px solid ${stepColour};
+  background: ${(p) => (p.$state === "pending" ? p.theme.color.surface : stepColour(p))};
+  color: ${(p) => (p.$state === "pending" ? p.theme.color.textMuted : "#fff")};
+`;
+
+export const StepLabel = styled.span<{ $state: StepState }>`
+  font-size: 13px;
+  line-height: 22px;
+  color: ${(p) =>
+    p.$state === "pending"
+      ? p.theme.color.textMuted
+      : p.$state === "failed"
+        ? p.theme.color.danger
+        : p.theme.color.text};
+  font-weight: ${(p) => (p.$state === "live" || p.$state === "failed" ? 600 : 400)};
+`;
+
 export const PipelineStep = styled.div<{ $state: "pending" | "done" | "live" | "failed" }>`
   font-size: 12px;
   display: flex;

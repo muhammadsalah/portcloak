@@ -214,6 +214,24 @@ type DiscardResult struct {
 	Failure *Failure `json:"failure,omitempty"`
 }
 
+// Log returns a job's output as the engine recorded it.
+//
+// The screen folds the live event stream as it arrives, because a line has to
+// appear the instant it is said. This is what it reconciles against on every
+// refresh: the stream is what the screen heard, and this is what the run
+// actually said. Nothing else can answer the question — the output came over an
+// exec stream from a clone that has usually been destroyed by the time anyone
+// reloads.
+//
+// `after` is how many lines the caller already has, counted over the whole run.
+// Zero asks for everything still held. A cursor the tail no longer reaches
+// comes back with Reset set, because there is no honest way to continue from a
+// line that has been discarded.
+func (j *JobsController) Log(jobID string, after int) (res LogView) {
+	defer func() { res = lists(res) }()
+	return j.eng.Logs(jobID, after)
+}
+
 // Discard abandons an interrupted job.
 //
 // It aborts any server-side multipart or block state, removes the local
@@ -263,6 +281,9 @@ func (j *JobsController) Discard(jobID string) DiscardResult {
 	if err := j.eng.Jobs.Delete(jobID); err != nil {
 		return DiscardResult{Failure: Fail(err)}
 	}
+	// A discarded job takes its output with it. Keeping it would leave a
+	// deleted job's export lines in front of whoever looks next.
+	j.eng.ForgetLogs(jobID)
 	removed = append(removed, "the checkpoint")
 
 	_ = j.eng.Audit.Record(obs.AuditEntry{

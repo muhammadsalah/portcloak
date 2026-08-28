@@ -88,7 +88,9 @@ function Contents({ overview }: { overview: Overview }) {
               <Small>
                 {`Password hashing: ${Object.entries(algorithms)
                   .map(([algorithm, n]) => `${algorithm} (${count(n)})`)
-                  .join(", ")}. The destination's password policy has to match, or these stop verifying.`}
+                  .join(
+                    ", ",
+                  )}. The destination's password policy has to match, or these stop verifying.`}
               </Small>
             </Muted>
           </div>
@@ -111,7 +113,9 @@ function Provenance({ overview }: { overview: Overview }) {
         ? "ephemeral clone — the serving instance was untouched"
         : "in place, on isolated ports",
     ],
-    ...(p.cloneRef ? ([["Clone reference", `${p.cloneRef} (destroyed)`]] as [string, unknown][]) : []),
+    ...(p.cloneRef
+      ? ([["Clone reference", `${p.cloneRef} (destroyed)`]] as [string, unknown][])
+      : []),
     ["Ports", p.ports],
     ["Users mode", p.usersMode],
     ["Secret verification", p.secretVerification],

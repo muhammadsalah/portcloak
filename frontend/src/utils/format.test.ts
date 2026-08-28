@@ -8,12 +8,17 @@
  * exactly the disagreement an operator reconciling an incident cannot afford.
  *
  * Every date below is built from a local-time literal — `"…T09:07:05"`, with no
- * trailing Z — because `when` and `time` render in the reader's zone by design.
+ * trailing Z — because both formatters render in the reader's zone by design.
  * A UTC instant would make these assertions pass in London and fail in Cairo.
+ *
+ * For the same reason the assertions are about the parts a timestamp must
+ * carry, not about one exact string: the ordering of those parts belongs to the
+ * reader's locale, and pinning it here would be this file deciding that
+ * everyone writes the month first.
  */
 import { describe, expect, it } from "vitest";
 
-import { bytes, count, stamp, time, titleCase, when } from "./format";
+import { bytes, count, stamp, titleCase, when } from "./format";
 
 describe("bytes", () => {
   it("says 0 B for nothing, rather than an empty cell", () => {
@@ -60,13 +65,35 @@ describe("count", () => {
   });
 });
 
+/** The zone this machine would name, whatever it is. */
+function zoneOf(iso: string): string {
+  const zone = new Intl.DateTimeFormat(undefined, { timeZoneName: "short" })
+    .formatToParts(new Date(iso))
+    .find((part) => part.type === "timeZoneName")?.value;
+  if (!zone) throw new Error("this environment names no time zone");
+  return zone;
+}
+
 describe("when", () => {
-  it("writes a timestamp the way it is read, not as an ISO string", () => {
-    expect(when("2026-03-04T09:07:05")).toBe("2026-03-04 09:07");
+  const iso = "2026-03-04T09:07:05";
+
+  it("writes the month as a word, so the date cannot be read the other way round", () => {
+    // 03/04 is the 3rd of April to half the world and the 4th of March to the
+    // other half. A capture is a record of a moment on someone else's server;
+    // it does not get to be ambiguous.
+    const out = when(iso);
+    expect(out).toMatch(/[A-Za-z]{4,}/);
+    expect(out).not.toMatch(/^\d{4}-\d{2}-\d{2}/);
+    expect(out).toContain("2026");
   });
 
-  it("pads every field, so a column of them lines up", () => {
-    expect(when("2026-01-02T03:04:05")).toBe("2026-01-02 03:04");
+  it("names the zone it is in", () => {
+    expect(when(iso)).toContain(zoneOf(iso));
+  });
+
+  it("keeps a 24-hour clock, because it sits beside durations that are", () => {
+    expect(when(iso)).toContain("09:07");
+    expect(when(iso)).not.toMatch(/AM|PM/i);
   });
 
   it("renders an em dash for nothing and for nonsense", () => {
@@ -75,17 +102,6 @@ describe("when", () => {
     expect(when(undefined)).toBe("—");
     expect(when("")).toBe("—");
     expect(when("not a date")).toBe("—");
-  });
-});
-
-describe("time", () => {
-  it("drops the date, keeping the clock", () => {
-    expect(time("2026-03-04T09:07:05")).toBe("09:07");
-  });
-
-  it("renders nothing at all for nothing, because it sits inline", () => {
-    expect(time(undefined)).toBe("");
-    expect(time("not a date")).toBe("");
   });
 });
 
@@ -102,17 +118,13 @@ describe("stamp", () => {
   it("names the zone it is in", () => {
     // Without this a record read on a laptop that has since crossed a border
     // cannot be lined up against a Keycloak server log.
-    const zone = new Intl.DateTimeFormat(undefined, { timeZoneName: "short" })
-      .formatToParts(new Date(iso))
-      .find((part) => part.type === "timeZoneName")?.value;
-
-    expect(zone).toBeTruthy();
-    expect(stamp(iso)).toContain(zone!);
+    expect(stamp(iso)).toContain(zoneOf(iso));
   });
 
   it("carries the full date, whatever the reader's locale orders first", () => {
     const rendered = stamp(iso);
     expect(rendered).toContain("2026");
+    // Padded, because a column of these is read down.
     expect(rendered).toContain("04");
   });
 

@@ -10,6 +10,7 @@ import (
 	"path"
 	"sort"
 	"strings"
+	"time"
 
 	"portcloak/internal/engine/config"
 	"portcloak/internal/engine/inspect"
@@ -305,6 +306,12 @@ type RestoreRequest struct {
 	// ConfirmRealm must equal the realm name when overwriting a realm that
 	// already exists, because that operation is destructive and irreversible.
 	ConfirmRealm string
+	// NoTransactionTimeout lets the import's transactions run without a time
+	// limit, for a realm too large to write inside the destination's. It is the
+	// same escape hatch the capture offers, and the same trade: the limit is
+	// what stops an import that has stopped making progress from holding a
+	// connection to the destination database open indefinitely.
+	NoTransactionTimeout bool
 }
 
 // RestoreResult is what an operator sees at the end.
@@ -377,6 +384,19 @@ func (o *Orchestrator) runRestore(ctx context.Context, env config.Environment, s
 		return
 	}
 	defer session.Close() //nolint:errcheck
+
+	// Which snapshot this is, recorded now that the manifest can be read. The
+	// Activity screen names it: a realm and a destination do not distinguish
+	// two captures of the same realm a fortnight apart, and restoring the wrong
+	// one is not a mistake that announces itself.
+	j.Origin = &config.SnapshotOrigin{
+		// The envelope's timestamp rather than the manifest's: the envelope is
+		// what the integrity check covers, so it is the copy that has been
+		// proven to belong to this bundle by the time this line runs.
+		CapturedAt:  session.Envelope.CreatedAt.Format(time.RFC3339),
+		Environment: session.Manifest.Source.EnvironmentName,
+	}
+	o.saveJob(j)
 
 	// A key used without being asked for is still named. Silence would be the
 	// one thing worse than the prompt it replaces.
@@ -577,11 +597,12 @@ func (o *Orchestrator) applyImport(ctx context.Context, env config.Environment, 
 	}
 
 	cmd, err := kc.BuildImport(kc.ImportRequest{
-		KcPath:    facts.KcPath,
-		Dir:       importDir,
-		Strategy:  req.Strategy,
-		Ports:     kc.Ports{HTTP: execCtx.Ports.HTTP, HTTPS: execCtx.Ports.HTTPS, Management: execCtx.Ports.Management},
-		Supported: o.discoverOptions(ctx, exec, facts.KcPath, "import", env.Sudo, rep),
+		KcPath:               facts.KcPath,
+		Dir:                  importDir,
+		Strategy:             req.Strategy,
+		Ports:                kc.Ports{HTTP: execCtx.Ports.HTTP, HTTPS: execCtx.Ports.HTTPS, Management: execCtx.Ports.Management},
+		Supported:            o.discoverOptions(ctx, exec, facts.KcPath, "import", env.Sudo, rep),
+		NoTransactionTimeout: req.NoTransactionTimeout,
 	})
 	if err != nil {
 		return applied, resil.Fatal("build the import command", err.Error(), err)
@@ -590,7 +611,7 @@ func (o *Orchestrator) applyImport(ctx context.Context, env config.Environment, 
 
 	applied.Started = true
 	result, err := exec.Run(ctx, target.Command{
-		Path: cmd.Path, Args: cmd.Args, Sudo: env.Sudo,
+		Path: cmd.Path, Args: cmd.Args, Env: cmd.Env, Sudo: env.Sudo,
 		OnStdout: rep.Log, OnStderr: rep.Log,
 	})
 	if err != nil {

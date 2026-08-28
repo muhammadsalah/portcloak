@@ -11,12 +11,7 @@
  */
 import { useState } from "react";
 
-import {
-  ConfigAPI,
-  type ConfigSnapshot,
-  type Environment,
-  type ProbeResult,
-} from "../../api";
+import { ConfigAPI, type ConfigSnapshot, type Environment, type ProbeResult } from "../../api";
 import { useNavigate } from "../../app/ShellContext";
 import { ProbePanel } from "../../components/ProbePanel";
 import {
@@ -35,11 +30,11 @@ import {
   Link,
   Muted,
   Notice,
-  Right,
   Row,
   Select,
   Small,
   Spinner,
+  Stack,
   Strong,
   Tabs,
   useModal,
@@ -153,10 +148,17 @@ export function EnvironmentEditor({
         />
       </CardBody>
 
+      {/*
+        The button is the heading. It said "Test connection" twice — once as a
+        label on the left and once on the button at the right — and the second
+        one is the only one that does anything.
+
+        The stack is what keeps the result off the button: the panel sat flush
+        against it, so a green border and a blue button shared an edge.
+      */}
       <CardBody $divided>
-        <Row>
-          <Strong>Test connection</Strong>
-          <Right>
+        <Stack $gap={12}>
+          <Row>
             <Button
               disabled={!originalName || probing}
               onClick={async () => {
@@ -167,16 +169,16 @@ export function EnvironmentEditor({
             >
               {probing ? "Testing…" : "Test connection"}
             </Button>
-          </Right>
-        </Row>
-        {!originalName ? (
-          <Muted>
-            <Small>Save the environment first, then test it.</Small>
-          </Muted>
-        ) : null}
-        {probing ? <Spinner>Probing…</Spinner> : null}
-        {probe?.failure ? <FailureNotice failure={probe.failure} /> : null}
-        {probe && !probe.failure ? <ProbePanel facts={probe.facts} ok={probe.ok} /> : null}
+          </Row>
+          {!originalName ? (
+            <Muted>
+              <Small>Save the environment first, then test it.</Small>
+            </Muted>
+          ) : null}
+          {probing ? <Spinner>Probing…</Spinner> : null}
+          {probe?.failure ? <FailureNotice failure={probe.failure} /> : null}
+          {probe && !probe.failure ? <ProbePanel facts={probe.facts} ok={probe.ok} /> : null}
+        </Stack>
       </CardBody>
 
       <CardFoot>
@@ -277,12 +279,13 @@ function KindFields({
             <Field label="Authentication">
               <Select
                 value={draft.auth ?? "key"}
-                onChange={(e) => set("auth", e.target.value as Environment["auth"])}
-              >
-                <option value="key">Private key</option>
-                <option value="agent">SSH agent</option>
-                <option value="password">Password</option>
-              </Select>
+                onChange={(auth) => set("auth", auth as Environment["auth"])}
+                options={[
+                  { value: "key", label: "Private key" },
+                  { value: "agent", label: "SSH agent" },
+                  { value: "password", label: "Password" },
+                ]}
+              />
             </Field>
           </FieldRow>
           <Field label="Keycloak server folder on the host">

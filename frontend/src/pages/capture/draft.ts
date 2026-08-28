@@ -17,6 +17,8 @@ export interface CaptureDraft {
   storage: string;
   usersMode: string;
   usersPerFile: number;
+  /** Let the export's transactions run without a time limit. See OptionsStep. */
+  noTransactionTimeout: boolean;
   verify: boolean;
   detectDependencies: boolean;
   encrypt: boolean;
@@ -29,6 +31,26 @@ export interface CaptureDraft {
 }
 
 export type UpdateDraft = (patch: Partial<CaptureDraft>) => void;
+
+/**
+ * What the export writes per user file, and per transaction.
+ *
+ * kc.sh exports one page of users inside one transaction, so this is not only
+ * a file-size setting: a realm whose users come from a federation provider is
+ * re-read through that provider one user at a time inside that transaction, and
+ * a page too large for the server's transaction limit kills the export. The
+ * engine holds the same bounds — this is the wizard being helpful, not the
+ * enforcement (see kc.ClampUsersPerFile).
+ */
+export const usersPerFileMin = 10;
+export const usersPerFileMax = 1000;
+export const usersPerFileDefault = 1000;
+
+/** Brings a typed page size inside the range. Empty, or nonsense, is the default. */
+export function clampUsersPerFile(n: number): number {
+  if (!Number.isFinite(n) || n <= 0) return usersPerFileDefault;
+  return Math.min(usersPerFileMax, Math.max(usersPerFileMin, Math.round(n)));
+}
 
 export function kindLabel(kind: string): string {
   switch (kind) {
@@ -65,8 +87,7 @@ export function advanceable(
       if (!probe) {
         return {
           ok: false,
-          reason:
-            "Run Test first, so a failure is a sentence now rather than a surprise later.",
+          reason: "Run Test first, so a failure is a sentence now rather than a surprise later.",
         };
       }
       if (!probe.ok) {

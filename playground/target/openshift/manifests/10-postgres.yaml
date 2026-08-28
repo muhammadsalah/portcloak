@@ -1,0 +1,116 @@
+# Copyright 2026 Muhammad Salah
+# SPDX-License-Identifier: Apache-2.0
+#
+# One Postgres, three databases — the same shape as the Docker playground, for
+# the same reason: separate servers would cost three times the memory for a
+# difference PortCloak cannot observe, and separate databases keep a restore
+# into kc-merged from reaching kc-a's rows by accident.
+#
+# No securityContext sets a uid. OpenShift assigns one from the namespace's
+# range and refuses a pod that asks for its own, and the image is built to run
+# under an arbitrary uid.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres
+  namespace: kc
+type: Opaque
+stringData:
+  # Development credentials for a cluster on a laptop. Written here rather than
+  # generated so the seeder and the Keycloaks can be read alongside each other.
+  POSTGRES_USER: keycloak
+  POSTGRES_PASSWORD: keycloak
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init
+  namespace: kc
+data:
+  10-databases.sql: |
+    CREATE DATABASE kc_a OWNER keycloak;
+    CREATE DATABASE kc_b OWNER keycloak;
+    CREATE DATABASE kc_merged OWNER keycloak;
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres
+  namespace: kc
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      # Three realms of 160,000 users each, with room for the tables an import
+      # rewrites. CRC's default storage class provisions from the VM's disk,
+      # which is why crc.sh asks for 100 GiB.
+      storage: 20Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: kc
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:17-alpine
+          envFrom:
+            - secretRef:
+                name: postgres
+          env:
+            - name: POSTGRES_DB
+              value: keycloak
+            # The image refuses to initialise into a non-empty directory, and
+            # a PVC arrives with lost+found in it.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          ports:
+            - containerPort: 5432
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: init
+              mountPath: /docker-entrypoint-initdb.d
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "keycloak"]
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: postgres
+        - name: init
+          configMap:
+            name: postgres-init
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: kc
+spec:
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432

@@ -11,11 +11,7 @@ import { useEffect, useState } from "react";
 import { SnapshotKeyFields, noKey, type SnapshotKey } from "../../components/SnapshotKeyFields";
 import { Muted, Small, useModalControls } from "../../design-system";
 
-export function KeyPrompt({
-  onOpen,
-}: {
-  onOpen: (key: SnapshotKey) => void | Promise<void>;
-}) {
+export function KeyPrompt({ onOpen }: { onOpen: (key: SnapshotKey) => void | Promise<void> }) {
   const [key, setKey] = useState<SnapshotKey>(noKey());
   const { setConfirm } = useModalControls();
 

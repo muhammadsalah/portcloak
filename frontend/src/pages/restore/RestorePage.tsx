@@ -107,6 +107,7 @@ function Restore({ loaded, snapshotId }: { loaded: Loaded; snapshotId?: string }
   const [planning, setPlanning] = useState(false);
   const [confirmRealm, setConfirmRealm] = useState("");
   const [applying, setApplying] = useState(false);
+  const [noTransactionTimeout, setNoTransactionTimeout] = useState(false);
   const [error, setError] = useState<string | undefined>();
 
   const index = steps.findIndex((s) => s.key === step);
@@ -254,6 +255,8 @@ function Restore({ loaded, snapshotId }: { loaded: Loaded; snapshotId?: string }
           strategy={strategy}
           outOfScope={loaded.outOfScope}
           applying={applying}
+          noTransactionTimeout={noTransactionTimeout}
+          onNoTransactionTimeout={setNoTransactionTimeout}
           onApply={async () => {
             setApplying(true);
             setError(undefined);
@@ -267,6 +270,7 @@ function Restore({ loaded, snapshotId }: { loaded: Loaded; snapshotId?: string }
               passphrase: key.passphrase,
               identities: key.identities,
               confirmRealm,
+              noTransactionTimeout,
             });
             setApplying(false);
             if (result.failure) {
@@ -299,11 +303,7 @@ function Restore({ loaded, snapshotId }: { loaded: Loaded; snapshotId?: string }
             ) : null}
             <Button onClick={() => navigate({ name: "library" })}>Cancel</Button>
             {isLast ? null : (
-              <Button
-                $variant="primary"
-                disabled={!canAdvance.ok}
-                onClick={() => void advance()}
-              >
+              <Button $variant="primary" disabled={!canAdvance.ok} onClick={() => void advance()}>
                 Next
               </Button>
             )}
