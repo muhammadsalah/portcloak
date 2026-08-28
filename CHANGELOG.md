@@ -176,6 +176,23 @@ returning.
   because the interface stays on the Keycloak admin console palette it was built to sit beside —
   the mark is the one place the teal appears.
 - `homeMoved` in the audit log. Every entry above it was written somewhere else.
+- **A release pipeline that signs what it publishes.** Pushing a `v*` tag builds all five
+  artifacts, signs and notarises the macOS bundle with a Developer ID under the hardened
+  runtime, has the Windows executables Authenticode-signed by SignPath Foundation, and opens a
+  draft release for the gate review to meet actual bytes. CI no longer builds: it is tests, and
+  packaging costs three runners to say nothing the suite has not.
+- **Every artifact is tied to this repository, not just to a certificate.** `SHA256SUMS` is
+  signed with Sigstore cosign in keyless mode — the identity is the release workflow's OIDC
+  token, so there is no private key to store, rotate or leak — and each artifact carries a
+  build-provenance attestation. A Developer ID signature says Apple knows who paid for the
+  certificate; these say the bytes came from this source tree at this commit, which is the
+  question a person downloading a tool that handles realm secrets is actually asking. It is also
+  why Linux needs no scheme of its own.
+- `package.sh` gained `--stage-only`, `--archive-only` and `--linux-docker`. The first two are a
+  seam: a signature goes on the bundle, not on the zip around it, so the release signs between
+  the two passes and the credentials stay out of a script a pull request can run. The third
+  forces the container's controlled sysroot on a Linux host, where the script otherwise prefers
+  a fast native build against whatever GTK the machine happens to carry.
 
 ### Fixed
 - **An empty configuration never got past its loading spinner.** Nil slices reached the frontend

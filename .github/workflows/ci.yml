@@ -3,6 +3,18 @@
 
 # CI guards main, and nothing else automatically.
 #
+# This workflow is tests, and only tests. Producing a distributable artifact is
+# release work and lives in release.yml, which runs on a tag: packaging costs
+# three runners and a Docker emulation pass, and none of it tells you anything
+# about a commit that the suite below has not already said.
+#
+# The cost of that split is worth stating plainly, because it is a real one.
+# Nothing here compiles for Windows or macOS any more — `vet` and `unit` build
+# for Linux and that is all — so a change that breaks the build on another
+# platform is now found when a tag is cut rather than when it is pushed. On a
+# repository with one contributor and a gated release that is a trade rather
+# than a hole, but it is a trade.
+#
 # It used to run on every push to every branch, which is a defensible policy
 # for a repository with one contributor and a cheap suite — but it spends
 # minutes on work-in-progress that is going to be rewritten before it lands.
@@ -34,63 +46,6 @@ env:
   NODE_VERSION: "24"
 
 jobs:
-  build:
-    name: Build (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        # TAGS is empty everywhere but Linux, where `gtk3` selects Wails'
-        # GTK3 + webkit2gtk-4.1 backend. Wails defaults to GTK4 +
-        # webkitgtk-6.0, which is not the stack installed below and is not
-        # present on Debian 12 or Ubuntu 22.04 — so without this tag the
-        # Linux build fails on a missing webkitgtk-6.0 pkg-config file.
-        # Must stay in step with build/linux/Dockerfile.
-        include:
-          - os: ubuntu-latest
-            tags: gtk3
-            prod_tags: production,gtk3
-          - os: macos-latest
-            tags: ""
-            prod_tags: production
-          - os: windows-latest
-            tags: ""
-            prod_tags: production
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: Linux WebKit dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
-
-      - name: Build the frontend
-        run: |
-          npm --prefix frontend ci
-          npm --prefix frontend run build
-
-      - name: Build
-        run: go build -tags "${{ matrix.tags }}" ./...
-
-      - name: Build the application
-        run: go build -tags "${{ matrix.tags }}" -o portcloak ./cmd/portcloak
-
-      # The release build is a different compilation, not the same one with a
-      # flag: `production` selects different files in both Wails and this
-      # repository. Building it here is what stops that path rotting unnoticed
-      # between releases and only failing on the day someone cuts a tag.
-      - name: Build the application (production)
-        run: go build -tags "${{ matrix.prod_tags }}" -trimpath -ldflags "-s -w" -o portcloak-production ./cmd/portcloak
-
   vet:
     name: Vet & lint
     runs-on: ubuntu-latest

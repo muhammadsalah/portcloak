@@ -10,8 +10,17 @@
 #   ./build/package.sh --version 0.0.1
 #   ./build/package.sh --targets windows,linux
 #   ./build/package.sh --skip-frontend          # reuse an existing frontend/dist
+#   ./build/package.sh --stage-only             # build and assemble, do not archive
+#   ./build/package.sh --archive-only           # archive what is already staged
+#   ./build/package.sh --linux-docker           # containerise Linux even on Linux
 #
 # Output lands in dist/ with a SHA256SUMS covering all of it.
+#
+# The last two flags exist because a signature has to go on the bundle, not on
+# the zip around it. A release therefore runs this in two passes — stage, sign,
+# archive — and the signing happens in between, in the workflow, where the
+# credentials are. Run without them it does both passes back to back, which is
+# what a developer building locally wants.
 #
 # | target  | arches        | how |
 # |---------|---------------|-----|
@@ -41,12 +50,18 @@ cd "$root"
 version=""
 targets=""
 skip_frontend=0
+do_build=1
+do_archive=1
+linux_docker=0
 while [ $# -gt 0 ]; do
 	case "$1" in
 	--version) version="$2"; shift 2 ;;
 	--targets) targets="$2"; shift 2 ;;
 	--skip-frontend) skip_frontend=1; shift ;;
-	-h | --help) sed -n '2,36p' "$0"; exit 0 ;;
+	--stage-only) do_archive=0; shift ;;
+	--archive-only) do_build=0; skip_frontend=1; shift ;;
+	--linux-docker) linux_docker=1; shift ;;
+	-h | --help) sed -n '2,42p' "$0"; exit 0 ;;
 	*) echo "unknown argument: $1" >&2; exit 2 ;;
 	esac
 done
@@ -78,8 +93,14 @@ echo "targets: $targets"
 echo
 
 dist="$root/dist"
-rm -rf "$dist"
-mkdir -p "$dist"
+# Everything assembled but not yet archived lives here. Keeping it in one place
+# is what lets the signing pass in between find it without knowing how any
+# particular platform lays its bundle out.
+stage="$dist/stage"
+if [ "$do_build" -eq 1 ]; then
+	rm -rf "$dist"
+fi
+mkdir -p "$dist" "$stage"
 
 # ------------------------------------------------------------------ frontend
 #
@@ -93,7 +114,7 @@ if [ "$skip_frontend" -eq 0 ]; then
 else
 	echo "==> frontend (skipped)"
 fi
-if [ ! -s frontend/dist/index.html ]; then
+if [ "$do_build" -eq 1 ] && [ ! -s frontend/dist/index.html ]; then
 	echo "frontend/dist/index.html is missing or empty — refusing to package a binary with no UI" >&2
 	exit 1
 fi
@@ -111,7 +132,9 @@ build_darwin() {
 		return
 	fi
 	echo "==> darwin/arm64 + darwin/amd64"
-	local app="$dist/PortCloak.app"
+	local out="$stage/macos-universal"
+	local app="$out/PortCloak.app"
+	rm -rf "$out"
 	mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 
 	local slices=()
@@ -147,12 +170,30 @@ build_darwin() {
 	# another machine. It is here because an unsigned bundle on Apple silicon
 	# is killed on launch rather than warned about, so without it the artifact
 	# cannot even be smoke-tested locally.
-	if have codesign; then
+	#
+	# Skipped when staging for a release, because the next thing to touch this
+	# bundle is a real Developer ID signature and an ad-hoc one would only be
+	# thrown away. Applying it anyway is harmless but misleading in the log.
+	if [ "$do_archive" -eq 1 ] && have codesign; then
 		codesign --force --deep --sign - "$app" 2>/dev/null &&
 			echo "    ad-hoc signed (NOT a Developer ID signature)"
 	fi
+}
 
-	(cd "$dist" && zip -qry "PortCloak-$version-macos-universal.zip" PortCloak.app && rm -rf PortCloak.app)
+archive_darwin() {
+	local out="$stage/macos-universal"
+	[ -d "$out/PortCloak.app" ] || return 0
+	# `ditto` rather than `zip`: it is the archiver Apple's own notarisation
+	# documentation specifies, and the only one that preserves the symlinks and
+	# extended attributes a signed bundle depends on. A `zip`-built archive can
+	# notarise and then fail to validate once expanded.
+	if have ditto; then
+		(cd "$out" && ditto -c -k --keepParent PortCloak.app \
+			"$dist/PortCloak-$version-macos-universal.zip")
+	else
+		(cd "$out" && zip -qry "$dist/PortCloak-$version-macos-universal.zip" PortCloak.app)
+	fi
+	rm -rf "$out"
 }
 
 # =========================================================================
@@ -182,21 +223,31 @@ build_windows() {
 
 	for arch in amd64 arm64; do
 		echo "==> windows/$arch"
+		local out="$stage/windows-$arch"
+		rm -rf "$out"
+		mkdir -p "$out"
 		# -H windowsgui: without it Windows opens a console behind the app.
 		# CGO_ENABLED=0: Wails' Windows backend is pure Go, so this needs no
 		# mingw and cross-compiles from macOS or Linux unchanged.
 		GOOS=windows GOARCH="$arch" CGO_ENABLED=0 \
 			go build -tags production -trimpath \
 			-ldflags "$ldflags_common -H windowsgui" \
-			-o "$dist/PortCloak.exe" ./cmd/portcloak
+			-o "$out/PortCloak.exe" ./cmd/portcloak
 		# A bare .exe has nowhere to carry a NOTICE, so the zip is the unit of
 		# redistribution and the licence rides beside the binary in it.
-		cp LICENSE NOTICE "$dist/"
-		(cd "$dist" && zip -q "PortCloak-$version-windows-$arch.zip" PortCloak.exe LICENSE NOTICE &&
-			rm -f PortCloak.exe)
+		cp LICENSE NOTICE "$out/"
 	done
-	rm -f "$dist/LICENSE" "$dist/NOTICE"
 	rm -f cmd/portcloak/*.syso
+}
+
+archive_windows() {
+	local arch out
+	for arch in amd64 arm64; do
+		out="$stage/windows-$arch"
+		[ -f "$out/PortCloak.exe" ] || continue
+		(cd "$out" && zip -qr "$dist/PortCloak-$version-windows-$arch.zip" .)
+		rm -rf "$out"
+	done
 }
 
 # =========================================================================
@@ -204,23 +255,44 @@ build_windows() {
 # =========================================================================
 stage_linux() { # arch binary
 	local arch="$1" bin="$2"
-	local stage="$dist/portcloak-$version-linux-$arch"
-	mkdir -p "$stage/bin" "$stage/share/applications"
-	cp "$bin" "$stage/bin/portcloak"
-	chmod +x "$stage/bin/portcloak"
-	cp build/linux/portcloak.desktop "$stage/share/applications/portcloak.desktop"
+	local out="$stage/linux-$arch"
+	local tree="$out/portcloak-$version-linux-$arch"
+	rm -rf "$out"
+	mkdir -p "$tree/bin" "$tree/share/applications"
+	cp "$bin" "$tree/bin/portcloak"
+	chmod +x "$tree/bin/portcloak"
+	cp build/linux/portcloak.desktop "$tree/share/applications/portcloak.desktop"
 	for px in 16 32 48 64 128 256 512; do
-		mkdir -p "$stage/share/icons/hicolor/${px}x${px}/apps"
-		cp "build/linux/appicon-${px}.png" "$stage/share/icons/hicolor/${px}x${px}/apps/portcloak.png"
+		mkdir -p "$tree/share/icons/hicolor/${px}x${px}/apps"
+		cp "build/linux/appicon-${px}.png" "$tree/share/icons/hicolor/${px}x${px}/apps/portcloak.png"
 	done
-	cp LICENSE NOTICE "$stage/"
-	cp README.md CHANGELOG.md "$stage/" 2>/dev/null || true
-	(cd "$dist" && tar czf "portcloak-$version-linux-$arch.tar.gz" "$(basename "$stage")" &&
-		rm -rf "$(basename "$stage")")
+	cp LICENSE NOTICE "$tree/"
+	cp README.md CHANGELOG.md "$tree/" 2>/dev/null || true
+}
+
+archive_linux() {
+	local arch out tree
+	for arch in amd64 arm64; do
+		out="$stage/linux-$arch"
+		tree="portcloak-$version-linux-$arch"
+		[ -d "$out/$tree" ] || continue
+		(cd "$out" && tar czf "$dist/$tree.tar.gz" "$tree")
+		rm -rf "$out"
+	done
 }
 
 build_linux() {
-	if [ "$host" = "Linux" ]; then
+	# On a Linux host the default is a native build, because it is far faster
+	# and a developer wants their own machine's toolchain. A release wants the
+	# opposite: --linux-docker forces the container even here.
+	#
+	# It is not only about the second architecture. A native build links
+	# against whatever GTK and glibc the host happens to carry — on a current
+	# runner image, newer than Debian 12 or Ubuntu 22.04 — and produces a
+	# binary that refuses to start for exactly the people build/README.md says
+	# the gtk3 tag exists to serve. The Dockerfile is the controlled sysroot,
+	# and a release is the case that needs one.
+	if [ "$host" = "Linux" ] && [ "$linux_docker" -eq 0 ]; then
 		local arch
 		arch=$(go env GOARCH)
 		echo "==> linux/$arch (native)"
@@ -268,13 +340,43 @@ build_linux() {
 	done
 }
 
-wants darwin && build_darwin
-wants windows && build_windows
-wants linux && build_linux
+if [ "$do_build" -eq 1 ]; then
+	wants darwin && build_darwin
+	wants windows && build_windows
+	wants linux && build_linux
+fi
+
+if [ "$do_archive" -eq 0 ]; then
+	echo
+	echo "staged in dist/stage/ — not archived:"
+	find "$stage" -mindepth 1 -maxdepth 1 -print | sed "s|$dist/|  |"
+	echo
+	echo "Sign what is there, then run: $0 --version $version --archive-only"
+	exit 0
+fi
+
+wants darwin && archive_darwin
+wants windows && archive_windows
+wants linux && archive_linux
+rmdir "$stage" 2>/dev/null || true
 
 # ------------------------------------------------------------------- sums
-(cd "$dist" && find . -maxdepth 1 -type f ! -name SHA256SUMS ! -name '.*' -print0 |
-	sort -z | xargs -0 shasum -a 256 >SHA256SUMS)
+#
+# `shasum` is not on a bare Linux runner, where the tool is `sha256sum`. Both
+# write the same format, which is what the verification line in the release
+# notes depends on.
+#
+# Two branches rather than one command held in an array: macOS ships bash 3.2,
+# where expanding an empty array under `set -u` is itself an unbound-variable
+# error. check-traceability.sh documents the same trap for the same reason.
+artifacts() {
+	find . -maxdepth 1 -type f ! -name SHA256SUMS ! -name '.*' -print0 | sort -z
+}
+if have shasum; then
+	(cd "$dist" && artifacts | xargs -0 shasum -a 256 >SHA256SUMS)
+else
+	(cd "$dist" && artifacts | xargs -0 sha256sum >SHA256SUMS)
+fi
 
 echo
 echo "dist/:"

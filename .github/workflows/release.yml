@@ -1,0 +1,500 @@
+# Copyright 2026 Muhammad Salah
+# SPDX-License-Identifier: Apache-2.0
+
+# Builds, signs and publishes a release. Nothing here runs on a push to main.
+#
+# The tag is the trigger, which matches the procedure in
+# spec/rollout/11-release-0.0.1.md: freeze, run the matrix, walk it through by
+# hand, review the gate, tag, publish. By the time a `v*` tag exists the tests
+# have already been green on main; this workflow's job is to turn that commit
+# into artifacts somebody else can trust.
+#
+# It ends at a **draft** release, deliberately. The gate review is a human step
+# and a draft is what lets it happen after the artifacts exist and before
+# anyone can download them.
+#
+# Three signatures, because the three platforms trust different things:
+#
+#   macOS    Developer ID + notarisation. Without both, Gatekeeper refuses the
+#            bundle outright on Apple silicon rather than warning about it.
+#   Windows  Authenticode via SignPath Foundation, which signs open-source
+#            projects at no cost. Without it SmartScreen calls the download
+#            unrecognised until enough people install it anyway.
+#   Linux    Nothing platform-native to satisfy, so the signature is Sigstore:
+#            cosign in keyless mode over SHA256SUMS. It authenticates using
+#            this workflow's OIDC token, so there is no private key to store,
+#            rotate or leak — which is the same rule build/README.md already
+#            states about signing credentials, taken to its conclusion.
+#
+# The cosign signature and the provenance attestation cover every artifact, not
+# only the Linux ones. A macOS user who wants to know the .app came from this
+# repository at this commit gets a better answer from those than from the
+# Developer ID signature, which only says Apple knows who paid for it.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  # For re-running a publish after fixing something in the workflow itself,
+  # without cutting a new tag for it.
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Tag to build (the release is created against it)"
+        required: true
+      version:
+        description: "Version to stamp, without a leading v (e.g. 0.0.1)"
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  GO_VERSION: "1.27"
+  NODE_VERSION: "24"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # The frontend is built once and shared, rather than three times in parallel.
+  #
+  # Not for speed. The Go binary embeds frontend/dist, and three independent
+  # `npm ci && vite build` runs can produce three different bundles — a
+  # transitive dependency that moved, a different runner image. Building it once
+  # is what makes "the same UI on all three platforms" a fact rather than an
+  # expectation.
+  # ---------------------------------------------------------------------------
+  frontend:
+    name: Frontend bundle
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.identity.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          # package.sh runs `git describe`, which needs the tags and the
+          # history. A shallow clone makes it report a version that is not the
+          # one being released.
+          fetch-depth: 0
+
+      - name: The version being released
+        id: identity
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            version="${{ inputs.version }}"
+          else
+            version="${GITHUB_REF_NAME#v}"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Releasing $version"
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm --prefix frontend ci
+      - run: npm --prefix frontend run build
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: frontend-dist
+          path: frontend/dist
+          retention-days: 1
+          # The committed placeholder is a dotfile, and frontend/embed.go needs
+          # it present or `//go:embed all:dist` fails the Go build.
+          include-hidden-files: true
+
+  # ---------------------------------------------------------------------------
+  # macOS — Developer ID, hardened runtime, notarised and stapled.
+  # ---------------------------------------------------------------------------
+  macos:
+    name: macOS (universal)
+    needs: frontend
+    runs-on: macos-latest
+    env:
+      VERSION: ${{ needs.frontend.outputs.version }}
+      # Read once here so the steps below can test whether signing is possible
+      # without referencing `secrets` in an `if:`, which is not allowed at job
+      # level and is easy to get subtly wrong at step level.
+      SIGNING_AVAILABLE: ${{ secrets.MACOS_CERTIFICATE_P12 != '' && secrets.APPLE_API_KEY_P8 != '' }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 0
+      - uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - uses: actions/download-artifact@v8
+        with:
+          name: frontend-dist
+          path: frontend/dist
+
+      - name: Assemble the bundle, unsigned
+        run: ./build/package.sh --targets darwin --version "$VERSION" --skip-frontend --stage-only
+
+      # The certificate goes into a keychain created for this run and thrown
+      # away with the runner. It is never written anywhere the checkout can see.
+      - name: Import the Developer ID certificate
+        if: env.SIGNING_AVAILABLE == 'true'
+        env:
+          CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          keychain="$RUNNER_TEMP/build.keychain-db"
+          # Random, and never used again: the keychain outlives nothing.
+          password=$(openssl rand -base64 24)
+
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+
+          printf '%s' "$CERTIFICATE_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" \
+            -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign -f pkcs12
+          rm -f "$RUNNER_TEMP/cert.p12"
+
+          # Without this, codesign triggers a UI prompt for keychain access that
+          # nothing on a runner can answer, and the step hangs until it times
+          # out rather than failing.
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$password" "$keychain" >/dev/null
+          security list-keychain -d user -s "$keychain" login.keychain-db
+
+          echo "Identities available to codesign:"
+          security find-identity -v -p codesigning "$keychain"
+
+      - name: Sign with the hardened runtime
+        if: env.SIGNING_AVAILABLE == 'true'
+        env:
+          IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+        run: |
+          set -euo pipefail
+          app="dist/stage/macos-universal/PortCloak.app"
+
+          # --options runtime is what notarisation requires; the entitlements
+          # are the holes that opens back up, and build/README.md says why each
+          # one is there. --timestamp contacts Apple's timestamp authority, so
+          # the signature stays valid after the certificate expires.
+          #
+          # No --deep. Apple deprecated it for signing, and this bundle has no
+          # nested code for it to reach anyway — one executable, a plist, an
+          # icon and the licence. It stays on the verify below, where it is
+          # still the right flag.
+          codesign --force --options runtime --timestamp \
+            --entitlements build/darwin/entitlements.plist \
+            --sign "$IDENTITY" "$app"
+
+          codesign --verify --deep --strict --verbose=2 "$app"
+          codesign -dv "$app" 2>&1 | grep -i 'flags.*runtime'
+
+      - name: Notarise and staple
+        if: env.SIGNING_AVAILABLE == 'true'
+        env:
+          API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          app="dist/stage/macos-universal/PortCloak.app"
+          printf '%s' "$API_KEY_P8" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
+
+          # A throwaway archive purely to hand Apple the bundle. The one that
+          # ships is built after stapling, because the staple has to be inside
+          # it — a user who is offline when they first launch has no other way
+          # for Gatekeeper to learn the notarisation happened.
+          ditto -c -k --keepParent "$app" "$RUNNER_TEMP/notarize.zip"
+
+          xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" \
+            --key "$RUNNER_TEMP/AuthKey.p8" \
+            --key-id "$API_KEY_ID" \
+            --issuer "$API_ISSUER_ID" \
+            --wait --timeout 30m
+          rm -f "$RUNNER_TEMP/AuthKey.p8" "$RUNNER_TEMP/notarize.zip"
+
+          xcrun stapler staple "$app"
+          xcrun stapler validate "$app"
+          # The question a user's machine will actually ask.
+          spctl --assess --type execute --verbose=4 "$app"
+
+      - name: Say plainly that this build is not signed
+        if: env.SIGNING_AVAILABLE != 'true'
+        run: |
+          echo "::warning title=Unsigned macOS build::No Apple credentials are configured, so this .app carries no Developer ID signature and is not notarised. Gatekeeper will refuse it on another machine. See build/README.md."
+
+      - name: Archive
+        run: ./build/package.sh --targets darwin --version "$VERSION" --archive-only
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: artifacts-macos
+          path: dist/*.zip
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # Windows — cross-compiled on Linux, Authenticode via SignPath Foundation.
+  #
+  # On ubuntu rather than windows-latest because Wails' Windows backend is pure
+  # Go: CGO_ENABLED=0 builds it from anywhere, so a Windows runner would buy
+  # nothing and cost more. build/README.md has the detail.
+  # ---------------------------------------------------------------------------
+  windows:
+    name: Windows (amd64 + arm64)
+    needs: frontend
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # SignPath's action reads this workflow run and downloads the artifact
+      # through the API. The workflow-level default is contents-only, under
+      # which every other scope is none, and the action fails fetching the
+      # artifact it was just handed the id of.
+      actions: read
+    env:
+      VERSION: ${{ needs.frontend.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 0
+      - uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - uses: actions/download-artifact@v8
+        with:
+          name: frontend-dist
+          path: frontend/dist
+
+      # Supplies the icon, the version block and the DPI-awareness manifest.
+      # package.sh warns and carries on without it; a release should not.
+      - name: go-winres
+        run: go install github.com/tc-hib/go-winres@latest
+
+      - name: Build, unarchived
+        run: ./build/package.sh --targets windows --version "$VERSION" --skip-frontend --stage-only
+
+      - name: Refuse a release .exe with no version block
+        run: |
+          set -euo pipefail
+          # If go-winres had not run the executable would be generic — no icon,
+          # no version block, and no per-monitor DPI awareness, so the UI is
+          # bitmap-scaled and blurry on a high-DPI display. Cheap to check, and
+          # otherwise invisible until someone opens Properties.
+          for exe in dist/stage/windows-*/PortCloak.exe; do
+            grep -qa '<assembly' "$exe" \
+              || { echo "$exe carries no application manifest — go-winres did not run" >&2; exit 1; }
+            echo "ok: $exe"
+          done
+
+      # Only the executables make the trip. SignPath returns what its artifact
+      # configuration describes, and sending LICENSE and NOTICE through a
+      # signing service that has no reason to know about them is how they come
+      # back missing. They are already staged beside the binaries and are
+      # picked up at archive time.
+      - uses: actions/upload-artifact@v7
+        id: unsigned
+        with:
+          name: artifacts-windows-unsigned
+          path: dist/stage/*/PortCloak.exe
+          retention-days: 1
+
+      - name: Authenticode signature (SignPath Foundation)
+        id: signpath
+        if: vars.SIGNPATH_ORGANIZATION_ID != ''
+        uses: signpath/github-action-submit-signing-request@v2
+        with:
+          connector-url: ${{ vars.SIGNPATH_CONNECTOR_URL || 'https://githubactions.connectors.signpath.io/' }}
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          # Extracted back over the staged tree, so the signed executables land
+          # exactly where the unsigned ones were and the archive step does not
+          # need to know which it got.
+          output-artifact-directory: dist/stage
+
+      - name: Confirm the signature actually landed
+        if: vars.SIGNPATH_ORGANIZATION_ID != ''
+        run: |
+          set -euo pipefail
+          # An Authenticode signature is a PKCS#7 blob in the certificate table,
+          # and osslsigntool can read it without Windows. Without this check a
+          # misconfigured artifact configuration returns the file untouched and
+          # the release ships unsigned while the log says "signed".
+          sudo apt-get update -qq && sudo apt-get install -y -qq osslsigncode
+          for exe in dist/stage/windows-*/PortCloak.exe; do
+            osslsigncode verify -in "$exe" 2>&1 | tee /tmp/verify.txt | tail -5
+            grep -q "Signature verification: ok" /tmp/verify.txt \
+              || { echo "$exe came back without a valid signature" >&2; exit 1; }
+          done
+
+      - name: Say plainly that this build is not signed
+        if: vars.SIGNPATH_ORGANIZATION_ID == ''
+        run: |
+          echo "::warning title=Unsigned Windows build::SignPath is not configured, so these executables carry no Authenticode signature and SmartScreen will call them unrecognised. See build/README.md."
+
+      - name: Archive
+        run: ./build/package.sh --targets windows --version "$VERSION" --archive-only
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: artifacts-windows
+          path: dist/*.zip
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # Linux — both architectures through the Dockerfile's GTK/WebKit sysroot.
+  # ---------------------------------------------------------------------------
+  linux:
+    name: Linux (amd64 + arm64)
+    needs: frontend
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.frontend.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 0
+      - uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - uses: actions/download-artifact@v8
+        with:
+          name: frontend-dist
+          path: frontend/dist
+
+      # arm64 is built under emulation, which is slow but is the price of a
+      # correct sysroot — see build/linux/Dockerfile for why this target cannot
+      # be cross-compiled with the Go toolchain alone.
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build and package
+        run: ./build/package.sh --targets linux --version "$VERSION" --skip-frontend --linux-docker
+
+      - name: Refuse a binary linked against the wrong toolkit
+        run: |
+          set -euo pipefail
+          # The gtk3 tag has to have taken, or the binary asks for
+          # webkitgtk-6.0 and will not start on Debian 12 or Ubuntu 22.04 —
+          # which is most of the people likely to run this. build/README.md
+          # names this as the check to run.
+          tar xzf dist/portcloak-*-linux-amd64.tar.gz -C "$RUNNER_TEMP"
+          needed=$(readelf -d "$RUNNER_TEMP"/portcloak-*-linux-amd64/bin/portcloak | grep NEEDED)
+          echo "$needed"
+          echo "$needed" | grep -q 'libwebkit2gtk-4.1.so.0' \
+            || { echo "not linked against webkit2gtk-4.1 — the gtk3 tag did not take" >&2; exit 1; }
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: artifacts-linux
+          path: dist/*.tar.gz
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # Everything together: checksums, a Sigstore signature over them, provenance
+  # for each artifact, and a draft release to hang it all on.
+  # ---------------------------------------------------------------------------
+  publish:
+    name: Publish
+    needs: [frontend, macos, windows, linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the release
+      id-token: write # cosign keyless, and the provenance attestation
+      attestations: write
+    env:
+      VERSION: ${{ needs.frontend.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: artifacts-*
+          path: incoming
+          merge-multiple: true
+
+      - name: Checksums over the artifacts as they will ship
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          mv incoming/* dist/
+          # Computed here, after Windows signing changed those bytes and after
+          # macOS stapling changed those. A checksum taken any earlier would
+          # describe files nobody is going to download.
+          (cd dist && sha256sum ./* > SHA256SUMS)
+          cat dist/SHA256SUMS
+
+      - uses: sigstore/cosign-installer@v4
+
+      # Keyless: the signing identity is this workflow's OIDC token, and the
+      # certificate it mints is logged in Rekor. Nothing secret is stored, which
+      # means nothing secret can leak or expire unnoticed.
+      #
+      # One signature over SHA256SUMS rather than one per artifact. The file
+      # already names every artifact by hash, so signing it authenticates all of
+      # them, and there is one thing to verify rather than five.
+      - name: Sign the checksums with Sigstore
+        run: |
+          set -euo pipefail
+          cosign sign-blob --yes \
+            --bundle dist/SHA256SUMS.cosign.bundle \
+            dist/SHA256SUMS
+          echo "verifying the signature we just made:"
+          cosign verify-blob \
+            --bundle dist/SHA256SUMS.cosign.bundle \
+            --certificate-identity "https://github.com/${GITHUB_REPOSITORY}/.github/workflows/release.yml@${GITHUB_REF}" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            dist/SHA256SUMS
+
+      # Answers a different question from either signature: not "who signed
+      # this" but "which workflow, at which commit, built it". Verified with
+      # `gh attestation verify <file> --repo <repo>`.
+      - uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: |
+            dist/*.zip
+            dist/*.tar.gz
+
+      - name: Draft the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.ref || github.ref_name }}
+        run: |
+          set -euo pipefail
+          notes=$(mktemp)
+          {
+            echo "## Verifying this release"
+            echo
+            echo '```bash'
+            echo "sha256sum -c SHA256SUMS"
+            echo
+            echo "cosign verify-blob \\"
+            echo "  --bundle SHA256SUMS.cosign.bundle \\"
+            echo "  --certificate-identity 'https://github.com/${GITHUB_REPOSITORY}/.github/workflows/release.yml@refs/tags/${TAG}' \\"
+            echo "  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \\"
+            echo "  SHA256SUMS"
+            echo
+            echo "gh attestation verify PortCloak-${VERSION}-macos-universal.zip --repo ${GITHUB_REPOSITORY}"
+            echo '```'
+            echo
+            echo "The macOS bundle is signed with a Developer ID and notarised; the Windows"
+            echo "executables are Authenticode-signed. Neither replaces the two checks above,"
+            echo "which are what tie these files to this repository at this commit."
+          } > "$notes"
+
+          gh release create "$TAG" \
+            --draft \
+            --title "PortCloak $VERSION" \
+            --notes-file "$notes" \
+            --verify-tag \
+            dist/*
+          echo "Draft release created. Review the gate, then publish it."

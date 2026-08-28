@@ -10,9 +10,16 @@
 ./build/package.sh --targets windows,linux  # or just some of it
 ```
 
-That is the whole release path. It builds the frontend, compiles each target
-with the `production` tag, stamps the build identity, assembles the platform
-bundles and writes `dist/` with one `SHA256SUMS` covering all of them.
+It builds the frontend, compiles each target with the `production` tag, stamps
+the build identity, assembles the platform bundles and writes `dist/` with one
+`SHA256SUMS` covering all of them.
+
+That is the whole *build*. It is not the whole release: a published release is
+also signed, notarised and attested, which happens in
+[`.github/workflows/release.yml`](../.github/workflows/release.yml) on a `v*`
+tag — see [Signing and notarisation](#signing-and-notarisation) below. The
+workflow drives this same script, so what a developer builds by hand and what
+ships differ in signatures and in nothing else.
 
 Five artifacts, six architectures:
 
@@ -36,8 +43,10 @@ undefined `pointer` in `webview_window_linux.go` — so it needs a C compiler
 *and* the GTK/WebKit headers and shared libraries for the target architecture.
 A cross C compiler on its own (zig cc, say) supplies libc but not those; a
 sysroot does, and `build/linux/Dockerfile` is the cheapest correct one. On a
-Linux host the script builds natively instead and skips Docker. The
-architecture that does not match the host runs under emulation and is slow.
+Linux host the script builds natively instead and skips Docker, because that is
+far faster and is what a developer on that machine wants; `--linux-docker`
+forces the container anyway, which is what a release needs. The architecture
+that does not match the host runs under emulation and is slow.
 
 ## The gtk3 build tag
 
@@ -124,18 +133,118 @@ what it produces.
 
 ## Signing and notarisation
 
-Not automated, and not to be automated in this script: it needs credentials that
-must not sit in something a pull request can run.
+Automated, in [`.github/workflows/release.yml`](../.github/workflows/release.yml), and
+still not in `package.sh` — for the reason it never was: the credentials must
+not sit in something a pull request can run. The workflow has them; the script
+does not, and can still be run by anyone.
 
-`package.sh` applies an **ad-hoc** signature on macOS. That is not a Developer ID
-signature and will not pass Gatekeeper on another machine — it is there because
-an unsigned bundle on Apple silicon is killed on launch rather than warned
-about, so without it the artifact cannot even be smoke-tested locally.
+A signature goes on the bundle, not on the zip around it, so `package.sh` has a
+seam in the middle:
 
-Before distribution the macOS bundle needs a Developer ID signature and a
-notarisation pass, and the Windows build needs an Authenticode signature. Both
-are listed in [`spec/rollout/11-release-0.0.1.md`](../spec/rollout/11-release-0.0.1.md)
-as release-gate work.
+```bash
+./build/package.sh --version 0.0.1 --targets darwin --stage-only   # assemble
+#   ... sign dist/stage/macos-universal/PortCloak.app here ...
+./build/package.sh --version 0.0.1 --targets darwin --archive-only # then wrap
+```
+
+Run without those flags it does both passes back to back, which is what a
+developer building locally wants. `--linux-docker` is the third flag the
+release needs: on a Linux host the script prefers a fast native build, and a
+release wants the container's controlled sysroot for both architectures
+instead.
+
+### What each platform gets, and why
+
+| | Signature | Without it |
+|---|---|---|
+| macOS | Developer ID + hardened runtime + notarised + stapled | Gatekeeper **refuses** the bundle on Apple silicon rather than warning — the app is killed on launch |
+| Windows | Authenticode, via [SignPath Foundation](https://signpath.org) | SmartScreen calls the download unrecognised until enough people install it anyway |
+| Linux | none native | nothing to satisfy; the platform has no equivalent |
+| all | `cosign` over `SHA256SUMS`, plus a build-provenance attestation per artifact | no way to tie a download to this repository at this commit |
+
+The last row is the one that does the most work. A Developer ID signature says
+Apple knows who paid for the certificate; an Authenticode signature says the
+same about a CA. Neither says the bytes came from this source tree. The Sigstore
+signature and the provenance attestation do, and they cover the Linux tarballs
+as well — which is why Linux gets no platform-specific scheme of its own. It is
+also **keyless**: the identity is the release workflow's OIDC token, so there is
+no private key to store, rotate, or leak. Verifying a release:
+
+```bash
+sha256sum -c SHA256SUMS
+
+cosign verify-blob --bundle SHA256SUMS.cosign.bundle \
+  --certificate-identity 'https://github.com/<owner>/portcloak/.github/workflows/release.yml@refs/tags/v0.0.1' \
+  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+  SHA256SUMS
+
+gh attestation verify PortCloak-0.0.1-macos-universal.zip --repo <owner>/portcloak
+```
+
+`package.sh` still applies an **ad-hoc** signature on macOS when it archives in
+one pass. That is not a Developer ID signature and will not pass Gatekeeper on
+another machine — it is there because an unsigned bundle on Apple silicon is
+killed on launch rather than warned about, so without it the artifact cannot
+even be smoke-tested locally. Under `--stage-only` it is skipped, because the
+next thing to touch that bundle is a real signature.
+
+### The macOS entitlements
+
+`darwin/entitlements.plist` carries two keys and no comments. The comments are
+here instead because **AMFI's plist parser rejects XML comments** — `plutil
+-lint` accepts the file and `codesign` then fails with `AMFIUnserializeXML:
+syntax error`, naming the first line of the comment.
+
+| Key | Why |
+|---|---|
+| `com.apple.security.cs.allow-jit` | JavaScriptCore compiles to native code at runtime. Without it the webview loads and every script fails at the point JIT is needed — a window that draws and does nothing. |
+| `com.apple.security.cs.allow-unsigned-executable-memory` | The same requirement one layer down: JavaScriptCore also maps writable-executable pages outside the JIT entitlement's scope, and WKWebView crashes on launch under a hardened runtime without it. |
+
+Three things commonly pasted into Wails entitlements are deliberately absent.
+**App Sandbox**, because PortCloak reads a Keycloak installation wherever the
+operator points it and writes bundles where they choose — a sandbox opened wide
+enough for that asserts a containment that does not exist.
+**`disable-library-validation`**, because nothing here loads a third-party
+plug-in, and enabling it would let any library be loaded into the process
+holding the operator's realm secrets. **Network entitlements**, because those
+are sandbox keys and outside the sandbox they restrict nothing; listing them
+would only imply a control that is not in force.
+
+### What has to exist before any of it runs
+
+Both signing stages are inert until configured, and say so with a workflow
+warning rather than failing. The release still builds, checksums and attests.
+
+**Apple** — repository *secrets*:
+
+| Secret | What it is |
+|---|---|
+| `MACOS_CERTIFICATE_P12` | Developer ID Application certificate and key, exported as `.p12`, then `base64` encoded |
+| `MACOS_CERTIFICATE_PASSWORD` | the password set when exporting that `.p12` |
+| `MACOS_SIGNING_IDENTITY` | the identity string, e.g. `Developer ID Application: Your Name (TEAMID)` |
+| `APPLE_API_KEY_P8` | App Store Connect API key `.p8`, `base64` encoded |
+| `APPLE_API_KEY_ID` | that key's Key ID |
+| `APPLE_API_ISSUER_ID` | the Issuer ID from App Store Connect → Users and Access → Integrations |
+
+```bash
+base64 -i DeveloperID.p12 | pbcopy      # macOS
+security find-identity -v -p codesigning # to read the identity string exactly
+```
+
+The API key is used rather than an Apple ID and app-specific password because
+it is scoped to notarisation and can be revoked on its own, without touching
+the account.
+
+**Windows** — one *secret*, `SIGNPATH_API_TOKEN`, and four repository
+*variables*: `SIGNPATH_ORGANIZATION_ID`, `SIGNPATH_PROJECT_SLUG`,
+`SIGNPATH_SIGNING_POLICY_SLUG` and `SIGNPATH_ARTIFACT_CONFIGURATION_SLUG`.
+`SIGNPATH_CONNECTOR_URL` is optional and defaults to the hosted connector. The
+organisation ID is a *variable* rather than a secret on purpose: the workflow
+tests it to decide whether signing is configured, and `if:` cannot read a
+secret.
+
+Applying to SignPath Foundation is described in
+[`../spec/rollout/11-release-0.0.1.md`](../spec/rollout/11-release-0.0.1.md).
 
 ## Windows resources
 
