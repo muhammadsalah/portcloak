@@ -229,9 +229,13 @@ function startedAt(job: JobView): string {
 function Phases({ job, live }: { job: JobView; live?: Live }) {
   const states = job.phases.map(
     (phase) =>
-      live?.steps.get(phase.phase) ?? (phase.done ? "done" : phase.live ? "live" : "pending"),
+      live?.steps.get(phase.phase) ??
+      (phase.skipped ? "skipped" : phase.done ? "done" : phase.live ? "live" : "pending"),
   );
-  const done = states.filter((state) => state === "done").length;
+  // Skipped counts toward the tally: the phase was reached, and the pipeline
+  // got to the end. What it did not do is reach a verdict, which is what the
+  // marker says rather than the count.
+  const done = states.filter((state) => state === "done" || state === "skipped").length;
 
   return (
     <PhaseColumn>
@@ -252,6 +256,8 @@ function Phases({ job, live }: { job: JobView; live?: Live }) {
 function marker(state: StepState, n: number): string {
   if (state === "done") return "✓";
   if (state === "failed") return "✕";
+  // A dash, not a tick and not a cross: nothing was concluded here.
+  if (state === "skipped") return "–";
   return String(n);
 }
 

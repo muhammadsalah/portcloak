@@ -719,6 +719,8 @@ export interface PhaseView {
   label: string;
   done: boolean;
   live: boolean;
+  /** Reached its turn and reported nothing. Neither done nor failed. */
+  skipped: boolean;
 }
 
 export interface JobView {

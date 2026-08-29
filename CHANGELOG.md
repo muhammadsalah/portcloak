@@ -14,6 +14,12 @@ record; unprefixed `v` tags mark shipped binaries.
 ## [Unreleased]
 
 ### Changed
+- A phase that was skipped is drawn in yellow with a dash, not in green with a tick. A restore whose
+  destination could not be read prints "Validation was not performed" and, next to it, ticked the
+  validation step in the same green as a step that had passed — the stepper contradicting the
+  sentence beside it, and doing so in the direction that reads as reassurance. Skipped is neither
+  done nor failed: the phase took its turn and reached no verdict, which is a third thing and now
+  looks like one. It still counts toward the phase tally, because the pipeline did reach the end.
 - The editors' *Test* buttons test what is on screen rather than what is on disk. They sent a name,
   so the probe read the saved copy — which meant a definition had to be saved before it could be
   tested, and testing it then answered a question nobody was asking: whether the thing already

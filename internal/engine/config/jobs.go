@@ -179,6 +179,9 @@ type Job struct {
 	// CompletedPhases lets the Activity screen tick the pipeline without
 	// replaying the event stream.
 	CompletedPhases []string `json:"completedPhases,omitempty"`
+	// SkippedPhases are the ones that reached their turn and had nothing to
+	// report — see SkipPhase. A phase can be in both: it ran, and it abstained.
+	SkippedPhases []string `json:"skippedPhases,omitempty"`
 }
 
 // JobStore persists jobs as one JSON file each, under ~/.portcloak/jobs/.
@@ -367,6 +370,22 @@ func (j *Job) Append(e LedgerEntry) {
 		}
 	}
 	j.Ledger = append(j.Ledger, e)
+}
+
+// SkipPhase records that a phase ran but did nothing, once.
+//
+// Skipped is not failed and it is not done. Validation that could not read the
+// destination's Admin API has not found the realm correct — it has not looked —
+// and a tick against it would say the opposite of what happened. The phase is
+// still completed alongside this: the pipeline reached the end, and it is the
+// verdict rather than the progress that is missing.
+func (j *Job) SkipPhase(phase string) {
+	for _, p := range j.SkippedPhases {
+		if p == phase {
+			return
+		}
+	}
+	j.SkippedPhases = append(j.SkippedPhases, phase)
 }
 
 // CompletePhase records a phase as done, once.

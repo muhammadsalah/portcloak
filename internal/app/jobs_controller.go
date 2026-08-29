@@ -42,6 +42,9 @@ type PhaseView struct {
 	Label string `json:"label"`
 	Done  bool   `json:"done"`
 	Live  bool   `json:"live"`
+	// Skipped means the phase reached its turn and had nothing to report. It
+	// travels beside Done rather than instead of it: the phase ran.
+	Skipped bool `json:"skipped"`
 }
 
 // JobView is one card on the Activity screen.
@@ -140,12 +143,17 @@ func renderPhases(job *config.Job) []PhaseView {
 	for _, p := range job.CompletedPhases {
 		done[p] = true
 	}
+	skipped := map[string]bool{}
+	for _, p := range job.SkippedPhases {
+		skipped[p] = true
+	}
 
 	out := make([]PhaseView, 0, len(phases))
 	for _, p := range phases {
 		out = append(out, PhaseView{
 			Phase: string(p), Label: obs.PhaseLabel(p),
 			Done: done[string(p)], Live: job.Phase == string(p) && job.State == config.JobRunning,
+			Skipped: skipped[string(p)],
 		})
 	}
 	return out

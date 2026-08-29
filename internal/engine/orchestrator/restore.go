@@ -470,6 +470,11 @@ func (o *Orchestrator) runRestore(ctx context.Context, env config.Environment, s
 	validation := o.validate(ctx, session, dest)
 	rep.CompletePhase(obs.PhaseValidate, validation.Summary)
 	j.CompletePhase(string(obs.PhaseValidate))
+	if !validation.Performed {
+		// It ran and abstained. Ticked as done it would read as "the realm
+		// checked out", which is the one thing it does not say.
+		j.SkipPhase(string(obs.PhaseValidate))
+	}
 
 	o.complete(j, rep, fmt.Sprintf("Restored %s into %s. %s", session.Realm, env.Name, validation.Summary))
 	_ = o.opts.Audit.Record(obs.AuditEntry{

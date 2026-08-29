@@ -33,16 +33,24 @@ export const Stepper = styled.ol`
   padding: 0;
 `;
 
-export type StepState = "pending" | "done" | "live" | "failed";
+/**
+ * `skipped` is a phase that took its turn and had nothing to report — the
+ * restore's validation, when the destination's Admin API could not be read. It
+ * is neither done nor failed, and it must not be drawn as either: a tick says
+ * the realm checked out, which is the one thing it did not do.
+ */
+export type StepState = "pending" | "done" | "live" | "failed" | "skipped";
 
 const stepColour = (p: { $state: StepState; theme: { color: Record<string, string> } }) =>
   p.$state === "live"
     ? p.theme.color.primary
     : p.$state === "failed"
       ? p.theme.color.danger
-      : p.$state === "done"
-        ? p.theme.color.success
-        : p.theme.color.textMuted;
+      : p.$state === "skipped"
+        ? p.theme.color.warning
+        : p.$state === "done"
+          ? p.theme.color.success
+          : p.theme.color.textMuted;
 
 export const Step = styled.li<{ $state: StepState; $last?: boolean }>`
   position: relative;

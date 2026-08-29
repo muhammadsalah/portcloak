@@ -541,6 +541,20 @@ func TestPostRestoreValidation_UnreachableIsNotPassed(t *testing.T) {
 	if !strings.Contains(j.Message, "not performed") {
 		t.Errorf("validation that did not run should say so: %q", j.Message)
 	}
+
+	// The sentence is only half of it. The Activity screen ticks a phase from
+	// CompletedPhases, so validation that abstained was drawn with the same
+	// green tick as validation that passed — the screen saying the opposite of
+	// the sentence printed beside it.
+	var skipped bool
+	for _, p := range j.SkippedPhases {
+		if p == string(obs.PhaseValidate) {
+			skipped = true
+		}
+	}
+	if !skipped {
+		t.Errorf("validation that did not run is not marked skipped: %v", j.SkippedPhases)
+	}
 }
 
 func keysOf(m map[string][]byte) []string {
