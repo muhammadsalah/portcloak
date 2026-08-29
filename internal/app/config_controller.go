@@ -324,14 +324,31 @@ type ProbeResult struct {
 // capture would find. A Test that ran something different is how the two drift
 // into reporting different things.
 func (c *ConfigController) TestEnvironment(name string) (res ProbeResult) {
-	defer func() { res = lists(res) }()
-	cfg := c.eng.Config.Config()
-	env, ok := cfg.Environment(name)
+	env, ok := c.eng.Config.Config().Environment(name)
 	if !ok {
-		return ProbeResult{Failure: Fail(config.ErrNotFound)}
+		return lists(ProbeResult{Failure: Fail(config.ErrNotFound)})
 	}
+	// No secret: the saved one is what a saved definition is tested with.
+	return c.TestEnvironmentDraft(env, "")
+}
 
-	exec, err := c.eng.executorFor(env)
+// TestEnvironmentDraft tests the definition on screen rather than the one on
+// disk, which is the only order in which testing is useful: a test that reads
+// the saved copy can only tell an operator whether what they already committed
+// works, and they are asking because they have not committed it yet.
+//
+// It saves nothing and blocks nothing. A definition that fails its test can
+// still be saved — a target that is down this minute is not a definition that
+// is wrong — and one that has never been saved can still be tested.
+//
+// The secret is the one typed into the editor, overlaid on the keychain for the
+// duration of the test. Left empty it resolves from the keychain as usual, so
+// editing a host or a port without retyping a password still tests.
+func (c *ConfigController) TestEnvironmentDraft(env config.Environment, secret string) (res ProbeResult) {
+	defer func() { res = lists(res) }()
+	creds := config.NewOverlay(c.eng.Creds, env.CredentialRef, secret)
+
+	exec, err := c.eng.executorForWith(env, creds)
 	if err != nil {
 		return ProbeResult{Failure: Fail(err)}
 	}
@@ -348,7 +365,7 @@ func (c *ConfigController) TestEnvironment(name string) (res ProbeResult) {
 	// The Admin API is optional. Its absence is a note, never a failure — but
 	// the reason for the absence is carried through, because "not reachable"
 	// over a URL the operator can open in a browser diagnoses nothing.
-	if v, verr := c.eng.adminFor(env); verr == nil && v != nil {
+	if v, verr := c.eng.adminForWith(env, creds); verr == nil && v != nil {
 		reason := v.Check(ctx)
 		facts.AdminReachable = reason == nil
 		switch {
@@ -375,8 +392,13 @@ func (c *ConfigController) TestEnvironment(name string) (res ProbeResult) {
 		At: time.Now(), OK: facts.OK(), Summary: facts.Summary(),
 		KeycloakVersion: facts.KeycloakVersion, CloneCapable: facts.CloneCapable,
 	}
-	if err := c.eng.Config.RecordEnvironmentProbe(name, stamp); err != nil {
-		c.eng.Log.Error("the probe result could not be recorded", "environment", name, "err", err)
+	// Recorded against the saved definition only. A draft that has never been
+	// saved has nothing to stamp, and one being edited must not stamp the copy
+	// on disk with a result belonging to a definition that differs from it.
+	if _, saved := c.eng.Config.Config().Environment(env.Name); saved {
+		if err := c.eng.Config.RecordEnvironmentProbe(env.Name, stamp); err != nil {
+			c.eng.Log.Error("the probe result could not be recorded", "environment", env.Name, "err", err)
+		}
 	}
 	return ProbeResult{OK: facts.OK(), Facts: facts}
 }
@@ -393,14 +415,20 @@ type StorageProbeResult struct {
 // TestStorage performs the round trip: list, write a probe, verify it, remove
 // it — and cleans up even when a step fails.
 func (c *ConfigController) TestStorage(name string) (res StorageProbeResult) {
-	defer func() { res = lists(res) }()
-	cfg := c.eng.Config.Config()
-	st, ok := cfg.StorageByName(name)
+	st, ok := c.eng.Config.Config().StorageByName(name)
 	if !ok {
-		return StorageProbeResult{Failure: Fail(config.ErrNotFound)}
+		return lists(StorageProbeResult{Failure: Fail(config.ErrNotFound)})
 	}
+	return c.TestStorageDraft(st, "")
+}
 
-	blobs, err := c.eng.storeFor(st)
+// TestStorageDraft tests the definition on screen. See TestEnvironmentDraft for
+// why that is the only order that helps.
+func (c *ConfigController) TestStorageDraft(st config.Storage, secret string) (res StorageProbeResult) {
+	defer func() { res = lists(res) }()
+	creds := config.NewOverlay(c.eng.Creds, st.CredentialRef, secret)
+
+	blobs, err := c.eng.storeForWith(st, creds)
 	if err != nil {
 		return StorageProbeResult{Failure: Fail(err)}
 	}
@@ -418,8 +446,11 @@ func (c *ConfigController) TestStorage(name string) (res StorageProbeResult) {
 	stamp := config.ProbeStamp{
 		At: time.Now(), OK: reach.OK(), Summary: string(reach.Access), Writable: &writable,
 	}
-	if err := c.eng.Config.RecordStorageProbe(name, stamp); err != nil {
-		c.eng.Log.Error("the probe result could not be recorded", "storage", name, "err", err)
+	// Saved definitions only, for the reason given in TestEnvironmentDraft.
+	if _, saved := c.eng.Config.Config().StorageByName(st.Name); saved {
+		if err := c.eng.Config.RecordStorageProbe(st.Name, stamp); err != nil {
+			c.eng.Log.Error("the probe result could not be recorded", "storage", st.Name, "err", err)
+		}
 	}
 
 	return StorageProbeResult{OK: reach.OK(), Reach: reach, Note: storageNote(reach)}

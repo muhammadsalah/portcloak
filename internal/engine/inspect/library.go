@@ -31,31 +31,31 @@ import (
 
 // Entry is one row of the snapshot library.
 type Entry struct {
+	CreatedAt       time.Time `json:"createdAt"`
 	SnapshotID      string    `json:"snapshotId"`
 	Realm           string    `json:"realm"`
-	CreatedAt       time.Time `json:"createdAt"`
 	Storage         string    `json:"storage"`
 	BundleKey       string    `json:"bundleKey"`
-	Bytes           int64     `json:"bytes"`
 	Environment     string    `json:"environment,omitempty"`
 	ExecutionMode   string    `json:"executionMode,omitempty"`
 	KeycloakVersion string    `json:"keycloakVersion,omitempty"`
-	Users           int       `json:"users"`
-	Clients         int       `json:"clients"`
 	Verdict         string    `json:"verdict"`
-	Encrypted       bool      `json:"encrypted"`
 	EncryptionMode  string    `json:"encryptionMode,omitempty"`
-	SecretCount     int       `json:"secretCount"`
-	DependencyCount int       `json:"dependencyCount"`
-	TokenContinuity bool      `json:"tokenContinuity"`
 	// Warning is the unmissable label an unencrypted bundle carries everywhere
 	// it appears.
-	Warning string `json:"warning,omitempty"`
+	Warning         string `json:"warning,omitempty"`
+	MetadataNote    string `json:"metadataNote,omitempty"`
+	Bytes           int64  `json:"bytes"`
+	Users           int    `json:"users"`
+	Clients         int    `json:"clients"`
+	SecretCount     int    `json:"secretCount"`
+	DependencyCount int    `json:"dependencyCount"`
+	Encrypted       bool   `json:"encrypted"`
+	TokenContinuity bool   `json:"tokenContinuity"`
 	// MetadataReadable is false when the sidecar is missing or unreadable. Such
 	// an entry is still listed — it can be opened, which verifies properly —
 	// rather than vanishing from the library.
-	MetadataReadable bool   `json:"metadataReadable"`
-	MetadataNote     string `json:"metadataNote,omitempty"`
+	MetadataReadable bool `json:"metadataReadable"`
 }
 
 // StorageStatus reports whether one backend could be read.

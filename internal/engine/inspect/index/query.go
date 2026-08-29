@@ -17,28 +17,28 @@ import (
 // Every credential field is presence or metadata. There is no field a hash, an
 // OTP seed or passkey material could occupy.
 type UserRow struct {
-	ID                 string   `json:"id"`
-	Username           string   `json:"username"`
-	Email              string   `json:"email,omitempty"`
-	FirstName          string   `json:"firstName,omitempty"`
-	LastName           string   `json:"lastName,omitempty"`
-	Enabled            bool     `json:"enabled"`
-	EmailVerified      bool     `json:"emailVerified"`
-	Origin             string   `json:"origin"`
-	HasPassword        bool     `json:"hasPassword"`
-	PasswordAlgorithm  string   `json:"passwordAlgorithm,omitempty"`
+	ID                string `json:"id"`
+	Username          string `json:"username"`
+	Email             string `json:"email,omitempty"`
+	FirstName         string `json:"firstName,omitempty"`
+	LastName          string `json:"lastName,omitempty"`
+	Origin            string `json:"origin"`
+	PasswordAlgorithm string `json:"passwordAlgorithm,omitempty"`
+	SecondFactor      string `json:"secondFactor"`
+	ServiceAccount    string `json:"serviceAccount,omitempty"`
+	// SourceFile and SourceIndex say where the full record lives, so single-user
+	// detail is re-read from the decrypted bundle rather than projected here.
+	SourceFile         string   `json:"sourceFile"`
+	RequiredActions    []string `json:"requiredActions,omitempty"`
+	Groups             []string `json:"groups,omitempty"`
 	PasswordIterations int      `json:"passwordIterations,omitempty"`
 	OTPCount           int      `json:"otpCount"`
 	WebAuthnCount      int      `json:"webauthnCount"`
+	SourceIndex        int      `json:"sourceIndex"`
+	Enabled            bool     `json:"enabled"`
+	EmailVerified      bool     `json:"emailVerified"`
+	HasPassword        bool     `json:"hasPassword"`
 	RecoveryCodes      bool     `json:"recoveryCodes"`
-	SecondFactor       string   `json:"secondFactor"`
-	RequiredActions    []string `json:"requiredActions,omitempty"`
-	Groups             []string `json:"groups,omitempty"`
-	ServiceAccount     string   `json:"serviceAccount,omitempty"`
-	// SourceFile and SourceIndex say where the full record lives, so single-user
-	// detail is re-read from the decrypted bundle rather than projected here.
-	SourceFile  string `json:"sourceFile"`
-	SourceIndex int    `json:"sourceIndex"`
 }
 
 // UserFilter narrows a listing. Every field intersects with the others, and

@@ -82,10 +82,10 @@ type ArtifactResult struct {
 type VerifyResult struct {
 	RootExpected string           `json:"rootExpected"`
 	RootActual   string           `json:"rootActual"`
-	OK           bool             `json:"ok"`
-	Artifacts    []ArtifactResult `json:"artifacts"`
-	Decryptable  bool             `json:"decryptable"`
 	Message      string           `json:"message"`
+	Artifacts    []ArtifactResult `json:"artifacts"`
+	OK           bool             `json:"ok"`
+	Decryptable  bool             `json:"decryptable"`
 }
 
 // Failures lists the artifacts that did not verify.

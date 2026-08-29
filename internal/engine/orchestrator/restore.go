@@ -60,15 +60,15 @@ type Precondition struct {
 
 // PreconditionReport is the whole preconditions step.
 type PreconditionReport struct {
+	Summary      string         `json:"summary"`
 	Dependencies []Precondition `json:"dependencies"`
 	// Checked is false when dependency detection did not run at capture time.
 	// Shown as "not checked", never as "none": absence of data is not absence
 	// of dependencies.
 	Checked bool `json:"checked"`
 	// IntegrityPassed and Decrypted are shown alongside as already-passed items.
-	IntegrityPassed bool   `json:"integrityPassed"`
-	Decrypted       bool   `json:"decrypted"`
-	Summary         string `json:"summary"`
+	IntegrityPassed bool `json:"integrityPassed"`
+	Decrypted       bool `json:"decrypted"`
 	// Blocks is always false. It is a field rather than an omission so the
 	// frontend cannot accidentally infer a gate that does not exist.
 	Blocks bool `json:"blocks"`
@@ -637,14 +637,14 @@ func (o *Orchestrator) applyImport(ctx context.Context, env config.Environment, 
 
 // Validation is the post-restore reconciliation.
 type Validation struct {
-	Performed bool            `json:"performed"`
-	Summary   string          `json:"summary"`
-	Rows      []ValidationRow `json:"rows"`
+	Summary        string          `json:"summary"`
+	ContinuityNote string          `json:"continuityNote"`
+	Rows           []ValidationRow `json:"rows"`
+	OutOfScope     []string        `json:"outOfScope"`
+	Performed      bool            `json:"performed"`
 	// TokenContinuity is the assertion the whole tool has been building
 	// toward: a token signed before the move still verifies after it.
-	TokenContinuity bool     `json:"tokenContinuity"`
-	ContinuityNote  string   `json:"continuityNote"`
-	OutOfScope      []string `json:"outOfScope"`
+	TokenContinuity bool `json:"tokenContinuity"`
 }
 
 // ValidationRow is one category's expected-versus-actual.

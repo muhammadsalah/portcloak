@@ -175,19 +175,25 @@ func (e *Engine) reliableOptions() reliable.Options {
 // Everything it returns is wrapped, so nothing reaches the orchestrator with an
 // unguarded remote call in it.
 func (e *Engine) executorFor(env config.Environment) (target.Executor, error) {
-	inner, err := e.rawExecutor(env)
+	return e.executorForWith(env, e.Creds)
+}
+
+// executorForWith is executorFor against a credential source other than this
+// machine's keychain, for the same reason storeForWith exists.
+func (e *Engine) executorForWith(env config.Environment, creds config.CredentialStore) (target.Executor, error) {
+	inner, err := e.rawExecutorWith(env, creds)
 	if err != nil {
 		return nil, err
 	}
 	return reliable.WrapExecutor(inner, endpointFor(env), e.reliableOptions()), nil
 }
 
-func (e *Engine) rawExecutor(env config.Environment) (target.Executor, error) {
+func (e *Engine) rawExecutorWith(env config.Environment, creds config.CredentialStore) (target.Executor, error) {
 	switch env.Kind {
 	case config.EnvLocal:
 		return local.New(env), nil
 	case config.EnvSSH:
-		return sshtarget.New(env, e.Creds)
+		return sshtarget.New(env, creds)
 	case config.EnvDocker:
 		return docker.NewExecutor(env)
 	case config.EnvKubernetes:
@@ -204,23 +210,30 @@ func endpointFor(env config.Environment) string {
 
 // storeFor is the storage half of the registry.
 func (e *Engine) storeFor(st config.Storage) (store.BlobStore, error) {
-	inner, err := e.rawStore(st)
+	return e.storeForWith(st, e.Creds)
+}
+
+// storeForWith builds a store against a credential source other than this
+// machine's keychain. The editor's test uses it to reach a definition whose
+// secret has been typed but not saved.
+func (e *Engine) storeForWith(st config.Storage, creds config.CredentialStore) (store.BlobStore, error) {
+	inner, err := e.rawStoreWith(st, creds)
 	if err != nil {
 		return nil, err
 	}
 	return reliable.WrapStore(inner, e.reliableOptions()), nil
 }
 
-func (e *Engine) rawStore(st config.Storage) (store.BlobStore, error) {
+func (e *Engine) rawStoreWith(st config.Storage, creds config.CredentialStore) (store.BlobStore, error) {
 	switch st.Kind {
 	case config.StoreDisk:
 		return disk.New(st.Folder)
 	case config.StoreSSH:
-		return sftpstore.New(st, e.Creds)
+		return sftpstore.New(st, creds)
 	case config.StoreS3:
-		return s3store.New(context.Background(), st, e.Creds)
+		return s3store.New(context.Background(), st, creds)
 	case config.StoreAzure:
-		return azurestore.New(st, e.Creds)
+		return azurestore.New(st, creds)
 	default:
 		return nil, resil.Fatal("reach the storage",
 			fmt.Sprintf("%q is not a storage kind PortCloak knows.", st.Kind), nil)
@@ -232,8 +245,8 @@ func (e *Engine) rawStore(st config.Storage) (store.BlobStore, error) {
 // The probe uses this rather than verifierFor because it reports *why* the
 // Admin API did not answer, and the Verifier interface only says whether it
 // did — which is all a capture needs and not enough for an editor.
-func (e *Engine) adminFor(env config.Environment) (*admin.Client, error) {
-	return admin.New(env, e.Creds)
+func (e *Engine) adminForWith(env config.Environment, creds config.CredentialStore) (*admin.Client, error) {
+	return admin.New(env, creds)
 }
 
 // verifierFor builds the optional Admin API client. A nil client is a supported

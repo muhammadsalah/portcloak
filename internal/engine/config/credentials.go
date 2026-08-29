@@ -192,3 +192,41 @@ func Resolve(cs CredentialStore, handle, owner string) (string, error) {
 	}
 	return v, nil
 }
+
+// Overlay answers one handle from memory and passes everything else through.
+//
+// It is what lets a definition be tested before it is saved. The editor holds a
+// draft and, if the operator typed one, a secret that is not in the keychain
+// yet — and a test that read the keychain would be testing the definition as it
+// was rather than as it is being written. Handing the store an overlay tests
+// what is on screen.
+//
+// An empty value overlays nothing, so editing a definition without retyping its
+// secret still tests against the one already stored.
+type Overlay struct {
+	Handle string
+	Value  string
+	Base   CredentialStore
+}
+
+// NewOverlay wraps base so that handle resolves to value. A blank handle or a
+// blank value returns base unchanged, which keeps the caller free of the test.
+func NewOverlay(base CredentialStore, handle, value string) CredentialStore {
+	if handle == "" || value == "" {
+		return base
+	}
+	return &Overlay{Handle: handle, Value: value, Base: base}
+}
+
+func (o *Overlay) Get(handle string) (string, error) {
+	if handle == o.Handle {
+		return o.Value, nil
+	}
+	return o.Base.Get(handle)
+}
+
+// Set and Delete go to the base store. A test never writes, so neither is
+// reached on the path this exists for; forwarding them keeps the overlay a
+// credential store rather than a partial one that fails in surprising places.
+func (o *Overlay) Set(handle, value string) error { return o.Base.Set(handle, value) }
+func (o *Overlay) Delete(handle string) error     { return o.Base.Delete(handle) }

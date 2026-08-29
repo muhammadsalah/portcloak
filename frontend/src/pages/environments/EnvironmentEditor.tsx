@@ -163,7 +163,7 @@ export function EnvironmentEditor({
               disabled={!originalName || probing}
               onClick={async () => {
                 setProbing(true);
-                setProbe(await ConfigAPI.testEnvironment(originalName));
+                setProbe(await ConfigAPI.testEnvironmentDraft(draft, secret));
                 setProbing(false);
               }}
             >

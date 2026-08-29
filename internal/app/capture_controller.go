@@ -104,19 +104,19 @@ func (c *CaptureController) Realms(environment string) (res RealmsResult) {
 // CaptureOptions is what the wizard collected.
 type CaptureOptions struct {
 	Environment        string   `json:"environment"`
-	Realms             []string `json:"realms"`
 	Storage            string   `json:"storage"`
 	UsersMode          string   `json:"usersMode"`
+	EncryptionMode     string   `json:"encryptionMode"`
+	Passphrase         string   `json:"passphrase"`
+	Realms             []string `json:"realms"`
+	Recipients         []string `json:"recipients"`
 	UsersPerFile       int      `json:"usersPerFile"`
 	Verify             bool     `json:"verify"`
 	DetectDependencies bool     `json:"detectDependencies"`
 	// NoTransactionTimeout lets the export's transactions run without a time
 	// limit, for a realm too large or too slow to read inside the default one.
-	NoTransactionTimeout bool     `json:"noTransactionTimeout"`
-	Encrypt              bool     `json:"encrypt"`
-	EncryptionMode       string   `json:"encryptionMode"`
-	Passphrase           string   `json:"passphrase"`
-	Recipients           []string `json:"recipients"`
+	NoTransactionTimeout bool `json:"noTransactionTimeout"`
+	Encrypt              bool `json:"encrypt"`
 	// AcknowledgedUnencrypted records that the operator saw and confirmed the
 	// decline notice. It is required rather than assumed, so declining is one
 	// deliberate action.

@@ -13,6 +13,19 @@ record; unprefixed `v` tags mark shipped binaries.
 
 ## [Unreleased]
 
+### Changed
+- The editors' *Test* buttons test what is on screen rather than what is on disk. They sent a name,
+  so the probe read the saved copy — which meant a definition had to be saved before it could be
+  tested, and testing it then answered a question nobody was asking: whether the thing already
+  committed works. A definition being entered for the first time had nothing saved to read at all.
+  The test now carries the draft and the secret typed beside it, the secret overlaid on the keychain
+  for the length of the probe; left blank it resolves from the keychain as before, so changing a
+  host without retyping a password still tests. Nothing is written and nothing is gated: a
+  definition that fails its test can still be saved, because a target that is down this minute is
+  not a definition that is wrong, and a probe result is recorded only against a definition that is
+  actually saved under that name. The capture wizard still tests by name, which is what it means —
+  there the operator has picked an environment that exists.
+
 ### Fixed
 - The seeded realms' LDAP federation resolved nobody. A provider created through the admin API gets
   its default mappers from a factory hook; the same provider arriving inside a realm import is

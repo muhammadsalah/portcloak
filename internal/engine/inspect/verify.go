@@ -11,16 +11,16 @@ import (
 
 // VerifyReport is the result of checking a snapshot without restoring it.
 type VerifyReport struct {
-	SnapshotID  string             `json:"snapshotId"`
-	Realm       string             `json:"realm"`
-	OK          bool               `json:"ok"`
-	Message     string             `json:"message"`
-	Decryptable bool               `json:"decryptable"`
-	Root        string             `json:"root"`
-	Artifacts   []VerifiedArtifact `json:"artifacts"`
+	SnapshotID string `json:"snapshotId"`
+	Realm      string `json:"realm"`
+	Message    string `json:"message"`
+	Root       string `json:"root"`
 	// Note states plainly that nothing was contacted, because "is my backup
 	// good" should be a routine, safe check rather than a restore drill.
-	Note string `json:"note"`
+	Note        string             `json:"note"`
+	Artifacts   []VerifiedArtifact `json:"artifacts"`
+	OK          bool               `json:"ok"`
+	Decryptable bool               `json:"decryptable"`
 }
 
 // VerifiedArtifact is one artifact's result.

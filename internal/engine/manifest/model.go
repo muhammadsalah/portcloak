@@ -157,31 +157,31 @@ type Key struct {
 	Type      string `json:"type,omitempty"`
 	Algorithm string `json:"algorithm,omitempty"`
 	Use       string `json:"use,omitempty"`
-	Active    bool   `json:"active"`
-	Priority  int    `json:"priority,omitempty"`
-	// PrivateCarried is the token-continuity signal: tokens signed before the
-	// move stay verifiable only if the private material travelled.
-	PrivateCarried bool `json:"privateCarried"`
 	// KeystoreFile is set for java-keystore providers, whose material may live
 	// in a file on disk rather than in the component.
 	KeystoreFile string `json:"keystoreFile,omitempty"`
+	Priority     int    `json:"priority,omitempty"`
+	Active       bool   `json:"active"`
+	// PrivateCarried is the token-continuity signal: tokens signed before the
+	// move stay verifiable only if the private material travelled.
+	PrivateCarried bool `json:"privateCarried"`
 }
 
 // ClientSummary is one client, as the inspector's table shows it.
 type ClientSummary struct {
 	ClientID       string   `json:"clientId"`
 	Name           string   `json:"name,omitempty"`
-	Enabled        bool     `json:"enabled"`
 	Protocol       string   `json:"protocol"`
+	RedirectURIs   []string `json:"redirectUris,omitempty"`
+	DefaultScopes  []string `json:"defaultScopes,omitempty"`
+	OptionalScopes []string `json:"optionalScopes,omitempty"`
+	Mappers        int      `json:"mappers"`
+	Enabled        bool     `json:"enabled"`
 	Confidential   bool     `json:"confidential"`
 	SecretPresent  bool     `json:"secretPresent"`
 	SecretMasked   bool     `json:"secretMasked"`
-	RedirectURIs   []string `json:"redirectUris,omitempty"`
-	Mappers        int      `json:"mappers"`
 	Authorization  bool     `json:"authorization"`
 	ServiceAccount bool     `json:"serviceAccount"`
-	DefaultScopes  []string `json:"defaultScopes,omitempty"`
-	OptionalScopes []string `json:"optionalScopes,omitempty"`
 }
 
 // ClientScopeSummary is one realm-level client scope.
@@ -219,25 +219,25 @@ type IdentityProviderSummary struct {
 type FederationSummary struct {
 	Name          string `json:"name"`
 	Provider      string `json:"provider"`
-	Enabled       bool   `json:"enabled"`
 	ConnectionURL string `json:"connectionUrl,omitempty"`
 	UsersDN       string `json:"usersDn,omitempty"`
 	BindDN        string `json:"bindDn,omitempty"`
+	SyncPeriod    string `json:"syncPeriod,omitempty"`
+	Mappers       int    `json:"mappers"`
+	Enabled       bool   `json:"enabled"`
 	// BindCarried says whether the bind credential travelled — without it, the
 	// federation reconnects at the destination only if it is re-entered there.
-	BindCarried bool   `json:"bindCarried"`
-	Mappers     int    `json:"mappers"`
-	SyncPeriod  string `json:"syncPeriod,omitempty"`
+	BindCarried bool `json:"bindCarried"`
 }
 
 // FlowSummary is one authentication flow.
 type FlowSummary struct {
 	Alias        string `json:"alias"`
 	Description  string `json:"description,omitempty"`
+	BoundAs      string `json:"boundAs,omitempty"`
+	Executions   int    `json:"executions"`
 	TopLevel     bool   `json:"topLevel"`
 	BuiltIn      bool   `json:"builtIn"`
-	Executions   int    `json:"executions"`
-	BoundAs      string `json:"boundAs,omitempty"`
 	ConfigSecret bool   `json:"configSecret"`
 }
 
@@ -298,22 +298,22 @@ type CredentialCounts struct {
 
 // Settings is the realm-level configuration worth showing.
 type Settings struct {
-	Enabled             bool              `json:"enabled"`
+	Themes              map[string]string `json:"themes,omitempty"`
 	DisplayName         string            `json:"displayName,omitempty"`
 	SSLRequired         string            `json:"sslRequired,omitempty"`
 	PasswordPolicy      string            `json:"passwordPolicy,omitempty"`
-	BruteForce          bool              `json:"bruteForceProtected"`
 	OTPPolicy           string            `json:"otpPolicy,omitempty"`
 	WebAuthnPolicy      string            `json:"webAuthnPolicy,omitempty"`
+	DefaultLocale       string            `json:"defaultLocale,omitempty"`
+	Locales             []string          `json:"supportedLocales,omitempty"`
+	DefaultGroups       []string          `json:"defaultGroups,omitempty"`
 	AccessTokenLifespan int               `json:"accessTokenLifespan,omitempty"`
 	SSOSessionIdle      int               `json:"ssoSessionIdleTimeout,omitempty"`
 	SSOSessionMax       int               `json:"ssoSessionMaxLifespan,omitempty"`
-	Themes              map[string]string `json:"themes,omitempty"`
-	Locales             []string          `json:"supportedLocales,omitempty"`
-	DefaultLocale       string            `json:"defaultLocale,omitempty"`
+	Enabled             bool              `json:"enabled"`
+	BruteForce          bool              `json:"bruteForceProtected"`
 	SMTPConfigured      bool              `json:"smtpConfigured"`
 	EventsEnabled       bool              `json:"eventsEnabled"`
-	DefaultGroups       []string          `json:"defaultGroups,omitempty"`
 }
 
 // Source is where and how a snapshot was taken.

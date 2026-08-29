@@ -120,11 +120,11 @@ func StreamUsersFile(ctx context.Context, path string, fn func(User) error) (int
 // presence and metadata, never a value. There is nowhere in this struct to put
 // a hash, an OTP seed or passkey material, and that is the point.
 type CredentialSummary struct {
-	HasPassword        bool   `json:"hasPassword"`
 	PasswordAlgorithm  string `json:"passwordAlgorithm,omitempty"`
 	PasswordIterations int    `json:"passwordIterations,omitempty"`
 	OTPCount           int    `json:"otpCount"`
 	WebAuthnCount      int    `json:"webauthnCount"`
+	HasPassword        bool   `json:"hasPassword"`
 	RecoveryCodes      bool   `json:"recoveryCodes"`
 }
 

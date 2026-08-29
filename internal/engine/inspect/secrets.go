@@ -22,11 +22,11 @@ type LedgerEntry struct {
 	Location  string `json:"location"`
 	Kind      string `json:"kind"`
 	KindLabel string `json:"kindLabel"`
-	Carried   bool   `json:"carried"`
-	Masked    bool   `json:"masked"`
 	Status    string `json:"status"`
 	Note      string `json:"note,omitempty"`
 	Algorithm string `json:"algorithm,omitempty"`
+	Carried   bool   `json:"carried"`
+	Masked    bool   `json:"masked"`
 	// Revealable is false for an entry with nothing behind it — a secret the
 	// source masked has no value to show, and offering Reveal on it would
 	// promise something that cannot be delivered.

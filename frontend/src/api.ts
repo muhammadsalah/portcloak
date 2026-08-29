@@ -228,6 +228,13 @@ export const ConfigAPI = {
     call<Failure | null>("ConfigController", "SavePreferences", p),
   testEnvironment: (name: string) => call<ProbeResult>("ConfigController", "TestEnvironment", name),
   testStorage: (name: string) => call<StorageProbeResult>("ConfigController", "TestStorage", name),
+  // The draft forms test what is on screen, secret included, before any of it
+  // is saved. The two above test a definition already on disk, which is what
+  // the capture wizard means when it tests the environment you picked.
+  testEnvironmentDraft: (env: Environment, secret: string) =>
+    call<ProbeResult>("ConfigController", "TestEnvironmentDraft", env, secret),
+  testStorageDraft: (st: Storage, secret: string) =>
+    call<StorageProbeResult>("ConfigController", "TestStorageDraft", st, secret),
   createStorageFolder: (name: string) =>
     call<Failure | null>("ConfigController", "CreateStorageFolder", name),
 };

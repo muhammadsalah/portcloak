@@ -83,7 +83,7 @@ export function StorageEditor({
 
   const test = async () => {
     setProbing(true);
-    setProbe(await ConfigAPI.testStorage(originalName));
+    setProbe(await ConfigAPI.testStorageDraft(draft, secret));
     setProbing(false);
   };
 
@@ -181,7 +181,7 @@ export function StorageEditor({
               draft={draft}
               onCreateFolder={async () => {
                 await ConfigAPI.createStorageFolder(originalName);
-                setProbe(await ConfigAPI.testStorage(originalName));
+                setProbe(await ConfigAPI.testStorageDraft(draft, secret));
               }}
             />
           ) : null}

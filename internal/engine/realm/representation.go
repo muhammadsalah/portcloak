@@ -22,96 +22,79 @@ import (
 // writes a realm file: the authoritative artifact stays exactly as kc.sh
 // produced it.
 type Representation struct {
-	Realm       string `json:"realm"`
-	ID          string `json:"id"`
-	Enabled     bool   `json:"enabled"`
-	DisplayName string `json:"displayName"`
-	SSLRequired string `json:"sslRequired"`
-
-	// Token and session lifespans. Token continuity relies on these together
-	// with the carried signing keys.
-	AccessTokenLifespan                int `json:"accessTokenLifespan"`
-	AccessTokenLifespanForImplicitFlow int `json:"accessTokenLifespanForImplicitFlow"`
-	SSOSessionIdleTimeout              int `json:"ssoSessionIdleTimeout"`
-	SSOSessionMaxLifespan              int `json:"ssoSessionMaxLifespan"`
-	OfflineSessionIdleTimeout          int `json:"offlineSessionIdleTimeout"`
-	OfflineSessionMaxLifespan          int `json:"offlineSessionMaxLifespan"`
-	RefreshTokenMaxReuse               int `json:"refreshTokenMaxReuse"`
-
+	Roles       Roles             `json:"roles"`
+	Attributes  map[string]string `json:"attributes"`
+	DefaultRole *Role             `json:"defaultRole"`
+	SMTPServer  map[string]string `json:"smtpServer"`
+	// Components hold key providers, LDAP federation and their mappers. They
+	// are the reason private key material travels in an ordinary export.
+	Components  map[string][]Component `json:"components"`
+	Realm       string                 `json:"realm"`
+	ID          string                 `json:"id"`
+	DisplayName string                 `json:"displayName"`
+	SSLRequired string                 `json:"sslRequired"`
 	// Password policy has to match at the destination, or imported hashes stop
 	// verifying.
 	PasswordPolicy string `json:"passwordPolicy"`
-
-	BruteForceProtected   bool `json:"bruteForceProtected"`
-	PermanentLockout      bool `json:"permanentLockout"`
-	MaxFailureWaitSeconds int  `json:"maxFailureWaitSeconds"`
-	FailureFactor         int  `json:"failureFactor"`
-
 	// OTP policy has to match, or existing OTP secrets stop verifying.
-	OTPPolicyType            string `json:"otpPolicyType"`
-	OTPPolicyAlgorithm       string `json:"otpPolicyAlgorithm"`
-	OTPPolicyDigits          int    `json:"otpPolicyDigits"`
-	OTPPolicyPeriod          int    `json:"otpPolicyPeriod"`
-	OTPPolicyLookAheadWindow int    `json:"otpPolicyLookAheadWindow"`
-
+	OTPPolicyType      string `json:"otpPolicyType"`
+	OTPPolicyAlgorithm string `json:"otpPolicyAlgorithm"`
 	// WebAuthn policy has to match, or passkeys stop working.
-	WebAuthnPolicyRpEntityName             string   `json:"webAuthnPolicyRpEntityName"`
-	WebAuthnPolicyRpID                     string   `json:"webAuthnPolicyRpId"`
-	WebAuthnPolicySignatureAlgorithms      []string `json:"webAuthnPolicySignatureAlgorithms"`
-	WebAuthnPolicyPasswordlessRpEntityName string   `json:"webAuthnPolicyPasswordlessRpEntityName"`
-	WebAuthnPolicyPasswordlessRpID         string   `json:"webAuthnPolicyPasswordlessRpId"`
-
-	Attributes map[string]string `json:"attributes"`
-
-	InternationalizationEnabled bool     `json:"internationalizationEnabled"`
-	SupportedLocales            []string `json:"supportedLocales"`
-	DefaultLocale               string   `json:"defaultLocale"`
-
+	WebAuthnPolicyRpEntityName             string `json:"webAuthnPolicyRpEntityName"`
+	WebAuthnPolicyRpID                     string `json:"webAuthnPolicyRpId"`
+	WebAuthnPolicyPasswordlessRpEntityName string `json:"webAuthnPolicyPasswordlessRpEntityName"`
+	WebAuthnPolicyPasswordlessRpID         string `json:"webAuthnPolicyPasswordlessRpId"`
+	DefaultLocale                          string `json:"defaultLocale"`
 	// Theme selections travel in the realm JSON; the theme files do not, which
 	// is why they are detected and reported instead.
-	LoginTheme   string `json:"loginTheme"`
-	AccountTheme string `json:"accountTheme"`
-	AdminTheme   string `json:"adminTheme"`
-	EmailTheme   string `json:"emailTheme"`
-
-	DefaultRole   *Role    `json:"defaultRole"`
-	DefaultRoles  []string `json:"defaultRoles"`
-	DefaultGroups []string `json:"defaultGroups"`
-
-	EventsEnabled      bool     `json:"eventsEnabled"`
-	EventsExpiration   int64    `json:"eventsExpiration"`
-	EventsListeners    []string `json:"eventsListeners"`
-	AdminEventsEnabled bool     `json:"adminEventsEnabled"`
-	AdminEventsDetails bool     `json:"adminEventsDetailsEnabled"`
-
-	SMTPServer map[string]string `json:"smtpServer"`
-
-	// Components hold key providers, LDAP federation and their mappers. They
-	// are the reason private key material travels in an ordinary export.
-	Components map[string][]Component `json:"components"`
-
-	Clients      []Client      `json:"clients"`
-	ClientScopes []ClientScope `json:"clientScopes"`
-	Roles        Roles         `json:"roles"`
-	Groups       []Group       `json:"groups"`
-
-	IdentityProviders       []IdentityProvider       `json:"identityProviders"`
-	IdentityProviderMappers []IdentityProviderMapper `json:"identityProviderMappers"`
-
-	AuthenticationFlows []AuthenticationFlow  `json:"authenticationFlows"`
-	AuthenticatorConfig []AuthenticatorConfig `json:"authenticatorConfig"`
-	RequiredActions     []RequiredAction      `json:"requiredActions"`
-
-	BrowserFlow              string `json:"browserFlow"`
-	DirectGrantFlow          string `json:"directGrantFlow"`
-	RegistrationFlow         string `json:"registrationFlow"`
-	ResetCredentialsFlow     string `json:"resetCredentialsFlow"`
-	ClientAuthenticationFlow string `json:"clientAuthenticationFlow"`
-	DockerAuthenticationFlow string `json:"dockerAuthenticationFlow"`
-
+	LoginTheme                        string                   `json:"loginTheme"`
+	AccountTheme                      string                   `json:"accountTheme"`
+	AdminTheme                        string                   `json:"adminTheme"`
+	EmailTheme                        string                   `json:"emailTheme"`
+	BrowserFlow                       string                   `json:"browserFlow"`
+	DirectGrantFlow                   string                   `json:"directGrantFlow"`
+	RegistrationFlow                  string                   `json:"registrationFlow"`
+	ResetCredentialsFlow              string                   `json:"resetCredentialsFlow"`
+	ClientAuthenticationFlow          string                   `json:"clientAuthenticationFlow"`
+	DockerAuthenticationFlow          string                   `json:"dockerAuthenticationFlow"`
+	WebAuthnPolicySignatureAlgorithms []string                 `json:"webAuthnPolicySignatureAlgorithms"`
+	SupportedLocales                  []string                 `json:"supportedLocales"`
+	DefaultRoles                      []string                 `json:"defaultRoles"`
+	DefaultGroups                     []string                 `json:"defaultGroups"`
+	EventsListeners                   []string                 `json:"eventsListeners"`
+	Clients                           []Client                 `json:"clients"`
+	ClientScopes                      []ClientScope            `json:"clientScopes"`
+	Groups                            []Group                  `json:"groups"`
+	IdentityProviders                 []IdentityProvider       `json:"identityProviders"`
+	IdentityProviderMappers           []IdentityProviderMapper `json:"identityProviderMappers"`
+	AuthenticationFlows               []AuthenticationFlow     `json:"authenticationFlows"`
+	AuthenticatorConfig               []AuthenticatorConfig    `json:"authenticatorConfig"`
+	RequiredActions                   []RequiredAction         `json:"requiredActions"`
 	// Users appear here only in the realm_file export mode. In the default
 	// different_files mode they live in sibling files and are streamed.
 	Users []User `json:"users"`
+	// Token and session lifespans. Token continuity relies on these together
+	// with the carried signing keys.
+	AccessTokenLifespan                int   `json:"accessTokenLifespan"`
+	AccessTokenLifespanForImplicitFlow int   `json:"accessTokenLifespanForImplicitFlow"`
+	SSOSessionIdleTimeout              int   `json:"ssoSessionIdleTimeout"`
+	SSOSessionMaxLifespan              int   `json:"ssoSessionMaxLifespan"`
+	OfflineSessionIdleTimeout          int   `json:"offlineSessionIdleTimeout"`
+	OfflineSessionMaxLifespan          int   `json:"offlineSessionMaxLifespan"`
+	RefreshTokenMaxReuse               int   `json:"refreshTokenMaxReuse"`
+	MaxFailureWaitSeconds              int   `json:"maxFailureWaitSeconds"`
+	FailureFactor                      int   `json:"failureFactor"`
+	OTPPolicyDigits                    int   `json:"otpPolicyDigits"`
+	OTPPolicyPeriod                    int   `json:"otpPolicyPeriod"`
+	OTPPolicyLookAheadWindow           int   `json:"otpPolicyLookAheadWindow"`
+	EventsExpiration                   int64 `json:"eventsExpiration"`
+	Enabled                            bool  `json:"enabled"`
+	BruteForceProtected                bool  `json:"bruteForceProtected"`
+	PermanentLockout                   bool  `json:"permanentLockout"`
+	InternationalizationEnabled        bool  `json:"internationalizationEnabled"`
+	EventsEnabled                      bool  `json:"eventsEnabled"`
+	AdminEventsEnabled                 bool  `json:"adminEventsEnabled"`
+	AdminEventsDetails                 bool  `json:"adminEventsDetailsEnabled"`
 }
 
 // Component is Keycloak's plug-in config record. Key providers, LDAP
@@ -139,29 +122,29 @@ func (c Component) HasConfig(key string) bool { return c.ConfigValue(key) != "" 
 
 // Client is a client definition.
 type Client struct {
+	Attributes                   map[string]string `json:"attributes"`
 	ID                           string            `json:"id"`
 	ClientID                     string            `json:"clientId"`
 	Name                         string            `json:"name"`
 	Description                  string            `json:"description"`
-	Enabled                      bool              `json:"enabled"`
 	Protocol                     string            `json:"protocol"`
-	PublicClient                 bool              `json:"publicClient"`
-	BearerOnly                   bool              `json:"bearerOnly"`
 	Secret                       string            `json:"secret"`
 	ClientAuthenticatorType      string            `json:"clientAuthenticatorType"`
-	RedirectURIs                 []string          `json:"redirectUris"`
-	WebOrigins                   []string          `json:"webOrigins"`
 	BaseURL                      string            `json:"baseUrl"`
 	AdminURL                     string            `json:"adminUrl"`
 	RootURL                      string            `json:"rootUrl"`
-	ServiceAccountsEnabled       bool              `json:"serviceAccountsEnabled"`
-	AuthorizationServicesEnabled bool              `json:"authorizationServicesEnabled"`
+	RegistrationAccessToken      string            `json:"registrationAccessToken"`
+	RedirectURIs                 []string          `json:"redirectUris"`
+	WebOrigins                   []string          `json:"webOrigins"`
 	AuthorizationSettings        json.RawMessage   `json:"authorizationSettings"`
 	ProtocolMappers              []ProtocolMapper  `json:"protocolMappers"`
 	DefaultClientScopes          []string          `json:"defaultClientScopes"`
 	OptionalClientScopes         []string          `json:"optionalClientScopes"`
-	Attributes                   map[string]string `json:"attributes"`
-	RegistrationAccessToken      string            `json:"registrationAccessToken"`
+	Enabled                      bool              `json:"enabled"`
+	PublicClient                 bool              `json:"publicClient"`
+	BearerOnly                   bool              `json:"bearerOnly"`
+	ServiceAccountsEnabled       bool              `json:"serviceAccountsEnabled"`
+	AuthorizationServicesEnabled bool              `json:"authorizationServicesEnabled"`
 }
 
 // Confidential reports whether this client authenticates with a secret.
@@ -256,10 +239,10 @@ type AuthenticationFlow struct {
 type FlowExecution struct {
 	Authenticator       string `json:"authenticator"`
 	AuthenticatorConfig string `json:"authenticatorConfig"`
-	AuthenticatorFlow   bool   `json:"authenticatorFlow"`
 	FlowAlias           string `json:"flowAlias"`
 	Requirement         string `json:"requirement"`
 	Priority            int    `json:"priority"`
+	AuthenticatorFlow   bool   `json:"authenticatorFlow"`
 	UserSetupAllowed    bool   `json:"userSetupAllowed"`
 }
 
