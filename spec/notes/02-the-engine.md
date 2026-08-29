@@ -428,7 +428,7 @@ space. `TestClampUsersPerFile_HoldsTheRange` covers the bounds,
 `TestCapture_UsersPerFileIsTheOperatorsChoice` and
 `TestCapture_UsersPerFileIsClampedToTheSupportedRange`
 (`internal/engine/orchestrator/capture_test.go`) cover what reaches the command line, and
-`clampUsersPerFile` in `frontend/src/pages/capture/draft.test.ts` covers the wizard's copy of the
+`clampUsersPerFile` in `frontend/src/pages/snapshots/capture/draft.test.ts` covers the wizard's
 same range. `TestBuildExport_LiftsTheTransactionLimitOnlyWhenAsked` and
 `TestCapture_TransactionLimitIsLiftedOnlyWhenAsked`, with
 `TestBuildImport_LiftsTheTransactionLimitOnlyWhenAsked` and

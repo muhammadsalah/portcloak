@@ -9,7 +9,7 @@
  */
 import styled from "styled-components";
 
-import { Mark, onDark } from "../components/Logo";
+import { Mark, onDark } from "@/components/Logo";
 
 export function Masthead() {
   return (

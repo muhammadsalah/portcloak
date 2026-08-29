@@ -10,7 +10,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { kindLabel as captureKindLabel } from "../capture/draft";
+import { kindLabel as captureKindLabel } from "@/pages/snapshots/capture/draft";
 import { kindLabel, kinds } from "./kinds";
 
 describe("the kinds", () => {

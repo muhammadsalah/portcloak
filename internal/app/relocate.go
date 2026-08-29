@@ -79,7 +79,7 @@ func (e *Engine) UseDefaultLocation() error {
 func (e *Engine) idleForRelocation() error {
 	if open := e.OpenSessionIDs(); len(open) > 0 {
 		return resil.Fatal("move the PortCloak folder",
-			fmt.Sprintf("%d snapshot%s open. Close it from the inspector first — an open snapshot is being read out of the folder you are asking to move.",
+			fmt.Sprintf("%d snapshot%s open. Close it from the inspector first. An open snapshot is being read out of the folder you are asking to move.",
 				len(open), isAre(len(open))),
 			errors.New("a snapshot is open"))
 	}

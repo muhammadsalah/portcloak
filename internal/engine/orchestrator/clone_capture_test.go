@@ -193,7 +193,7 @@ func TestCapture_MultiRealmSharesOneClone(t *testing.T) {
 		}
 	}
 	if len(p.Created) != 1 {
-		t.Errorf("%d clones were created for two realms — a clone is a parked execution context, not a per-realm resource", len(p.Created))
+		t.Errorf("%d clones were created for two realms. A clone is a parked execution context, not a per-realm resource", len(p.Created))
 	}
 	if len(p.Destroyed) != 1 {
 		t.Errorf("destroy ran %d times", len(p.Destroyed))

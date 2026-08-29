@@ -91,9 +91,15 @@ describe("when", () => {
     expect(when(iso)).toContain(zoneOf(iso));
   });
 
-  it("keeps a 24-hour clock, because it sits beside durations that are", () => {
-    expect(when(iso)).toContain("09:07");
-    expect(when(iso)).not.toMatch(/AM|PM/i);
+  it("names AM or PM, which is what the desktop around it writes", () => {
+    expect(when(iso)).toMatch(/\bAM\b/);
+    expect(when(iso)).not.toMatch(/\b21:07\b/);
+  });
+
+  // A meridiem does not excuse a ragged column: these are read down a table.
+  it("keeps the hour padded so a column of them lines up", () => {
+    expect(when("2026-03-04T09:07:05")).toContain("09:07");
+    expect(when("2026-03-04T15:07:05")).toContain("03:07");
   });
 
   it("renders an em dash for nothing and for nonsense", () => {

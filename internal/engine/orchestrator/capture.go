@@ -447,7 +447,7 @@ func (o *Orchestrator) sealAndStore(ctx context.Context, cc captureContext, j *c
 	}
 	j.CompletePhase(string(obs.PhaseUpload))
 
-	o.complete(j, rep, fmt.Sprintf("Captured %s — %d users, %d clients. %s",
+	o.complete(j, rep, fmt.Sprintf("Captured %s: %d users, %d clients. %s",
 		j.Realm, m.Counts.Users, m.Counts.Clients, m.Completeness.Verdict))
 
 	_ = o.opts.Audit.Record(obs.AuditEntry{
@@ -532,7 +532,7 @@ func (o *Orchestrator) export(ctx context.Context, cc captureContext, j *config.
 				// that as success would ship a snapshot missing its realm.
 				return kc.ExportLayout{}, resil.Fatal("export the realm",
 					fmt.Sprintf("kc.sh reported success but produced no realm file for %q.", j.Realm), nil).
-					WithAdvice("Check that the realm name is exactly right — the export names its output after it.")
+					WithAdvice("Check that the realm name is exactly right. The export names its output after it.")
 			}
 			rep.CompletePhase(obs.PhaseExport, fmt.Sprintf("%d file(s) written.", 1+len(layout.UserFiles)+len(layout.Other)))
 			return layout, nil
@@ -545,7 +545,7 @@ func (o *Orchestrator) export(ctx context.Context, cc captureContext, j *config.
 			// would come back three times and then be reported as a port race
 			// that PortCloak had never had any say in.
 			retryable = false
-			advice = "This Keycloak's export command accepts no port options, so PortCloak cannot move the export off the port that is taken. Stop whatever is holding it, or capture from an environment where the export runs in its own network namespace — Docker and Kubernetes do."
+			advice = "This Keycloak's export command accepts no port options, so PortCloak cannot move the export off the port that is taken. Stop whatever is holding it, or capture from an environment where the export runs in its own network namespace. Docker and Kubernetes do."
 		}
 		if !retryable || !outcome.BindConflict || attempt == maxExportAttempts {
 			return kc.ExportLayout{}, resil.Fatal("export the realm", message, nil).WithAdvice(advice)
@@ -852,7 +852,7 @@ func (o *Orchestrator) seal(ctx context.Context, cc captureContext, j *config.Jo
 
 func encryptionSuffix(c crypto.Config) string {
 	if !c.Enabled {
-		return " — unencrypted"
+		return " · unencrypted"
 	}
 	return " and encrypted"
 }

@@ -103,7 +103,7 @@ func TestResume_ConvergesOnTheSameObject(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !bytes.Equal(got, want) {
-		t.Fatalf("the resumed object is %d bytes and the sealed bundle %d — a resume must converge, never concatenate or truncate",
+		t.Fatalf("the resumed object is %d bytes and the sealed bundle %d. A resume must converge, never concatenate or truncate",
 			len(got), len(want))
 	}
 

@@ -48,6 +48,6 @@ func (a *AuditController) Audit(action string, sinceDays int) (res AuditView) {
 	}
 	return AuditView{
 		Entries: entries, Path: a.eng.Audit.Path(),
-		Note: "No user is recorded, because there is none — PortCloak is a single-user local tool. Each entry says what happened and when.",
+		Note: "No user is recorded, because there is none. PortCloak is a single-user local tool. Each entry says what happened and when.",
 	}
 }

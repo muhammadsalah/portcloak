@@ -92,7 +92,7 @@ func (p *Platform) Probe(ctx context.Context) (target.TargetFacts, error) {
 	}
 
 	if _, err := p.cli.Ping(ctx, client.PingOptions{}); err != nil {
-		facts.Fail("Docker endpoint", fmt.Sprintf("%s — %v", endpointLabel(p.env), err),
+		facts.Fail("Docker endpoint", fmt.Sprintf("%s: %v", endpointLabel(p.env), err),
 			"Check that Docker is running and that this account can use its socket.")
 		return facts, nil
 	}
@@ -101,7 +101,7 @@ func (p *Platform) Probe(ctx context.Context) (target.TargetFacts, error) {
 
 	inspected, err := p.cli.ContainerInspect(ctx, p.env.Container, client.ContainerInspectOptions{})
 	if err != nil {
-		facts.Fail("Serving container", fmt.Sprintf("%s — not found", p.env.Container),
+		facts.Fail("Serving container", fmt.Sprintf("%s: not found", p.env.Container),
 			"Name the container or service running Keycloak. A container that is not running can still be selected, but a capture needs it to exist.")
 		return facts, nil
 	}

@@ -19,7 +19,7 @@ import {
   type ReactNode,
 } from "react";
 
-import { ConfigAPI, JobsAPI } from "../api";
+import { ConfigAPI, JobsAPI } from "@/api";
 import { useProgress } from "./ProgressContext";
 import type { Route } from "./routes";
 
@@ -48,7 +48,7 @@ const ShellContext = createContext<Shell | null>(null);
 
 export function ShellProvider({ children }: { children: ReactNode }) {
   const [{ route, nonce }, setLocation] = useState<{ route: Route; nonce: number }>({
-    route: { name: "library" },
+    route: { name: "snapshots" },
     nonce: 0,
   });
   const [environments, setEnvironments] = useState(0);

@@ -6,9 +6,10 @@
  * switches that change what may be written here, and the reachability probe.
  */
 import { useState } from "react";
+import { Icon } from "@/components/Icon";
 
-import { ConfigAPI, type ConfigSnapshot, type Storage, type StorageProbeResult } from "../../api";
-import { useNavigate } from "../../app/ShellContext";
+import { ConfigAPI, type ConfigSnapshot, type Storage, type StorageProbeResult } from "@/api";
+import { useNavigate } from "@/app/ShellContext";
 import {
   Badge,
   Button,
@@ -37,8 +38,8 @@ import {
   Tabs,
   Toggle,
   useModal,
-} from "../../design-system";
-import { bytes } from "../../utils/format";
+} from "@/design-system";
+import { bytes } from "@/utils/format";
 import { credentialLabel, kindLabel, kinds } from "./kinds";
 
 export function StorageEditor({
@@ -154,7 +155,7 @@ export function StorageEditor({
           on={Boolean(draft.encryptionRequired)}
           onChange={(value) => set("encryptionRequired", value)}
           label="Encryption required"
-          hint="Removes the opt-out for anything written here. A snapshot cannot be written to this storage unencrypted, and the engine enforces it — a hand-edited config cannot bypass it."
+          hint="Removes the opt-out for anything written here. A snapshot cannot be written to this storage unencrypted, and the engine enforces it: a hand-edited config cannot bypass it."
         />
       </CardBody>
 
@@ -162,15 +163,16 @@ export function StorageEditor({
       <CardBody $divided>
         <Stack $gap={12}>
           <Row>
-            <Button disabled={!originalName || probing} onClick={() => void test()}>
+            {/* Not gated on the definition existing yet. The test reads what is
+                on screen, so a storage being entered for the first time is
+                exactly the one worth testing — and the button that said to save
+                it first was asking for the commitment the test is meant to
+                inform. */}
+            <Button disabled={probing} onClick={() => void test()}>
+              <Icon name="activity" />
               {probing ? "Testing…" : "Test storage"}
             </Button>
           </Row>
-          {!originalName ? (
-            <Muted>
-              <Small>Save the storage first, then test it.</Small>
-            </Muted>
-          ) : null}
           {probing ? (
             <Spinner>Listing, writing a probe object, verifying, removing it…</Spinner>
           ) : null}
@@ -210,8 +212,12 @@ export function StorageEditor({
           ) : null}
         </Row>
         <Row>
-          <Button onClick={() => navigate({ name: "storage" })}>Cancel</Button>
+          <Button onClick={() => navigate({ name: "storage" })}>
+            <Icon name="close" />
+            Cancel
+          </Button>
           <Button $variant="primary" disabled={saving || !draft.name} onClick={() => void save()}>
+            <Icon name="check" />
             {saving ? "Saving…" : "Save"}
           </Button>
         </Row>
@@ -473,6 +479,7 @@ function ReachPanel({
       </KeyValue>
       {offerFolder ? (
         <Button style={{ marginTop: 10 }} onClick={() => void onCreateFolder()}>
+          <Icon name="folder" />
           Create the folder
         </Button>
       ) : null}

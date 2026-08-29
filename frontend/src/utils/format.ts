@@ -44,8 +44,8 @@ export function count(n: number | undefined): string {
  *
  * The ordering of the parts is the reader's locale's, not ours: Intl is given
  * the fields rather than a pattern, so a reader who writes the day first gets
- * the day first. The clock is 24-hour everywhere, because this sits beside
- * durations and log lines that are.
+ * the day first. The clock is 12-hour with AM or PM named, which is what the
+ * desktop this runs on writes elsewhere.
  */
 export function when(iso: string | undefined): string {
   return format(iso, false) ?? "—";
@@ -73,10 +73,16 @@ function format(iso: string | undefined, seconds: boolean): string | undefined {
     day: "2-digit",
     month: "long",
     year: "numeric",
+    // The hour stays padded even with a meridiem beside it. These sit in table
+    // columns, and "03:18 AM" lines up under "11:18 AM" where "3:18 AM" does
+    // not — a column of dates that lines up is read down, one that does not is
+    // read row by row.
     hour: "2-digit",
     minute: "2-digit",
     ...(seconds ? { second: "2-digit" as const } : {}),
-    hour12: false,
+    hour12: true,
+    // No timeZone: the zone is the one this desktop is in, and naming it is
+    // what keeps a local reading unambiguous without a conversion in the head.
     timeZoneName: "short",
   }).format(d);
 }

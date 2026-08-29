@@ -52,19 +52,6 @@ type LibraryView struct {
 	FirstRun *FirstRun `json:"firstRun,omitempty"`
 }
 
-// FirstRun names the two things needed before a capture is possible.
-type FirstRun struct {
-	Heading          string `json:"heading"`
-	Body             string `json:"body"`
-	NeedsEnvironment bool   `json:"needsEnvironment"`
-	NeedsStorage     bool   `json:"needsStorage"`
-	EnvironmentBody  string `json:"environmentBody"`
-	StorageBody      string `json:"storageBody"`
-	NoAccountHeading string `json:"noAccountHeading"`
-	NoAccountBody    string `json:"noAccountBody"`
-	ConfigFile       string `json:"configFile"`
-}
-
 // Library lists every snapshot across every configured storage, with no key.
 func (s *SnapshotController) Library() (res LibraryView) {
 	defer func() { res = lists(res) }()
@@ -100,17 +87,10 @@ func (s *SnapshotController) Library() (res LibraryView) {
 	sort.Strings(view.Realms)
 
 	if len(lib.Entries) == 0 {
-		view.FirstRun = &FirstRun{
-			Heading:          "No snapshots yet",
-			Body:             "PortCloak needs two things before it can capture a realm: where Keycloak runs, and where the snapshot should go.",
-			NeedsEnvironment: len(cfg.Environments) == 0,
-			NeedsStorage:     len(cfg.Storage) == 0,
-			EnvironmentBody:  "A Keycloak you can reach — on this machine, over SSH, in Docker, or in a Kubernetes namespace. PortCloak reads it; it never restarts or reconfigures the instance serving your logins.",
-			StorageBody:      "A folder for the snapshots — on disk, on a host over SSH, in an S3 bucket, or in Azure Blob. You can mark one as requiring encryption, and nothing plaintext will ever be written there.",
-			NoAccountHeading: "There is no account and no sign-in",
-			NoAccountBody:    "PortCloak is a local tool. Everything it knows lives in plain files in your home folder — config.yaml holds your environments and storage, and every credential goes to this machine's keychain, referenced by handle. You can read that file, diff it, and commit it without leaking anything.",
-			ConfigFile:       s.eng.Home().ConfigFile(),
-		}
+		view.FirstRun = s.eng.firstRun(
+			"No snapshots yet",
+			"PortCloak needs two things before it can capture a realm: where Keycloak runs, and where the snapshot should go.",
+		)
 	}
 	return view
 }

@@ -85,7 +85,7 @@ func TestControllers_NeverHandTheFrontendNull(t *testing.T) {
 				t.Fatalf("%s produced JSON that will not parse: %v", name, err)
 			}
 			for _, path := range nullsIn("", decoded) {
-				t.Errorf("%s returned null at %s — the frontend reads that as a list and throws before it can clear the spinner", name, path)
+				t.Errorf("%s returned null at %s. The frontend reads that as a list and throws before it can clear the spinner", name, path)
 			}
 		})
 	}

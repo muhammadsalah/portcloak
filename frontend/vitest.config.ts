@@ -1,6 +1,8 @@
 // Copyright 2026 Muhammad Salah
 // SPDX-License-Identifier: Apache-2.0
 
+import { fileURLToPath } from "node:url";
+
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
@@ -26,6 +28,12 @@ export default defineConfig({
       },
     }),
   ],
+  // "@" is src/, matching the paths entry in tsconfig.json. Kept in step with
+  // it by hand: TypeScript resolves the checker's view and this resolves the
+  // bundler's, and nothing enforces that they agree.
+  resolve: {
+    alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
+  },
   test: {
     environment: "jsdom",
     setupFiles: ["src/test/setup.ts"],
@@ -83,10 +91,10 @@ export default defineConfig({
             "src/components/SnapshotKeyFields.tsx",
             "src/hooks/useAsync.ts",
             "src/pages/activity/live.ts",
-            "src/pages/capture/draft.ts",
+            "src/pages/snapshots/capture/draft.ts",
             "src/pages/environments/kinds.ts",
-            "src/pages/inspector/tabs.ts",
-            "src/pages/restore/wizard.ts",
+            "src/pages/snapshots/inspect/tabs.ts",
+            "src/pages/snapshots/restore/wizard.ts",
             "src/pages/storage/kinds.ts",
             "src/utils/format.ts",
           ].map((file) => [

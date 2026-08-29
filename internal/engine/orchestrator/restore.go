@@ -247,7 +247,7 @@ func idpNote(m manifest.Manifest) string {
 		}
 	}
 	if len(m.IdentityProviders) > 0 {
-		return "redirect URIs still point at the source — review after import"
+		return "redirect URIs still point at the source, review after import"
 	}
 	return ""
 }
@@ -505,7 +505,7 @@ func (a appliedState) describe() string {
 		if a.Note != "" {
 			return a.Note
 		}
-		return "the import had started, so some changes may already have been applied — Keycloak's import is not transactional"
+		return "the import had started, so some changes may already have been applied. Keycloak's import is not transactional"
 	}
 }
 

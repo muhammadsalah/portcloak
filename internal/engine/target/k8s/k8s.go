@@ -127,7 +127,7 @@ func (p *Platform) Probe(ctx context.Context) (target.TargetFacts, error) {
 	}
 
 	if _, err := p.clientset.Discovery().ServerVersion(); err != nil {
-		facts.Fail("Cluster", fmt.Sprintf("%s — %v", p.env.Context, err),
+		facts.Fail("Cluster", fmt.Sprintf("%s: %v", p.env.Context, err),
 			"Check that the context is current and that your credentials have not expired.")
 		return facts, nil
 	}
@@ -136,14 +136,14 @@ func (p *Platform) Probe(ctx context.Context) (target.TargetFacts, error) {
 
 	if _, err := p.clientset.CoreV1().Namespaces().Get(ctx, p.namespace, metav1.GetOptions{}); err != nil {
 		if apierrors.IsNotFound(err) {
-			facts.Fail("Namespace", p.namespace+" — not found",
+			facts.Fail("Namespace", p.namespace+": not found",
 				"That is the namespace PortCloak looked for on this context.")
 			return facts, nil
 		}
 		if apierrors.IsForbidden(err) {
 			// Not being able to read the namespace object is common and not
 			// fatal; what matters is the verbs below.
-			facts.Warn("Namespace", p.namespace+" — cannot be read directly", "")
+			facts.Warn("Namespace", p.namespace+": cannot be read directly", "")
 		}
 	} else {
 		facts.Pass("Namespace", p.namespace)
@@ -151,7 +151,7 @@ func (p *Platform) Probe(ctx context.Context) (target.TargetFacts, error) {
 
 	pod, err := p.templateFor(ctx)
 	if err != nil {
-		facts.Fail("Workload", fmt.Sprintf("%s — %v", p.env.Workload, err),
+		facts.Fail("Workload", fmt.Sprintf("%s: %v", p.env.Workload, err),
 			"Name the Deployment or StatefulSet running Keycloak, as deployment/<name> or statefulset/<name>.")
 		return facts, nil
 	}
@@ -227,7 +227,7 @@ func (p *Platform) Probe(ctx context.Context) (target.TargetFacts, error) {
 	// tar; PortCloak streams the export out over the exec channel itself, which
 	// is why an image without one is not a problem to report.
 	facts.HasTar = false
-	facts.Pass("File transfer", "streamed over exec — the clone needs no tar")
+	facts.Pass("File transfer", "streamed over exec, so the clone needs no tar")
 	facts.Ports = target.PortSet{HTTP: 8080, HTTPS: 8443, Management: 9000}
 	facts.Pass("Free ports", "the clone has its own network namespace, so nothing can collide")
 

@@ -438,7 +438,7 @@ func RunOffsetResumeContract(t *testing.T, newStore Factory) {
 			t.Error("the write did not report itself as resumed")
 		}
 		if got := readBack(t, s, key); !bytes.Equal(got, body) {
-			t.Fatalf("the resumed object is %d bytes, want %d — a resume must converge, never concatenate or truncate",
+			t.Fatalf("the resumed object is %d bytes, want %d: a resume must converge, never concatenate or truncate",
 				len(got), len(body))
 		}
 		if res.Digest != digest {
@@ -527,7 +527,7 @@ func RunOffsetResumeContract(t *testing.T, newStore Factory) {
 			t.Error("a source that cannot be rewound was reported as resumed")
 		}
 		if got := readBack(t, s, key); !bytes.Equal(got, body) {
-			t.Fatalf("the object is %d bytes, want %d — the prefix was not discarded", len(got), len(body))
+			t.Fatalf("the object is %d bytes, want %d: the prefix was not discarded", len(got), len(body))
 		}
 	})
 }

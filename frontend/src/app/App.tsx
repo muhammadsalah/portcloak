@@ -11,16 +11,16 @@
  */
 import styled from "styled-components";
 
-import { ActivityPage } from "../pages/activity/ActivityPage";
-import { AuditPage } from "../pages/audit/AuditPage";
-import { CapturePage } from "../pages/capture/CapturePage";
-import { EnvironmentsPage } from "../pages/environments/EnvironmentsPage";
-import { InspectorPage } from "../pages/inspector/InspectorPage";
-import { KeysPage } from "../pages/keys/KeysPage";
-import { LibraryPage } from "../pages/library/LibraryPage";
-import { RestorePage } from "../pages/restore/RestorePage";
-import { SettingsPage } from "../pages/settings/SettingsPage";
-import { StoragePage } from "../pages/storage/StoragePage";
+import { ActivityPage } from "@/pages/activity/ActivityPage";
+import { AuditPage } from "@/pages/audit/AuditPage";
+import { CapturePage } from "@/pages/snapshots/capture/CapturePage";
+import { EnvironmentsPage } from "@/pages/environments/EnvironmentsPage";
+import { InspectorPage } from "@/pages/snapshots/inspect/InspectorPage";
+import { KeysPage } from "@/pages/keys/KeysPage";
+import { SnapshotsPage } from "@/pages/snapshots/SnapshotsPage";
+import { RestorePage } from "@/pages/snapshots/restore/RestorePage";
+import { SettingsPage } from "@/pages/settings/SettingsPage";
+import { StoragePage } from "@/pages/storage/StoragePage";
 import { Masthead } from "./Masthead";
 import { Nav } from "./Nav";
 import { useShell } from "./ShellContext";
@@ -57,8 +57,8 @@ export function App() {
 
 function Screen({ route }: { route: Route }) {
   switch (route.name) {
-    case "library":
-      return <LibraryPage />;
+    case "snapshots":
+      return <SnapshotsPage />;
     case "capture":
       return <CapturePage />;
     case "restore":
@@ -66,9 +66,9 @@ function Screen({ route }: { route: Route }) {
     case "activity":
       return <ActivityPage />;
     case "environments":
-      return <EnvironmentsPage select={route.select} />;
+      return <EnvironmentsPage select={route.select} add={route.add} />;
     case "storage":
-      return <StoragePage select={route.select} />;
+      return <StoragePage select={route.select} add={route.add} />;
     case "browse":
       return <StoragePage select={route.storage} browsing />;
     case "keys":

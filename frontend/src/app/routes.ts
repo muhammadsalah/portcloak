@@ -13,11 +13,11 @@
 
 export type Route =
   | { name: "capture" }
-  | { name: "library" }
+  | { name: "snapshots" }
   | { name: "restore"; snapshotId?: string }
   | { name: "activity" }
-  | { name: "environments"; select?: string }
-  | { name: "storage"; select?: string }
+  | { name: "environments"; select?: string; add?: boolean }
+  | { name: "storage"; select?: string; add?: boolean }
   | { name: "browse"; storage: string }
   | { name: "keys" }
   | { name: "audit" }
@@ -44,7 +44,7 @@ export function routeKey(route: Route): string {
   switch (route.name) {
     case "inspect":
     case "restore":
-      return "library";
+      return "snapshots";
     case "browse":
       return "storage";
     default:

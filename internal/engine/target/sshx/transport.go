@@ -51,7 +51,7 @@ type UnknownHostKeyError struct {
 }
 
 func (e *UnknownHostKeyError) Error() string {
-	return fmt.Sprintf("%s is not in this machine's known_hosts. Its %s key fingerprint is %s — check that against the host before accepting it.",
+	return fmt.Sprintf("%s is not in this machine's known_hosts. Its %s key fingerprint is %s. Check that against the host before accepting it.",
 		e.Host, e.KeyType, e.Fingerprint)
 }
 

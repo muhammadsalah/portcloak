@@ -14,8 +14,8 @@
 import { describe, expect, it } from "vitest";
 import { screen } from "@testing-library/react";
 
-import type { TargetFacts } from "../api";
-import { renderApp } from "../test/render";
+import type { TargetFacts } from "@/api";
+import { renderApp } from "@/test/render";
 import { ProbePanel } from "./ProbePanel";
 
 function facts(checks: TargetFacts["checks"] = []): TargetFacts {
@@ -37,7 +37,7 @@ describe("the headline", () => {
   it("promises the serving instance is not touched when the probe passed", () => {
     renderApp(<ProbePanel facts={facts()} ok />);
     expect(
-      screen.getByText("Probe passed — capture will not touch the serving instance"),
+      screen.getByText("Probe passed. Capture will not touch the serving instance"),
     ).toBeInTheDocument();
   });
 

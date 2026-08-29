@@ -116,7 +116,7 @@ func TestCopyTree_PreservesTheModesThatKeepSecretsOut(t *testing.T) {
 		t.Fatalf("the jobs folder did not arrive: %v", err)
 	}
 	if perm := info.Mode().Perm(); perm != 0o700 {
-		t.Errorf("the jobs folder arrived as %o, not 0700 — job checkpoints name environments and realms", perm)
+		t.Errorf("the jobs folder arrived as %o, not 0700. Job checkpoints name environments and realms", perm)
 	}
 	info, err = os.Stat(filepath.Join(dst, "config.yaml"))
 	if err != nil {

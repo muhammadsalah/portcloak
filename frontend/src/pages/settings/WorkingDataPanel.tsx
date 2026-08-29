@@ -8,7 +8,8 @@
  * checkpoint is a separate action on the Activity screen, and this panel says
  * so rather than quietly doing both.
  */
-import { SettingsAPI, type WorkingData } from "../../api";
+import { SettingsAPI, type WorkingData } from "@/api";
+import { Icon } from "@/components/Icon";
 import {
   Badge,
   BulletList,
@@ -23,8 +24,8 @@ import {
   NoticeBox,
   Small,
   useModal,
-} from "../../design-system";
-import { bytes } from "../../utils/format";
+} from "@/design-system";
+import { bytes } from "@/utils/format";
 
 type Modal = ReturnType<typeof useModal>;
 
@@ -73,6 +74,7 @@ export function WorkingDataPanel({
           style={{ marginTop: 12 }}
           onClick={() => confirmPurge(working, modal, reload)}
         >
+          <Icon name="trash" />
           Purge local data
         </Button>
       </CardBody>

@@ -9,10 +9,11 @@
  * expects to find there.
  */
 import { useState } from "react";
+import { Icon } from "@/components/Icon";
 import styled from "styled-components";
 
-import { ConfigAPI, type ConfigSnapshot, type Storage, type StorageView } from "../../api";
-import { useNavigate } from "../../app/ShellContext";
+import { ConfigAPI, type ConfigSnapshot, type Storage, type StorageView } from "@/api";
+import { useNavigate } from "@/app/ShellContext";
 import {
   Badge,
   Button,
@@ -29,38 +30,59 @@ import {
   Spinner,
   Split,
   Truncate,
-} from "../../design-system";
-import { useAsync } from "../../hooks/useAsync";
-import { StorageBrowser } from "./StorageBrowser";
+} from "@/design-system";
+import { useAsync } from "@/hooks/useAsync";
+import { StorageBrowser } from "./browse/StorageBrowser";
 import { StorageEditor } from "./StorageEditor";
 import { kindLabel } from "./kinds";
 
-export function StoragePage({ select, browsing }: { select?: string; browsing?: boolean }) {
+export function StoragePage({
+  select,
+  browsing,
+  add,
+}: {
+  select?: string;
+  browsing?: boolean;
+  add?: boolean;
+}) {
   const { state } = useAsync(() => ConfigAPI.load(), []);
 
   if (state.status === "failed") throw state.error;
   if (state.status === "loading") return <Spinner>Loading configuration…</Spinner>;
 
-  return <StorageScreen snapshot={state.value} select={select} browsing={Boolean(browsing)} />;
+  return (
+    <StorageScreen
+      snapshot={state.value}
+      select={select}
+      browsing={Boolean(browsing)}
+      add={Boolean(add)}
+    />
+  );
 }
 
 function StorageScreen({
   snapshot,
   select,
   browsing,
+  add,
 }: {
   snapshot: ConfigSnapshot;
   select?: string;
   browsing: boolean;
+  add: boolean;
 }) {
   const navigate = useNavigate();
 
   // A name that is no longer there — a deleted storage still in a route — is
   // nobody's selection rather than an editor full of undefined.
   const initial = snapshot.storage.find((s) => s.name === (select ?? snapshot.storage[0]?.name));
-  const [selected, setSelected] = useState<string | undefined>(initial?.name);
-  const [draft, setDraft] = useState<Storage | undefined>(initial ? { ...initial } : undefined);
-  const [originalName, setOriginalName] = useState(initial?.name ?? "");
+  // `add` arrives from the route, so a screen that sent an operator here to add
+  // one lands them in the editor rather than on the list beside it.
+  const [selected, setSelected] = useState<string | undefined>(add ? undefined : initial?.name);
+  const [draft, setDraft] = useState<Storage | undefined>(
+    add ? { name: "", kind: "disk" } : initial ? { ...initial } : undefined,
+  );
+  const [originalName, setOriginalName] = useState(add ? "" : (initial?.name ?? ""));
   // Bumped whenever a different storage is picked, so the editor remounts and
   // drops the probe result and typed secret belonging to the last one.
   const [editorKey, setEditorKey] = useState(0);
@@ -84,10 +106,12 @@ function StorageScreen({
       </div>
       {browsing ? (
         <Button onClick={() => navigate({ name: "storage", select: selected })}>
+          <Icon name="back" />
           Back to storage
         </Button>
       ) : (
         <Button $variant="primary" onClick={() => edit(null)}>
+          <Icon name="plus" />
           Add storage
         </Button>
       )}
@@ -146,14 +170,14 @@ function NothingYet({ snapshot }: { snapshot: ConfigSnapshot }) {
       <CardBody>
         <CardTitle>No storage yet</CardTitle>
         <p>
-          A storage is where snapshots are written — a folder on disk, a folder on a host over SSH,
+          A storage is where snapshots are written: a folder on disk, a folder on a host over SSH,
           an S3 bucket, or an Azure Blob container. Mark one as requiring encryption and nothing
           plaintext will ever be written to it.
         </p>
         <p>
           <Muted>
             <Small>
-              {`Add one with the button above, or write it into ${snapshot.configFile} by hand — the file is the same one this screen edits. Credentials never go in it: each secret goes to this machine's keychain and only a handle is written to the file.`}
+              {`Add one with the button above, or write it into ${snapshot.configFile} by hand. The file is the same one this screen edits. Credentials never go in it: each secret goes to this machine's keychain and only a handle is written to the file.`}
             </Small>
           </Muted>
         </p>
@@ -220,7 +244,7 @@ function ProbeLine({ storage }: { storage: StorageView }) {
 
   return (
     <ProbeText $bad={bad}>
-      {`Tested ${storage.probeAge} · ${detail}${storage.stale ? " — stale" : ""}`}
+      {`Tested ${storage.probeAge} · ${detail}${storage.stale ? " · stale" : ""}`}
     </ProbeText>
   );
 }

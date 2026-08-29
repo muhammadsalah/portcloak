@@ -193,7 +193,7 @@ func TestCloneSpec_Derivation(t *testing.T) {
 	kept := strings.Join(spec.Kept, " ")
 	for _, want := range []string{"imagePullSecrets", "serviceAccountName", "securityContext", "nodeSelector", "tolerations", "volumes", "env", "resources"} {
 		if !strings.Contains(kept, want) {
-			t.Errorf("the keep list is missing %q — a clone without it may not schedule or may be rejected by an SCC", want)
+			t.Errorf("the keep list is missing %q. A clone without it may not schedule or may be rejected by an SCC", want)
 		}
 	}
 

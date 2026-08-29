@@ -720,7 +720,7 @@ func ClassifyFailure(realm string, o Outcome, stderr string) (message, advice st
 			false
 	}
 	if o.BindConflict {
-		return "The export could not bind the ports it was given — something claimed them in the moment between PortCloak reserving them and Keycloak starting.",
+		return "The export could not bind the ports it was given. Something claimed them in the moment between PortCloak reserving them and Keycloak starting.",
 			"This race is unavoidable and harmless. PortCloak reallocates and tries again.",
 			true
 	}
@@ -728,7 +728,7 @@ func ClassifyFailure(realm string, o Outcome, stderr string) (message, advice st
 	switch {
 	case o.TransactionTimeout:
 		return "The export took longer than this Keycloak allows a single transaction to run, so the server rolled it back partway through the realm's users.",
-			"This is a time limit, not disk space and not connectivity. It shows up on large realms whose users come from a federated store: the export re-reads every user through the federation provider one at a time, so one page of users can sit on a slow directory for minutes. Capture again with a smaller users-per-file — the export writes one page per transaction, so that is what bounds the work inside one. A hundred is a reasonable place to start.",
+			"This is a time limit, not disk space and not connectivity. It shows up on large realms whose users come from a federated store: the export re-reads every user through the federation provider one at a time, so one page of users can sit on a slow directory for minutes. Capture again with a smaller users-per-file. The export writes one page per transaction, so that is what bounds the work inside one. A hundred is a reasonable place to start.",
 			false
 	case strings.Contains(joined, "realm") && strings.Contains(joined, "not found"):
 		return fmt.Sprintf("Keycloak does not have a realm called %q.", realm),

@@ -17,7 +17,7 @@
  */
 import styled from "styled-components";
 
-import { Icon } from "../components/Icon";
+import { Icon } from "@/components/Icon";
 import { useShell } from "./ShellContext";
 import { type Route, routeKey } from "./routes";
 
@@ -31,11 +31,8 @@ const groups: { section: string; items: NavItem[] }[] = [
   {
     section: "Workspace",
     items: [
-      // Activity leads, because it is the screen an operator returns to. The
-      // other two start something; this one says what is happening now, which
-      // is the question being asked every time the window is opened again.
+      { key: "snapshots", label: "Snapshots", route: { name: "snapshots" } },
       { key: "activity", label: "Activity", route: { name: "activity" } },
-      { key: "library", label: "Snapshots", route: { name: "library" } },
     ],
   },
   {

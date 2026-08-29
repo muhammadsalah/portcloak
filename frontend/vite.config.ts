@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { writeFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
 import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
 
@@ -46,6 +48,12 @@ export default defineConfig({
     }),
     keepEmbedPlaceholder(),
   ],
+  // "@" is src/, matching the paths entry in tsconfig.json. Kept in step with
+  // it by hand: TypeScript resolves the checker's view and this resolves the
+  // bundler's, and nothing enforces that they agree.
+  resolve: {
+    alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
+  },
   base: "./",
   // The logo lives at the repository root, not under frontend/, because the
   // README and packaging need it too. Pointing Vite's public directory at it

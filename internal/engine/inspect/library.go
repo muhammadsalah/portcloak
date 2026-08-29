@@ -209,7 +209,7 @@ func readEntry(ctx context.Context, blobs store.BlobStore, st config.Storage, t 
 // unencryptedWarning is the label an unencrypted bundle carries in the library,
 // in the manifest and in the completeness report — all three, because an
 // operator must never be able to say afterwards that they did not realise.
-const unencryptedWarning = "Unencrypted — this bundle holds unmasked client secrets and private signing keys in the clear."
+const unencryptedWarning = "Unencrypted. This bundle holds unmasked client secrets and private signing keys in the clear."
 
 // Filter narrows the library.
 type Filter struct {

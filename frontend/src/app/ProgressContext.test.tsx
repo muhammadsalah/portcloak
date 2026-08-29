@@ -15,14 +15,14 @@ import { describe, expect, it, vi } from "vitest";
 import { act, render } from "@testing-library/react";
 import type { ReactNode } from "react";
 
-import type { ProgressEvent } from "../api";
+import type { ProgressEvent } from "@/api";
 import { ProgressProvider, useProgress } from "./ProgressContext";
 
 /** Stands in for the engine: `send` is what the Wails event stream would do. */
 const stream = { emit: undefined as ((event: ProgressEvent) => void) | undefined };
 
-vi.mock("../api", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../api")>();
+vi.mock("@/api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/api")>();
   return {
     ...actual,
     onProgress: (handler: (event: ProgressEvent) => void) => {

@@ -10,9 +10,9 @@
  * of what happened shared a screen with four buttons that make things happen.
  * They are here now and the audit screen is a record again.
  */
-import { SettingsAPI } from "../../api";
-import { PageSubtitle, PageTitle, Spinner, SplitWide } from "../../design-system";
-import { useAsync } from "../../hooks/useAsync";
+import { SettingsAPI } from "@/api";
+import { PageSubtitle, PageTitle, Spinner, SplitWide } from "@/design-system";
+import { useAsync } from "@/hooks/useAsync";
 import { AboutPanel } from "./AboutPanel";
 import { LocationPanel } from "./LocationPanel";
 import { OrphanPanel } from "./OrphanPanel";
@@ -36,7 +36,7 @@ export function SettingsPage() {
     <div>
       <PageTitle>Settings</PageTitle>
       <PageSubtitle>
-        Where PortCloak keeps its files, and everything it is holding — here and elsewhere.
+        Where PortCloak keeps its files, and everything it is holding, here and elsewhere.
       </PageSubtitle>
 
       {state.status === "loading" ? (

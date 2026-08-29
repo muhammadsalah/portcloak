@@ -11,7 +11,7 @@
  */
 import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode } from "react";
 
-import { onProgress, type ProgressEvent } from "../api";
+import { onProgress, type ProgressEvent } from "@/api";
 
 type Listener = (event: ProgressEvent) => void;
 

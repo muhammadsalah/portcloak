@@ -28,7 +28,7 @@ import (
 // reached only the pre-flight check would fail at the point of no return, with
 // the clone already created.
 func TestRestoreWizard_NeverHardcodesAnEmptyKey(t *testing.T) {
-	src := readView(t, "restore", "RestorePage.tsx")
+	src := readView(t, "snapshots/restore", "RestorePage.tsx")
 
 	// `passphrase: ""` and `identities: []`, however they are spaced.
 	empty := regexp.MustCompile(`(?m)\b(passphrase|identities)\s*:\s*(""|''|\[\s*\])`)
@@ -39,7 +39,7 @@ func TestRestoreWizard_NeverHardcodesAnEmptyKey(t *testing.T) {
 
 	// And the field has to exist, or there is nothing to carry. It lives on the
 	// Destination step, beside the notice promising decryption runs first.
-	step := readView(t, "restore", "DestinationStep.tsx")
+	step := readView(t, "snapshots/restore", "DestinationStep.tsx")
 	if !strings.Contains(step, "<SnapshotKeyFields") {
 		t.Error("the restore flow renders no key input; an encrypted snapshot cannot be restored without one")
 	}
@@ -53,12 +53,12 @@ func TestRestoreWizard_NeverHardcodesAnEmptyKey(t *testing.T) {
 // other.
 func TestSnapshotKey_IsAskedForInOnePlace(t *testing.T) {
 	asks := map[string][2]string{
-		"the restore wizard": {"restore", "DestinationStep.tsx"},
-		"the inspector":      {"inspector", "KeyPrompt.tsx"},
+		"the restore wizard": {"snapshots/restore", "DestinationStep.tsx"},
+		"the inspector":      {"snapshots/inspect/dialogs", "KeyPrompt.tsx"},
 	}
 	for screen, where := range asks {
 		src := readView(t, where[0], where[1])
-		if !strings.Contains(src, `from "../../components/SnapshotKeyFields"`) {
+		if !strings.Contains(src, `from "@/components/SnapshotKeyFields"`) {
 			t.Errorf("%s does not use the shared key fields", screen)
 		}
 		if strings.Contains(src, "AGE-SECRET-KEY-1") {
@@ -69,6 +69,9 @@ func TestSnapshotKey_IsAskedForInOnePlace(t *testing.T) {
 }
 
 // readView reads one file out of a page folder under frontend/src/pages.
+//
+// The page argument carries the nesting: the screens are arranged by how they
+// are reached, so a restore step lives under the snapshot list that opens it.
 func readView(t *testing.T, page, name string) string {
 	t.Helper()
 	b, err := os.ReadFile(filepath.Join("..", "..", "frontend", "src", "pages", page, name))
@@ -84,7 +87,7 @@ func readView(t *testing.T, page, name string) string {
 // the wrong number — it misses the key the operator typed into the inspector a
 // moment earlier, which is exactly the case that made the prompt indefensible.
 func TestRestoreWizard_AsksTheEngineWhatItCanTry(t *testing.T) {
-	src := readView(t, "restore", "RestorePage.tsx")
+	src := readView(t, "snapshots/restore", "RestorePage.tsx")
 
 	if !strings.Contains(src, "KeysAPI.availability(") {
 		t.Error("the restore wizard does not ask what an open would have to work with")
@@ -99,7 +102,7 @@ func TestRestoreWizard_AsksTheEngineWhatItCanTry(t *testing.T) {
 // offered — encryption off, unconfirmed, and blocked on a confirmation the
 // operator had just declined to give.
 func TestCaptureWizard_DecliningToDeclineTurnsEncryptionBackOn(t *testing.T) {
-	src := readView(t, "capture", "OptionsStep.tsx")
+	src := readView(t, "snapshots/capture", "OptionsStep.tsx")
 
 	if !strings.Contains(src, "onCancel:") {
 		t.Fatal("the decline dialog has no cancel handler, so dismissing it decides nothing")

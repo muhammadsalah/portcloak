@@ -174,7 +174,7 @@ func (r *RestoreController) Apply(req ApplyRequest) ApplyResult {
 // OutOfScopeNote is what the result screen restates after a restore.
 func (r *RestoreController) OutOfScopeNote() []string {
 	return []string{
-		"Sessions were not carried, by design. Users will re-authenticate — token continuity comes from the signing keys, not from replaying session objects.",
+		"Sessions were not carried, by design. Users will re-authenticate. Token continuity comes from the signing keys, not from replaying session objects.",
 		"Themes and provider JARs were reported, never migrated. Deploying them on the destination was yours to do.",
 	}
 }

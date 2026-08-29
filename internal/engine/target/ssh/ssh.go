@@ -88,7 +88,7 @@ func (e *Executor) Probe(ctx context.Context) (target.TargetFacts, error) {
 
 	conn, err := e.connect(ctx)
 	if err != nil {
-		facts.Fail("Connection", fmt.Sprintf("%s@%s — %v", e.env.User, e.env.Host, err), resil.Hint(err))
+		facts.Fail("Connection", fmt.Sprintf("%s@%s: %v", e.env.User, e.env.Host, err), resil.Hint(err))
 		return facts, nil
 	}
 	facts.Reachable = true
@@ -96,7 +96,7 @@ func (e *Executor) Probe(ctx context.Context) (target.TargetFacts, error) {
 
 	kcPath := path.Join(strings.TrimRight(e.env.ServerFolder, "/"), "bin", "kc.sh")
 	if out, code, err := e.runSimple(ctx, conn, "test -x "+shellQuote(kcPath)+" && echo ok"); err != nil || code != 0 || !strings.Contains(out, "ok") {
-		facts.Fail("kc.sh", kcPath+" — not found or not executable",
+		facts.Fail("kc.sh", kcPath+": not found or not executable",
 			"That is the path PortCloak looked for on the remote host. If Keycloak lives elsewhere, correct the server folder.")
 		return facts, nil
 	}
@@ -157,7 +157,7 @@ func (e *Executor) Probe(ctx context.Context) (target.TargetFacts, error) {
 	facts.Pass("Free ports", set.String()+" allocated on the host")
 
 	facts.CloneCapable = false
-	facts.CloneDetail = "not applicable — the export runs as a separate process on the host, isolated by the ports above"
+	facts.CloneDetail = "not applicable: the export runs as a separate process on the host, isolated by the ports above"
 	facts.AddCheck(target.Check{Name: "Ephemeral clone", Value: facts.CloneDetail, Status: target.CheckPass})
 
 	return facts, nil

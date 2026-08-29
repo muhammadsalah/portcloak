@@ -71,6 +71,17 @@ export const Button = styled.button<{ $variant?: ButtonVariant }>`
   line-height: 1.5;
   white-space: nowrap;
 
+  /* A button is a row, so an icon can sit in front of its label without the
+     caller arranging anything. The icon carries the button's own colour, and
+     is aria-hidden, so the accessible name stays the label alone. */
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+
+  svg {
+    flex: none;
+  }
+
   ${(p) => variants[p.$variant ?? "secondary"]}
 
   &:disabled {

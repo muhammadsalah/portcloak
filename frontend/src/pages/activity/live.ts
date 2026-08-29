@@ -19,7 +19,7 @@
  * lets a test drive a retry, a breaker opening and a phase failing through it
  * in sequence, which is the shape of the run it actually has to describe.
  */
-import type { LogLine, ProgressEvent } from "../../api";
+import type { LogLine, ProgressEvent } from "@/api";
 
 export type { LogLine };
 
@@ -190,12 +190,12 @@ export function applyEvent(all: Map<string, Live>, event: ProgressEvent): void {
 
     case "retry":
       current.warn = true;
-      current.note = `Attempt ${event.attempt} failed — retrying in ${Math.round((event.retryIn ?? 0) / 1e9)}s. ${event.message ?? ""}`;
+      current.note = `Attempt ${event.attempt} failed. Retrying in ${Math.round((event.retryIn ?? 0) / 1e9)}s. ${event.message ?? ""}`;
       break;
 
     case "breakerOpen":
       current.warn = true;
-      current.note = `Paused — ${event.item} has been unreachable. Retrying in ${Math.round((event.retryIn ?? 0) / 1e9)}s. Nothing is lost.`;
+      current.note = `Paused. ${event.item} has been unreachable. Retrying in ${Math.round((event.retryIn ?? 0) / 1e9)}s. Nothing is lost.`;
       break;
 
     case "phaseStarted":

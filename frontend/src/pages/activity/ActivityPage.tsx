@@ -18,9 +18,10 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { JobsAPI, type ActivityView, type JobView } from "../../api";
-import { useProgress } from "../../app/ProgressContext";
-import { Notice, PageSubtitle, PageTitle, Spinner } from "../../design-system";
+import { JobsAPI, type ActivityView, type JobView } from "@/api";
+import { useProgress } from "@/app/ProgressContext";
+import { Notice, PageSubtitle, PageTitle, Spinner } from "@/design-system";
+import { FirstRun } from "@/components/FirstRun";
 import { JobCard } from "./JobCard";
 import {
   applyEvent,
@@ -193,7 +194,9 @@ export function ActivityPage() {
       <PageTitle>Activity</PageTitle>
       <PageSubtitle>{view.summary}</PageSubtitle>
 
-      {view.jobs.length === 0 ? (
+      {view.firstRun ? (
+        <FirstRun firstRun={view.firstRun} />
+      ) : view.jobs.length === 0 ? (
         <Notice
           tone="info"
           title="Nothing has run yet"

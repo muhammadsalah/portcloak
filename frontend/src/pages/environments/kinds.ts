@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /** The four kinds of environment, and how they are named on screen. */
-import type { EnvironmentKind } from "../../api";
+import type { EnvironmentKind } from "@/api";
 
 export const kinds: { value: EnvironmentKind; label: string }[] = [
   { value: "local", label: "Local" },

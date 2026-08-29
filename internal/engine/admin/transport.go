@@ -226,7 +226,7 @@ func certReason(err error) string {
 	}
 	var unknown x509.UnknownAuthorityError
 	if errors.As(err, &unknown) {
-		return "it was signed by an authority this machine does not know — which is what a self-signed or private-CA certificate looks like."
+		return "it was signed by an authority this machine does not know, which is what a self-signed or private-CA certificate looks like."
 	}
 	return "the certificate could not be verified."
 }

@@ -434,7 +434,7 @@ func (k *KeysController) Availability() Availability {
 	case total == 0:
 		out.Note = "There are no keys on this machine, so an encrypted snapshot needs the key it was sealed with."
 	case session == total:
-		out.Note = fmt.Sprintf("PortCloak will try the %d key(s) you have already used in this session. Quitting forgets them — save one under Keys to keep it.", session)
+		out.Note = fmt.Sprintf("PortCloak will try the %d key(s) you have already used in this session. Quitting forgets them. Save one under Keys to keep it.", session)
 	case session == 0:
 		out.Note = fmt.Sprintf("PortCloak will try the %d key(s) stored on this machine.", total)
 	default:

@@ -11,81 +11,56 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Tags prefixed `spec-` mark the design
 record; unprefixed `v` tags mark shipped binaries.
 
-## [Unreleased]
+## [0.0.3] — 2026-08-29
+
+### Added
+- Every table inside a snapshot pages, and the page is addressable. The users list, the clients,
+  keys, user federations, identity providers, authentication flows and external dependencies, and
+  the secret ledger. Numbered pages rather than one step at a time, with the first and the last
+  always reachable, and the number of rows on a page is the reader's: 25, 50, 100 or 200. A realm
+  that issues a client per integration has thousands of them, and a service-account client is still
+  a client; reaching the eleventh page of anything used to mean pressing the same arrow ten times
+  with nothing on screen saying how many presses were left. Changing the page size keeps the row
+  you were on in view rather than returning you to the top.
+- Activity shows what to do when nothing has run. It is the screen an operator returns to, and on a
+  new install it said only that nothing had happened yet. It now shows the same two steps the
+  snapshot list shows when it has nothing to list: a Keycloak to read from, and somewhere to put
+  what is read.
+- Every button carries an icon, primary and secondary alike. Capture, restore, save, add, import,
+  verify, inspect, test, refresh, back and next each have their own mark, so a row of buttons can
+  be told apart at a glance instead of read word by word.
 
 ### Changed
-- A phase that was skipped is drawn in yellow with a dash, not in green with a tick. A restore whose
-  destination could not be read prints "Validation was not performed" and, next to it, ticked the
-  validation step in the same green as a step that had passed — the stepper contradicting the
-  sentence beside it, and doing so in the direction that reads as reassurance. Skipped is neither
-  done nor failed: the phase took its turn and reached no verdict, which is a third thing and now
-  looks like one. It still counts toward the phase tally, because the pipeline did reach the end.
-- The editors' *Test* buttons test what is on screen rather than what is on disk. They sent a name,
-  so the probe read the saved copy — which meant a definition had to be saved before it could be
-  tested, and testing it then answered a question nobody was asking: whether the thing already
-  committed works. A definition being entered for the first time had nothing saved to read at all.
-  The test now carries the draft and the secret typed beside it, the secret overlaid on the keychain
-  for the length of the probe; left blank it resolves from the keychain as before, so changing a
-  host without retyping a password still tests. Nothing is written and nothing is gated: a
-  definition that fails its test can still be saved, because a target that is down this minute is
-  not a definition that is wrong, and a probe result is recorded only against a definition that is
-  actually saved under that name. The capture wizard still tests by name, which is what it means —
-  there the operator has picked an environment that exists.
-
-### Fixed
-- The seeded realms' LDAP federation resolved nobody. A provider created through the admin API gets
-  its default mappers from a factory hook; the same provider arriving inside a realm import is
-  created without it, and one with no mappers asks the directory for no attributes at all. What
-  came back was a DN and an empty attribute set, reported once per user as `User returned from LDAP
-  has null username!` — five thousand times, by a provider whose own configuration reads as
-  correct. The mappers are written into the realm now, as `subComponents` of the provider. First
-  name reads `givenName` rather than the `cn` Keycloak defaults to for an unknown vendor, because
-  `cn` in this directory is the whole name and a federated user would otherwise arrive called
-  "Mei Gupta Gupta".
-- The seeder generated a realm no Keycloak would accept, in three separate ways. Client roles rode
-  inside each client object, where `ClientRepresentation` has no field for them — they belong at
-  realm level under `roles.client`, keyed by clientId. The LDAP federation component repeated its
-  own `providerType`, which is the key the `components` map is already filed under and not a
-  property of the component. And every generated passkey carried a `credentialType` in its
-  credential data, one field more than `WebAuthnCredentialData`'s seven. Each failed the entire
-  import rather than the field: the first two as `400 unable to read contents from stream`, the
-  third as `500 Cannot parse the JSON` — messages that name the stream and not what was in it, so
-  the only way to the answer was the server's own stack trace.
-- The OpenShift playground grants the LDAP pods `anyuid`, from `apply.sh` rather than from
-  somebody's memory. The OpenLDAP image runs as its own uid and writes where that uid can;
-  `restricted-v2` admits a pod as an arbitrary uid from the namespace's range, under which the
-  image cannot complete its own setup and the pod crash-loops. The grant is written as the
-  RoleBinding `oc adm policy add-scc-to-user` creates, so it applies with everything else and is
-  visible in the repository.
-- The playground's LDAP image no longer exists. Bitnami moved its catalogue and `bitnami/openldap`
-  now publishes no tags at all — the same move CI already works around for MinIO — so the Docker
-  playground failed to pull and the OpenShift one sat in `ImagePullBackOff`. Both now name
-  `bitnamilegacy/openldap:2.6.10-debian-12-r4`: the archive keeps the images but not the floating
-  `2.6`, so the version is written out in full. Frozen, which for a directory that exists to be
-  seeded and thrown away is the whole requirement.
-- The seeding script died on `unbound variable` before it could load a directory. macOS ships bash
-  3.2, which finds the end of a variable name one byte at a time: in `"$service…"` it takes the
-  first byte of the ellipsis to be part of the name, looks up a variable nobody set, and `set -u`
-  ends the run. Braces settle where the name stops. CI never saw it because CI runs bash 5, which
-  reads the character rather than the byte — so this was a macOS-only failure in a script whose
-  whole purpose is to be run on a workstation.
-- The same script's check for a stopped Docker playground never fired. `compose ps` succeeds
-  whether or not anything is running, an empty playground being a valid answer rather than an
-  error, so testing its exit status tested nothing. What got through failed later as `service
-  "ldap-a" is not running` and a refused connection on 8080 — a longer way of saying what the
-  check already had a sentence for. It tests the output now.
+- Test works before you save, on both the environment and the storage editors. The button read the
+  definition on disk, so a definition had to be saved before it could be tested, and testing it
+  then answered a question nobody was asking: whether the thing already committed works. It now
+  tests what is on screen, including a password typed but not yet stored. Nothing is written and
+  nothing is gated: a definition that fails its test can still be saved, because a target that is
+  down this minute is not a definition that is wrong.
+- Add an environment and Add a storage open the editor. Both used to land on the list with the
+  editor still a click away, including the two buttons on the first-run screen whose whole purpose
+  is to start one.
+- Times are written with AM or PM rather than on a 24-hour clock, in this desktop's own zone and
+  with the zone named.
+- A phase that was skipped is drawn in yellow with a dash rather than in green with a tick. A
+  restore whose destination could not be read reports that validation was not performed, and used
+  to tick the validation step in the same green as one that had passed, contradicting the sentence
+  printed beside it.
+- Snapshots is called Snapshots everywhere. The screen was labelled one thing and named `library`
+  in the route, the navigation key and the icon set.
 
 ### Development
-- The OpenShift playground's routes answer on `nip.io` hostnames carrying the cluster's own
-  address — `kc-a.127.0.0.1.nip.io` and its two siblings — rather than on the `apps-crc.testing`
-  names OpenShift generates. The generated ones resolve only where something has been taught to
-  resolve them, and CRC teaches a fixed list: `/etc/hosts` gets the console, the API and a handful
-  of others, and `/etc/resolver` gets nothing, so there is no wildcard and a route named after a
-  namespace is not on the list. Two of these three were unreachable from the host for exactly that
-  reason. nip.io needs no local configuration at all, and says which cluster a hostname points at,
-  which `apps-crc.testing` does not. `apply.sh` substitutes the address from `crc ip` — 127.0.0.1
-  on macOS, where CRC forwards 80 and 443 rather than exposing the VM; the VM's own on Linux — and
-  `PLAYGROUND_INGRESS_IP` overrides it for a cluster that is not CRC.
+- The pages are arranged by how they are reached rather than as eleven sibling folders: capture,
+  restore and inspection now sit under the snapshot list that opens all three, and browsing under
+  the storage editor that opens it. Imports resolve through `@/`, so a screen four levels down
+  names what it imports instead of counting steps back to it.
+- The playground works again, end to end. Its LDAP image had been unpublished from under it when
+  Bitnami moved its catalogue; the seeding script died on macOS's bash before it loaded anything,
+  and its check for a stopped stack never fired; the realm it generated was one Keycloak refused to
+  import, in three separate ways; and the federation it configured resolved nobody, because a
+  provider imported with a realm does not get the mappers the admin API would have given it. The
+  OpenShift half also grants its directories the SCC they need, and publishes its SFTP on 2223,
+  where CRC is not already listening.
 
 ## [0.0.2] — 2026-08-29
 

@@ -58,7 +58,7 @@ type Encryption struct {
 // This is the one place a slightly uncomfortable label is the correct design:
 // an operator must never be able to say afterwards that they did not realise
 // the file held unmasked secrets.
-const UnencryptedWarning = "This snapshot is not encrypted. It holds unmasked client secrets, LDAP bind credentials, IdP secrets, SMTP passwords and RSA private signing keys in the clear — holding the file is equivalent to holding the realm."
+const UnencryptedWarning = "This snapshot is not encrypted. It holds unmasked client secrets, LDAP bind credentials, IdP secrets, SMTP passwords and RSA private signing keys in the clear. Holding the file is equivalent to holding the realm."
 
 // Envelope is the bundle's self-description. It carries no secret, so it can be
 // read and rendered the moment a bundle is decrypted, and its non-secret subset

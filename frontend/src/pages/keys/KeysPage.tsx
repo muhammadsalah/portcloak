@@ -17,7 +17,8 @@
  * Restore and Inspect then try these keys without asking, and say which one
  * worked.
  */
-import { KeysAPI, type KeyAvailability, type KeysView, type StoredKey } from "../../api";
+import { KeysAPI, type KeyAvailability, type KeysView, type StoredKey } from "@/api";
+import { Icon } from "@/components/Icon";
 import {
   Badge,
   Button,
@@ -36,9 +37,9 @@ import {
   Small,
   Spinner,
   useModal,
-} from "../../design-system";
-import { useAsync } from "../../hooks/useAsync";
-import { ConfirmByName, GenerateKeyForm, ImportKeyForm } from "./KeyDialogs";
+} from "@/design-system";
+import { useAsync } from "@/hooks/useAsync";
+import { ConfirmByName, GenerateKeyForm, ImportKeyForm } from "./dialogs/KeyDialogs";
 
 export function KeysPage() {
   const { state, reload } = useAsync(
@@ -99,8 +100,12 @@ function Keys({
           <PageSubtitle>{view.note}</PageSubtitle>
         </div>
         <Row>
-          <Button onClick={importKey}>Import a key</Button>
+          <Button onClick={importKey}>
+            <Icon name="importIn" />
+            Import a key
+          </Button>
           <Button $variant="primary" onClick={generate}>
+            <Icon name="plus" />
             Create a key
           </Button>
         </Row>
@@ -127,7 +132,7 @@ function Keys({
           <Muted>
             <Small>
               A key lives in this machine&apos;s keychain. config.yaml holds only its name, its
-              kind, its public half where it has one, and a handle — so the file stays portable
+              kind, its public half where it has one, and a handle, so the file stays portable
               between machines and the secrets deliberately do not.
             </Small>
           </Muted>
@@ -165,6 +170,7 @@ function SessionKeys({
             reload();
           }}
         >
+          <Icon name="trash" />
           Forget them
         </Button>
       </CardHead>
@@ -191,16 +197,20 @@ function EmptyState({ onGenerate, onImport }: { onGenerate: () => void; onImport
           <Muted>
             <Small>
               An age keypair is the one to start with. Its public half is what a capture seals to,
-              which means the machine that takes a snapshot does not have to be able to open it —
+              which means the machine that takes a snapshot does not have to be able to open it, so
               capture and restore stop being the same privilege.
             </Small>
           </Muted>
         </p>
         <Row>
           <Button $variant="primary" onClick={onGenerate}>
+            <Icon name="plus" />
             Create a key
           </Button>
-          <Button onClick={onImport}>Import one I already have</Button>
+          <Button onClick={onImport}>
+            <Icon name="importIn" />
+            Import one I already have
+          </Button>
         </Row>
       </CardBody>
     </Card>
@@ -238,12 +248,16 @@ function KeyCard({
             </Muted>
           ) : null}
           {storedKey.present ? (
-            <Button onClick={() => confirmReveal(storedKey, modal)}>Show secret</Button>
+            <Button onClick={() => confirmReveal(storedKey, modal)}>
+              <Icon name="eye" />
+              Show secret
+            </Button>
           ) : null}
           <Button
             $variant="danger"
             onClick={() => confirmDelete(storedKey, deleteWarning, modal, reload)}
           >
+            <Icon name="trash" />
             Delete
           </Button>
         </Row>
@@ -255,7 +269,7 @@ function KeyCard({
         </Muted>
         {storedKey.publicKey ? (
           <div style={{ marginTop: 10 }}>
-            <Label>Public key — captures seal to this</Label>
+            <Label>Public key, captures seal to this</Label>
             <RevealValue>{storedKey.publicKey}</RevealValue>
           </div>
         ) : null}

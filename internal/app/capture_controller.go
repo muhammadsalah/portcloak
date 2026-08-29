@@ -43,7 +43,7 @@ func (c *CaptureController) Defaults() (res WizardDefaults) {
 		Environments:     snapshot.Environments,
 		Storages:         snapshot.Storage,
 		Preferences:      c.eng.Config.Preferences(),
-		EncryptionNotice: "Recommended. An unencrypted snapshot holds unmasked client secrets, LDAP bind credentials and RSA private signing keys in the clear — holding the file is equivalent to holding the realm.",
+		EncryptionNotice: "Recommended. An unencrypted snapshot holds unmasked client secrets, LDAP bind credentials and RSA private signing keys in the clear. Holding the file is equivalent to holding the realm.",
 		DeclineNotice:    declineNotice,
 	}
 	if d, ok := cfg.DefaultStorage(); ok {
@@ -54,7 +54,7 @@ func (c *CaptureController) Defaults() (res WizardDefaults) {
 
 // declineNotice is what turning encryption off actually means. It is stated in
 // full, once, at the moment of the decision.
-const declineNotice = "This snapshot will be written unencrypted. The file will contain unmasked client secrets, LDAP bind credentials, IdP secrets, SMTP passwords and RSA private signing keys, in the clear. Anyone who obtains it effectively holds the realm. PortCloak will label the snapshot and record this choice, and will not expire the file — where it ends up afterwards is yours to decide."
+const declineNotice = "This snapshot will be written unencrypted. The file will contain unmasked client secrets, LDAP bind credentials, IdP secrets, SMTP passwords and RSA private signing keys, in the clear. Anyone who obtains it effectively holds the realm. PortCloak will label the snapshot and record this choice, and will not expire the file. Where it ends up afterwards is yours to decide."
 
 // Realms lists what can be captured from an environment.
 //
@@ -82,7 +82,7 @@ func (c *CaptureController) Realms(environment string) (res RealmsResult) {
 	v, err := c.eng.verifierFor(env)
 	if err != nil || v == nil {
 		return RealmsResult{
-			Note: "This environment has no Admin API configured, so PortCloak cannot list its realms. Type the realm name — the export reads it straight from the database.",
+			Note: "This environment has no Admin API configured, so PortCloak cannot list its realms. Type the realm name. The export reads it straight from the database.",
 		}
 	}
 
@@ -91,7 +91,7 @@ func (c *CaptureController) Realms(environment string) (res RealmsResult) {
 
 	if !v.Reachable(ctx) {
 		return RealmsResult{
-			Note: "The Admin API was not reachable, so PortCloak cannot list the realms. Type the realm name — the export does not need the server running.",
+			Note: "The Admin API was not reachable, so PortCloak cannot list the realms. Type the realm name. The export does not need the server running.",
 		}
 	}
 	realms, err := v.Realms(ctx)

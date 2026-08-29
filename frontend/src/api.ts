@@ -360,7 +360,7 @@ export interface DeleteResult extends MaybeFailed {
 }
 
 export const SnapshotAPI = {
-  library: () => call<LibraryView>("SnapshotController", "Library"),
+  snapshots: () => call<LibraryView>("SnapshotController", "Library"),
   browse: (storage: string) => call<BrowseResult>("SnapshotController", "Browse", storage),
   remove: (storage: string, bundleKey: string) =>
     call<DeleteResult>("SnapshotController", "Delete", storage, bundleKey),
@@ -766,6 +766,8 @@ export interface ActivityView extends MaybeFailed {
   running: number;
   interrupted: number;
   summary: string;
+  /** What an empty Activity shows instead of a bare notice. */
+  firstRun?: FirstRun;
 }
 
 export interface DiscardResult extends MaybeFailed {

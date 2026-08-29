@@ -49,7 +49,7 @@ func PlanResume(home config.Home, j *config.Job) ResumePlan {
 	}
 	if j.Kind != config.JobCapture {
 		return ResumePlan{Kind: ResumeUnavailable,
-			Reason: "A restore is not resumed automatically. Keycloak's import is not transactional, so replaying one is not always safe — review what was applied and start again deliberately."}
+			Reason: "A restore is not resumed automatically. Keycloak's import is not transactional, so replaying one is not always safe. Review what was applied and start again deliberately."}
 	}
 
 	cp := j.Checkpoint

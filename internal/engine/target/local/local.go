@@ -79,11 +79,11 @@ func (e *Executor) Probe(ctx context.Context) (target.TargetFacts, error) {
 	folder := expand(e.env.ServerFolder)
 	if folder == "" {
 		facts.Fail("Keycloak server folder", "not set",
-			"Point the environment at the install root — the folder containing bin/kc.sh.")
+			"Point the environment at the install root, the folder containing bin/kc.sh.")
 		return facts, nil
 	}
 	if st, err := os.Stat(folder); err != nil || !st.IsDir() {
-		facts.Fail("Keycloak server folder", folder+" — not found",
+		facts.Fail("Keycloak server folder", folder+": not found",
 			"Check the path. PortCloak expects the install root, not the bin folder inside it.")
 		return facts, nil
 	}
@@ -94,12 +94,12 @@ func (e *Executor) Probe(ctx context.Context) (target.TargetFacts, error) {
 	if err != nil {
 		// Naming the exact path it looked for is the difference between a
 		// fixable message and a puzzle.
-		facts.Fail("kc.sh", kcPath+" — not found",
+		facts.Fail("kc.sh", kcPath+": not found",
 			"That is the path PortCloak looked for. If Keycloak lives elsewhere, correct the server folder.")
 		return facts, nil
 	}
 	if st.Mode()&0o111 == 0 && runtime.GOOS != "windows" {
-		facts.Fail("kc.sh", kcPath+" — not executable",
+		facts.Fail("kc.sh", kcPath+": not executable",
 			"Give it execute permission, or run PortCloak as an account that can.")
 		return facts, nil
 	}
@@ -137,7 +137,7 @@ func (e *Executor) Probe(ctx context.Context) (target.TargetFacts, error) {
 	// A local install has no clone to make, and saying so plainly is better
 	// than leaving the row blank on a screen where the other kinds fill it in.
 	facts.CloneCapable = false
-	facts.CloneDetail = "not applicable — the export runs as a separate process on this machine, isolated by the ports above"
+	facts.CloneDetail = "not applicable: the export runs as a separate process on this machine, isolated by the ports above"
 	facts.AddCheck(target.Check{Name: "Ephemeral clone", Value: facts.CloneDetail, Status: target.CheckPass})
 
 	facts.HasTar = true

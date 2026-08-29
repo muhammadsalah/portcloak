@@ -366,7 +366,7 @@ func (s *Store) Put(ctx context.Context, key string, r io.Reader, opts store.Put
 	if opts.Digest != "" && opts.Digest != digest {
 		_ = client.Remove(tmp)
 		return store.PutResult{}, resil.Fatal("verify the upload",
-			fmt.Sprintf("%s did not arrive intact — the bytes written do not match the digest computed before the transfer.", key), nil)
+			fmt.Sprintf("%s did not arrive intact. The bytes written do not match the digest computed before the transfer.", key), nil)
 	}
 
 	_ = client.Remove(p)

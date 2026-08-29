@@ -358,7 +358,7 @@ func (s *Store) Put(ctx context.Context, key string, r io.Reader, opts store.Put
 	digest := hex.EncodeToString(h.Sum(nil))
 	if opts.Digest != "" && opts.Offset == 0 && opts.Digest != digest {
 		return store.PutResult{}, resil.Fatal("verify the upload",
-			fmt.Sprintf("%s did not arrive intact — the bytes do not match the digest computed before the transfer.", key), nil)
+			fmt.Sprintf("%s did not arrive intact. The bytes do not match the digest computed before the transfer.", key), nil)
 	}
 
 	commitOpts := &blockblob.CommitBlockListOptions{}

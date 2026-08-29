@@ -278,7 +278,7 @@ func (b *Breaker) Allow() error {
 		return &Error{
 			Op:       "connect",
 			Message:  fmt.Sprintf("%s has been unreachable for %s. PortCloak has paused rather than keep hammering it, and will try again in %s.", b.endpoint, roundish(elapsed), roundish(remaining)),
-			Advice:   "Nothing is lost — the job keeps its checkpoint and resumes from where it stopped.",
+			Advice:   "Nothing is lost. The job keeps its checkpoint and resumes from where it stopped.",
 			Class:    Retryable,
 			Endpoint: b.endpoint,
 		}

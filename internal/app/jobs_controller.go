@@ -78,7 +78,11 @@ type ActivityView struct {
 	Running     int       `json:"running"`
 	Interrupted int       `json:"interrupted"`
 	Summary     string    `json:"summary"`
-	Failure     *Failure  `json:"failure,omitempty"`
+	// FirstRun is what an empty Activity shows instead of a bare notice. The
+	// screen an operator returns to should say what to do when there is nothing
+	// to return to yet.
+	FirstRun *FirstRun `json:"firstRun,omitempty"`
+	Failure  *Failure  `json:"failure,omitempty"`
 }
 
 // List returns every job, newest first.
@@ -120,6 +124,13 @@ func (j *JobsController) List() (res ActivityView) {
 			out.Interrupted++
 		}
 		out.Jobs = append(out.Jobs, v)
+	}
+
+	if len(out.Jobs) == 0 {
+		out.FirstRun = j.eng.firstRun(
+			"Nothing has run yet",
+			"Captures and restores appear here while they run, and stay afterwards with what they did.",
+		)
 	}
 
 	switch {

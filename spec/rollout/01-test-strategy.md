@@ -180,7 +180,8 @@ an answer from it mocks `src/api.ts`, which is the frontend's only door to Go.
 
 That a module *is* view state, rather than something drawn, is the thing the tests depend on, so
 the three named above were moved out of their components to where they can be stated on their
-own — `pages/capture/draft.ts`, `pages/restore/wizard.ts`, and `pages/activity/live.ts`. Only the
+own — `pages/snapshots/capture/draft.ts`, `pages/snapshots/restore/wizard.ts`, and
+`pages/activity/live.ts`. Only the
 user table stayed in place, because paging and facets are held in the query it sends and the
 assertion worth making is which query that was.
 

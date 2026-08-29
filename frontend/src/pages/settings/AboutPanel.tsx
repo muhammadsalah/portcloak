@@ -10,8 +10,9 @@
  * transcribing a commit hash by eye, and half of those arrive wrong.
  */
 import { useState } from "react";
+import { Icon } from "@/components/Icon";
 
-import type { AboutView } from "../../api";
+import type { AboutView } from "@/api";
 import {
   Button,
   Card,
@@ -23,7 +24,7 @@ import {
   Muted,
   Row,
   Small,
-} from "../../design-system";
+} from "@/design-system";
 
 export function AboutPanel({ about }: { about: AboutView }) {
   const rows: [string, string, boolean][] = [
@@ -89,6 +90,7 @@ function CopyButton({ text }: { text: string }) {
         });
       }}
     >
+      <Icon name="copy" />
       {copied ? "Copied" : "Copy build details"}
     </Button>
   );

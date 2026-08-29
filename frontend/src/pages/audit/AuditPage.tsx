@@ -13,7 +13,7 @@
 import { useState } from "react";
 import styled from "styled-components";
 
-import { AuditAPI, type AuditEntry } from "../../api";
+import { AuditAPI, type AuditEntry } from "@/api";
 import {
   Card,
   CardBody,
@@ -32,9 +32,9 @@ import {
   Small,
   Spinner,
   type Tone,
-} from "../../design-system";
-import { useAsync } from "../../hooks/useAsync";
-import { stamp } from "../../utils/format";
+} from "@/design-system";
+import { useAsync } from "@/hooks/useAsync";
+import { stamp } from "@/utils/format";
 
 const actions = [
   { value: "", label: "All actions" },
@@ -187,7 +187,7 @@ function describe(e: AuditEntry): string {
     case "keyDeleted":
       return "DELETED an encryption key";
     default:
-      return `${e.action} — ${e.outcome}`;
+      return `${e.action} · ${e.outcome}`;
   }
 }
 

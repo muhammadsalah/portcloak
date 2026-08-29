@@ -16,7 +16,7 @@ describe("routeKey", () => {
   it("is the route's own name for every screen the rail lists", () => {
     const listed: Route[] = [
       { name: "capture" },
-      { name: "library" },
+      { name: "snapshots" },
       { name: "activity" },
       { name: "environments" },
       { name: "storage" },
@@ -33,8 +33,8 @@ describe("routeKey", () => {
   it("lights up Snapshots while one is being restored", () => {
     // A restore starts from a row on the snapshot list and has no rail item of
     // its own. A rail with nothing selected reads as being lost.
-    expect(routeKey({ name: "restore" })).toBe("library");
-    expect(routeKey({ name: "restore", snapshotId: "snap-1" })).toBe("library");
+    expect(routeKey({ name: "restore" })).toBe("snapshots");
+    expect(routeKey({ name: "restore", snapshotId: "snap-1" })).toBe("snapshots");
   });
 
   it("lights up Library while a snapshot is being inspected", () => {
@@ -46,7 +46,7 @@ describe("routeKey", () => {
         bundleKey: "2026/03/acme.pck",
         snapshotId: "snap-1",
       }),
-    ).toBe("library");
+    ).toBe("snapshots");
   });
 
   it("lights up Storage while a storage is being browsed", () => {
@@ -65,6 +65,6 @@ describe("routeKey", () => {
         snapshotId: "s",
         tab: "secrets",
       }),
-    ).toBe("library");
+    ).toBe("snapshots");
   });
 });

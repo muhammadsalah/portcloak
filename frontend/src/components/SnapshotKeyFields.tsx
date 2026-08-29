@@ -11,7 +11,7 @@
  * passphrase or by an age identity, and an operator who learns the shape of
  * that question on one screen should recognise it on the other.
  */
-import { Label, Input, Textarea } from "../design-system";
+import { Label, Input, Textarea } from "@/design-system";
 
 /** A key as the engine takes it: one passphrase, or one or more identities. */
 export interface SnapshotKey {

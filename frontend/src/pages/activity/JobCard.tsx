@@ -8,9 +8,9 @@
 import { memo, useEffect, useRef, type ReactNode } from "react";
 import styled from "styled-components";
 
-import { JobsAPI, type JobView, type LogLine } from "../../api";
-import { useNavigate } from "../../app/ShellContext";
-import { Icon } from "../../components/Icon";
+import { JobsAPI, type JobView, type LogLine } from "@/api";
+import { useNavigate } from "@/app/ShellContext";
+import { Icon } from "@/components/Icon";
 import {
   Badge,
   Button,
@@ -37,9 +37,9 @@ import {
   useModal,
   type StepState,
   type Tone,
-} from "../../design-system";
-import { titleCase, when } from "../../utils/format";
-import { ResumePassphrase } from "./ResumePassphrase";
+} from "@/design-system";
+import { titleCase, when } from "@/utils/format";
+import { ResumePassphrase } from "./dialogs/ResumePassphrase";
 import { logTail, type Live } from "./live";
 
 type Modal = ReturnType<typeof useModal>;
@@ -105,7 +105,7 @@ export function JobCard({ job, live, reload }: { job: JobView; live?: Live; relo
                 tone={running ? "ok" : "info"}
                 title={
                   running
-                    ? `Ephemeral clone ${job.provenance.cloneRef} is running — the serving instance is untouched.`
+                    ? `Ephemeral clone ${job.provenance.cloneRef} is running. The serving instance is untouched.`
                     : `Ephemeral clone ${job.provenance.cloneRef} was created and destroyed.`
                 }
                 body={
@@ -174,7 +174,7 @@ function Identity({ job }: { job: JobView }) {
       </Row>
       <Facts>
         {restore ? (
-          <Fact icon="library" title="The snapshot being restored">
+          <Fact icon="snapshots" title="The snapshot being restored">
             <FactLabel>Snapshot</FactLabel>
             {job.origin?.capturedAt ? when(job.origin.capturedAt) : "—"}
           </Fact>
@@ -422,6 +422,7 @@ function Actions({
             reload();
           }}
         >
+          <Icon name="close" />
           Cancel
         </Button>
       ) : null}
@@ -443,6 +444,7 @@ function Actions({
               void doResume(job, modal, reload);
             }}
           >
+            <Icon name="refresh" />
             {rerunsExport ? "Resume (re-exports)" : "Resume"}
           </Button>
           {resumeNote ? (
@@ -454,7 +456,10 @@ function Actions({
       ) : null}
 
       {job.discardable ? (
-        <Button onClick={() => confirmDiscard(job, modal, reload)}>Discard</Button>
+        <Button onClick={() => confirmDiscard(job, modal, reload)}>
+          <Icon name="trash" />
+          Discard
+        </Button>
       ) : null}
 
       {job.state === "completed" && job.kind === "capture" && job.snapshotId ? (
@@ -468,6 +473,7 @@ function Actions({
             })
           }
         >
+          <Icon name="inspect" />
           Inspect
         </Button>
       ) : null}

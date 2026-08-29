@@ -120,7 +120,7 @@ func validateEnvironment(e Environment, base string, add addFunc) {
 	switch e.Kind {
 	case EnvLocal:
 		if e.ServerFolder == "" {
-			add(base+".serverFolder", "the local environment %q does not say where Keycloak is installed. Point serverFolder at the install root — the folder containing bin/kc.sh.", e.Name)
+			add(base+".serverFolder", "the local environment %q does not say where Keycloak is installed. Point serverFolder at the install root, the folder containing bin/kc.sh.", e.Name)
 		}
 		rejectForeign(e, base, add, "host", "namespace", "container", "context", "workload", "dockerEndpoint")
 	case EnvSSH:

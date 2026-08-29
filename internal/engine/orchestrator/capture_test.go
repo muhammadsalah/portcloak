@@ -386,7 +386,7 @@ func TestCapture_TeardownRunsOnEveryExitPath(t *testing.T) {
 			h.capture(defaultRequest())
 
 			if !h.exec.WasTornDown() {
-				t.Fatalf("teardown did not run on the %q path — a clone would have been left running", c.name)
+				t.Fatalf("teardown did not run on the %q path. A clone would have been left running", c.name)
 			}
 		})
 	}

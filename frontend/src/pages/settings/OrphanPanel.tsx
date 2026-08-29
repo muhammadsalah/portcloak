@@ -7,7 +7,8 @@
  * Found by PortCloak's own label on launch. Offered, never removed without
  * asking — your cluster is not ours to garbage-collect.
  */
-import { SettingsAPI, type OrphanReport } from "../../api";
+import { SettingsAPI, type OrphanReport } from "@/api";
+import { Icon } from "@/components/Icon";
 import {
   Button,
   Card,
@@ -21,7 +22,7 @@ import {
   Row,
   Small,
   useModal,
-} from "../../design-system";
+} from "@/design-system";
 
 export function OrphanPanel({ report, reload }: { report: OrphanReport; reload: () => void }) {
   const modal = useModal();
@@ -36,6 +37,7 @@ export function OrphanPanel({ report, reload }: { report: OrphanReport; reload: 
       <CardHead>
         <CardTitle>{heading}</CardTitle>
         <Button $variant="plain" onClick={reload}>
+          <Icon name="refresh" />
           Check again
         </Button>
       </CardHead>
@@ -64,9 +66,13 @@ export function OrphanPanel({ report, reload }: { report: OrphanReport; reload: 
                   reload();
                 }}
               >
+                <Icon name="trash" />
                 Remove it
               </Button>
-              <Button onClick={reload}>Leave it</Button>
+              <Button onClick={reload}>
+                <Icon name="close" />
+                Leave it
+              </Button>
             </Row>
           </div>
         ))}
@@ -88,7 +94,7 @@ export function OrphanPanel({ report, reload }: { report: OrphanReport; reload: 
         <p>
           <Muted>
             <Small>
-              Found by PortCloak&apos;s own label on launch. Offered, never removed without asking —
+              Found by PortCloak&apos;s own label on launch. Offered, never removed without asking.
               your cluster is not ours to garbage-collect.
             </Small>
           </Muted>

@@ -241,7 +241,7 @@ func (i *InspectController) Users(q UsersQuery) (res UsersResult) {
 
 	out := UsersResult{
 		Page: page, Facets: facets,
-		Note: "Credential presence only — hashes, OTP seeds and passkey material are never shown.",
+		Note: "Credential presence only. Hashes, OTP seeds and passkey material are never shown.",
 	}
 	if page.Total == 0 {
 		out.Empty = describeActiveFilters(q)

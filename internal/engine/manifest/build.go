@@ -410,7 +410,7 @@ func buildSecretLedger(rep *realm.Representation, opts BuildOptions) []Secret {
 		switch {
 		case value == "":
 			s.Carried = false
-			s.Note = "not carried — set it by hand after import"
+			s.Note = "not carried, set it by hand after import"
 		case IsMasked(value):
 			s.Carried = false
 			s.Masked = true

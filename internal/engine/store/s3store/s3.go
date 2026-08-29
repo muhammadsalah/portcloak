@@ -416,7 +416,7 @@ func (s *Store) putSingle(ctx context.Context, key string, r io.Reader, opts sto
 	digest := hex.EncodeToString(sum[:])
 	if opts.Digest != "" && opts.Digest != digest {
 		return store.PutResult{}, resil.Fatal("verify the upload",
-			fmt.Sprintf("%s did not arrive intact — the bytes do not match the digest computed before the transfer.", key), nil)
+			fmt.Sprintf("%s did not arrive intact. The bytes do not match the digest computed before the transfer.", key), nil)
 	}
 
 	in := &s3.PutObjectInput{
@@ -504,7 +504,7 @@ func (s *Store) putMultipart(ctx context.Context, key string, r io.Reader, opts 
 	digest := hex.EncodeToString(h.Sum(nil))
 	if opts.Digest != "" && opts.Offset == 0 && opts.Digest != digest {
 		return store.PutResult{}, resil.Fatal("verify the upload",
-			fmt.Sprintf("%s did not arrive intact — the bytes do not match the digest computed before the transfer.", key), nil)
+			fmt.Sprintf("%s did not arrive intact. The bytes do not match the digest computed before the transfer.", key), nil)
 	}
 
 	res, err := s.CompleteMultipart(ctx, id, key, parts)

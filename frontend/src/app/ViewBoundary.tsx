@@ -17,7 +17,7 @@
  */
 import { Component, type ErrorInfo, type ReactNode } from "react";
 
-import { Button, Notice } from "../design-system";
+import { Button, Notice } from "@/design-system";
 
 interface Props {
   /** Remounts the subtree, and so re-runs its loads, when it changes. */

@@ -1,5 +1,16 @@
 {
   "compilerOptions": {
+    // "@/x" is src/x, from anywhere. Nesting the pages by how they are reached
+    // put real screens three and four levels down, and "../../../design-system"
+    // says nothing about what it imports while quietly encoding where the file
+    // that imports it happens to sit — so it breaks on every move. Vite and
+    // Vitest are given the same alias; all three have to agree or the checker
+    // and the bundler disagree about what resolves.
+    // Relative, and no baseUrl: TypeScript 6 removed baseUrl and requires the
+    // target to start with "./".
+    "paths": {
+      "@/*": ["./src/*"]
+    },
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "bundler",

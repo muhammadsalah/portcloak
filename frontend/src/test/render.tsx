@@ -18,7 +18,7 @@ import type { ReactElement, ReactNode } from "react";
 import { ThemeProvider } from "styled-components";
 import { render, type RenderResult } from "@testing-library/react";
 
-import { ModalProvider, theme } from "../design-system";
+import { ModalProvider, theme } from "@/design-system";
 
 function Providers({ children }: { children: ReactNode }) {
   return (

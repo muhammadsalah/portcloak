@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /** The four kinds of storage, and how they are named on screen. */
-import type { StorageKind } from "../../api";
+import type { StorageKind } from "@/api";
 
 export const kinds: { value: StorageKind; label: string }[] = [
   { value: "disk", label: "Disk" },

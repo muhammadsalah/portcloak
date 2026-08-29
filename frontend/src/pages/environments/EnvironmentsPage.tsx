@@ -10,9 +10,10 @@
  * on `save` in EnvironmentEditor.
  */
 import { useState } from "react";
+import { Icon } from "@/components/Icon";
 
-import { ConfigAPI, type ConfigSnapshot, type Environment, type EnvironmentView } from "../../api";
-import { useNavigate } from "../../app/ShellContext";
+import { ConfigAPI, type ConfigSnapshot, type Environment, type EnvironmentView } from "@/api";
+import { useNavigate } from "@/app/ShellContext";
 import {
   Button,
   Card,
@@ -29,29 +30,38 @@ import {
   Spinner,
   Split,
   Truncate,
-} from "../../design-system";
-import { useAsync } from "../../hooks/useAsync";
+} from "@/design-system";
+import { useAsync } from "@/hooks/useAsync";
 import styled from "styled-components";
 
 import { EnvironmentEditor } from "./EnvironmentEditor";
 import { kindLabel } from "./kinds";
 
-export function EnvironmentsPage({ select }: { select?: string }) {
+export function EnvironmentsPage({ select, add }: { select?: string; add?: boolean }) {
   const { state, reload } = useAsync(() => ConfigAPI.load(), []);
 
   if (state.status === "failed") throw state.error;
   if (state.status === "loading") return <Spinner>Loading configuration…</Spinner>;
 
-  return <Environments snapshot={state.value} select={select} reload={() => void reload()} />;
+  return (
+    <Environments
+      snapshot={state.value}
+      select={select}
+      add={Boolean(add)}
+      reload={() => void reload()}
+    />
+  );
 }
 
 function Environments({
   snapshot,
   select,
+  add,
   reload,
 }: {
   snapshot: ConfigSnapshot;
   select?: string;
+  add: boolean;
   reload: () => void;
 }) {
   const navigate = useNavigate();
@@ -61,11 +71,15 @@ function Environments({
   const initial = snapshot.environments.find(
     (e) => e.name === (select ?? snapshot.environments[0]?.name),
   );
-  const [selected, setSelected] = useState<string | undefined>(initial?.name);
-  const [draft, setDraft] = useState<Environment | undefined>(initial ? { ...initial } : undefined);
+  // `add` arrives from the route, so a screen that sent an operator here to add
+  // one lands them in the editor rather than on the list beside it.
+  const [selected, setSelected] = useState<string | undefined>(add ? undefined : initial?.name);
+  const [draft, setDraft] = useState<Environment | undefined>(
+    add ? { name: "", kind: "local" } : initial ? { ...initial } : undefined,
+  );
   // Empty while adding: it is the name the engine is asked to replace, and a
   // new environment replaces nothing.
-  const [originalName, setOriginalName] = useState(initial?.name ?? "");
+  const [originalName, setOriginalName] = useState(add ? "" : (initial?.name ?? ""));
   // Bumped whenever a different environment is picked, so the editor remounts
   // and drops the probe result and typed secrets belonging to the last one.
   const [editorKey, setEditorKey] = useState(0);
@@ -87,6 +101,7 @@ function Environments({
           </PageSubtitle>
         </div>
         <Button $variant="primary" onClick={() => edit(null)}>
+          <Icon name="plus" />
           Add environment
         </Button>
       </PageHead>
@@ -134,14 +149,14 @@ function NothingYet({ snapshot }: { snapshot: ConfigSnapshot }) {
       <CardBody>
         <CardTitle>No environments yet</CardTitle>
         <p>
-          An environment is one place a Keycloak server runs — on this machine, on a host you reach
+          An environment is one place a Keycloak server runs: on this machine, on a host you reach
           over SSH, in a Docker container, or in a Kubernetes namespace. PortCloak reads from it. It
           never restarts or reconfigures the instance serving your logins.
         </p>
         <p>
           <Muted>
             <Small>
-              {`Add one with the button above, or write it into ${snapshot.configFile} by hand — the file is the same one this screen edits. Credentials never go in it: each secret goes to this machine's keychain and only a handle is written to the file.`}
+              {`Add one with the button above, or write it into ${snapshot.configFile} by hand. The file is the same one this screen edits. Credentials never go in it: each secret goes to this machine's keychain and only a handle is written to the file.`}
             </Small>
           </Muted>
         </p>
@@ -173,6 +188,7 @@ function ConfigProblems({ snapshot, reload }: { snapshot: ConfigSnapshot; reload
           reload();
         }}
       >
+        <Icon name="refresh" />
         Reload config.yaml
       </Button>
     </NoticeBox>
@@ -236,7 +252,7 @@ function ProbeLine({ environment }: { environment: EnvironmentView }) {
 
   return (
     <ProbeText $bad={bad}>
-      {`${label}${environment.lastProbe.keycloakVersion ? ` · Keycloak ${environment.lastProbe.keycloakVersion}` : ""}${environment.stale ? " — stale" : ""}`}
+      {`${label}${environment.lastProbe.keycloakVersion ? ` · Keycloak ${environment.lastProbe.keycloakVersion}` : ""}${environment.stale ? " · stale" : ""}`}
     </ProbeText>
   );
 }

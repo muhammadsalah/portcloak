@@ -15,7 +15,7 @@
  */
 import { beforeEach, describe, expect, it } from "vitest";
 
-import type { ProgressEvent } from "../../api";
+import type { ProgressEvent } from "@/api";
 import {
   applyEvent,
   applyTail,
@@ -131,7 +131,7 @@ describe("retry", () => {
       event({ kind: "retry", attempt: 3, retryIn: 4_000_000_000, message: "connection reset" }),
     );
     expect(live.warn).toBe(true);
-    expect(live.note).toBe("Attempt 3 failed — retrying in 4s. connection reset");
+    expect(live.note).toBe("Attempt 3 failed. Retrying in 4s. connection reset");
   });
 
   it("still says something when the engine offered no message", () => {
@@ -146,7 +146,7 @@ describe("breakerOpen", () => {
     const live = fold(event({ kind: "breakerOpen", item: "archive", retryIn: 60_000_000_000 }));
     expect(live.warn).toBe(true);
     expect(live.note).toBe(
-      "Paused — archive has been unreachable. Retrying in 60s. Nothing is lost.",
+      "Paused. archive has been unreachable. Retrying in 60s. Nothing is lost.",
     );
   });
 });
@@ -225,7 +225,7 @@ describe("the log tail", () => {
     expect(hasLogTail(job)).toBe(false);
   });
 
-  it("is a tail, not a file — it keeps the last lines and discards the first", () => {
+  it("is a tail, not a file: it keeps the last lines and discards the first", () => {
     // A 120,000-user export talks enough to exhaust the renderer otherwise.
     const all = new Map<string, Live>();
     for (let i = 0; i < maxLogLines + 50; i++) {
@@ -264,13 +264,13 @@ describe("an event missing a field the engine usually sends", () => {
 
   it("renders an immediate retry as 0s rather than as NaN", () => {
     expect(fold(event({ kind: "retry", attempt: 1 })).note).toBe(
-      "Attempt 1 failed — retrying in 0s. ",
+      "Attempt 1 failed. Retrying in 0s. ",
     );
   });
 
   it("renders an immediate breaker retry as 0s", () => {
     expect(fold(event({ kind: "breakerOpen", item: "archive" })).note).toBe(
-      "Paused — archive has been unreachable. Retrying in 0s. Nothing is lost.",
+      "Paused. archive has been unreachable. Retrying in 0s. Nothing is lost.",
     );
   });
 

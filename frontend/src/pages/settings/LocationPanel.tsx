@@ -10,7 +10,8 @@
  */
 import { useEffect, useState } from "react";
 
-import { type LocationView, SettingsAPI } from "../../api";
+import { type LocationView, SettingsAPI } from "@/api";
+import { Icon } from "@/components/Icon";
 import {
   Badge,
   Button,
@@ -31,7 +32,7 @@ import {
   type Tone,
   useModal,
   useModalControls,
-} from "../../design-system";
+} from "@/design-system";
 
 type Modal = ReturnType<typeof useModal>;
 
@@ -94,6 +95,7 @@ export function LocationPanel({
             disabled={!location.movable || Boolean(location.blocked)}
             onClick={() => confirmMove(location, modal, reload)}
           >
+            <Icon name="folder" />
             Move to another folder
           </Button>
           {!location.atDefault ? (
@@ -101,10 +103,12 @@ export function LocationPanel({
               disabled={!location.movable || Boolean(location.blocked)}
               onClick={() => confirmDefault(location, modal, reload)}
             >
+              <Icon name="folder" />
               Use the default folder
             </Button>
           ) : null}
           <Button $variant="plain" onClick={reload}>
+            <Icon name="refresh" />
             Refresh
           </Button>
         </Row>
@@ -158,14 +162,14 @@ function MovedAndKept() {
     <div>
       <div style={{ fontWeight: 600, marginBottom: 2 }}>What moves:</div>
       <ul style={{ fontSize: 12, margin: "4px 0 0", paddingLeft: 18 }}>
-        <li>config.yaml — your environments, storage definitions and preferences</li>
+        <li>config.yaml holds your environments, storage definitions and preferences</li>
         <li>the audit log</li>
         <li>job checkpoints, including any interrupted job waiting to be resumed</li>
         <li>logs, inspection indexes and decrypted working files</li>
       </ul>
       <div style={{ fontWeight: 600, margin: "10px 0 2px" }}>What does not:</div>
       <ul style={{ fontSize: 12, margin: "4px 0 0", paddingLeft: 18 }}>
-        <li>this machine&apos;s keychain — every credential stays exactly where it is</li>
+        <li>this machine&apos;s keychain, where every credential stays exactly as it is</li>
         <li>every snapshot in storage; moving this folder moves no backup</li>
       </ul>
     </div>
@@ -206,7 +210,7 @@ function MoveForm({
       <p style={{ marginTop: 12 }}>
         <Muted>
           <Small>
-            {`Moving from ${from}. The running application follows the folder — nothing has to be restarted.`}
+            {`Moving from ${from}. The running application follows the folder, so nothing has to be restarted.`}
           </Small>
         </Muted>
       </p>

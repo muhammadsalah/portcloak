@@ -10,10 +10,11 @@
  * — see the note on `save`.
  */
 import { useState } from "react";
+import { Icon } from "@/components/Icon";
 
-import { ConfigAPI, type ConfigSnapshot, type Environment, type ProbeResult } from "../../api";
-import { useNavigate } from "../../app/ShellContext";
-import { ProbePanel } from "../../components/ProbePanel";
+import { ConfigAPI, type ConfigSnapshot, type Environment, type ProbeResult } from "@/api";
+import { useNavigate } from "@/app/ShellContext";
+import { ProbePanel } from "@/components/ProbePanel";
 import {
   Badge,
   Button,
@@ -38,7 +39,7 @@ import {
   Strong,
   Tabs,
   useModal,
-} from "../../design-system";
+} from "@/design-system";
 import { kindLabel, kinds } from "./kinds";
 
 export function EnvironmentEditor({
@@ -159,22 +160,20 @@ export function EnvironmentEditor({
       <CardBody $divided>
         <Stack $gap={12}>
           <Row>
+            {/* See StorageEditor: the test reads the draft, so it does not wait
+                for the draft to be saved. */}
             <Button
-              disabled={!originalName || probing}
+              disabled={probing}
               onClick={async () => {
                 setProbing(true);
                 setProbe(await ConfigAPI.testEnvironmentDraft(draft, secret));
                 setProbing(false);
               }}
             >
+              <Icon name="activity" />
               {probing ? "Testing…" : "Test connection"}
             </Button>
           </Row>
-          {!originalName ? (
-            <Muted>
-              <Small>Save the environment first, then test it.</Small>
-            </Muted>
-          ) : null}
           {probing ? <Spinner>Probing…</Spinner> : null}
           {probe?.failure ? <FailureNotice failure={probe.failure} /> : null}
           {probe && !probe.failure ? <ProbePanel facts={probe.facts} ok={probe.ok} /> : null}
@@ -200,8 +199,12 @@ export function EnvironmentEditor({
           ) : null}
         </Row>
         <Row>
-          <Button onClick={() => navigate({ name: "environments" })}>Cancel</Button>
+          <Button onClick={() => navigate({ name: "environments" })}>
+            <Icon name="close" />
+            Cancel
+          </Button>
           <Button $variant="primary" disabled={saving || !draft.name} onClick={() => void save()}>
+            <Icon name="check" />
             {saving ? "Saving…" : "Save"}
           </Button>
         </Row>
@@ -230,7 +233,7 @@ function KindFields({
         <>
           <Field
             label="Keycloak server folder"
-            hint="The install root — the folder containing bin/kc.sh, not the bin folder itself."
+            hint="The install root: the folder containing bin/kc.sh, not the bin folder itself."
           >
             <Input
               type="text"
@@ -298,8 +301,8 @@ function KindFields({
           </Field>
           {draft.auth === "agent" ? (
             <FieldHint style={{ marginBottom: 16 }}>
-              Agent authentication stores no secret at all — PortCloak asks the running agent when
-              it connects.
+              Agent authentication stores no secret at all. PortCloak asks the running agent when it
+              connects.
             </FieldHint>
           ) : (
             <CredentialField
@@ -412,7 +415,7 @@ function KcPathField({ draft, set }: { draft: Environment; set: Setter }) {
   return (
     <Field
       label="Path to kc.sh inside the container (optional)"
-      hint="Leave this empty for the official images. Set it for a custom build that installs Keycloak elsewhere — the probe reports which path it will use either way."
+      hint="Leave this empty for the official images. Set it for a custom build that installs Keycloak elsewhere. The probe reports which path it will use either way."
     >
       <Input
         type="text"
@@ -557,7 +560,7 @@ function confirmDelete(
         <p>
           <Muted>
             <Small>
-              Snapshots already captured from it keep its name in their provenance — deleting an
+              Snapshots already captured from it keep its name in their provenance. Deleting an
               environment does not rewrite history, and nothing on the Keycloak itself is touched.
             </Small>
           </Muted>

@@ -24,6 +24,7 @@ export {
   Toggle,
 } from "./Form";
 export { Select, type SelectOption } from "./Select";
+export { Pagination, pageNumbers, pageSizes } from "./Pagination";
 export { GlobalStyle } from "./GlobalStyle";
 export { Menu, type MenuItem } from "./Menu";
 export {

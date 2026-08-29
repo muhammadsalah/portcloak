@@ -39,7 +39,7 @@ func EnvironmentReadiness(e Environment) Readiness {
 	case EnvSSH:
 		switch e.Auth {
 		case "":
-			return notReady("choose how PortCloak should authenticate to %s — a private key, the SSH agent, or a password.", e.Host)
+			return notReady("choose how PortCloak should authenticate to %s: a private key, the SSH agent, or a password.", e.Host)
 		case SSHKey, SSHPassword:
 			if e.CredentialRef == "" {
 				return notReady("the %s for %s has not been supplied yet, so there is nothing in this machine's keychain to connect with.", authNoun(e.Auth), e.Host)

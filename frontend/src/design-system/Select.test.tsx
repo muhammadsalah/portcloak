@@ -16,7 +16,7 @@ import { describe, expect, it, vi } from "vitest";
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
-import { renderApp } from "../test/render";
+import { renderApp } from "@/test/render";
 import { Select } from "./Select";
 
 const realms = [

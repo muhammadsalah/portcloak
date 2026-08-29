@@ -471,7 +471,7 @@ func storageNote(r store.Reach) string {
 		return "Reachable, but PortCloak could not write here. Snapshots can be browsed and restored from this storage; new captures cannot be written to it."
 	default:
 		if r.FailedStep != "" {
-			return "Not reachable — " + r.FailedStep + " failed. " + r.Detail
+			return "Not reachable. " + r.FailedStep + " failed. " + r.Detail
 		}
 		return "Not reachable. " + r.Detail
 	}

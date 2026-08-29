@@ -79,7 +79,7 @@ func (s *SettingsController) location(failure *Failure) LocationView {
 	out := LocationView{
 		Root:        home.Root,
 		ConfigFile:  home.ConfigFile(),
-		Note:        "Plain YAML — read it, diff it, commit it, hand-edit a hostname. PortCloak re-reads it on launch. No credential is ever written here; only keychain handles.",
+		Note:        "Plain YAML. Read it, diff it, commit it, hand-edit a hostname. PortCloak re-reads it on launch. No credential is ever written here; only keychain handles.",
 		Credentials: s.eng.Config.CheckCredentials(s.eng.Creds),
 		Failure:     failure,
 	}
@@ -369,9 +369,9 @@ func (s *SettingsController) WorkingData() (res WorkingData) {
 	defer func() { res = lists(res) }()
 	out := WorkingData{
 		Keeps: []string{
-			"config.yaml — your environments, storage definitions and preferences",
+			"config.yaml holds your environments, storage definitions and preferences",
 			"this machine's keychain entries",
-			"every snapshot in storage — purging local data is never a way to lose a backup",
+			"every snapshot in storage. Purging local data is never a way to lose a backup",
 			"any interrupted job that can still be resumed",
 		},
 	}
@@ -390,9 +390,9 @@ func (s *SettingsController) WorkingData() (res WorkingData) {
 	}
 	switch {
 	case len(open) > 0:
-		out.IndexNote = fmt.Sprintf("%d snapshot%s open — closing them removes their indexes.", len(open), plural(len(open)))
+		out.IndexNote = fmt.Sprintf("%d snapshot%s open. Closing them removes their indexes.", len(open), plural(len(open)))
 	case out.IndexCount == 0:
-		out.IndexNote = "none — no snapshot is open"
+		out.IndexNote = "none: no snapshot is open"
 	default:
 		out.IndexNote = fmt.Sprintf("%d left by a previous session", out.IndexCount)
 	}
