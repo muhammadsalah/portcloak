@@ -14,6 +14,12 @@ record; unprefixed `v` tags mark shipped binaries.
 ## [Unreleased]
 
 ### Fixed
+- The playground's LDAP image no longer exists. Bitnami moved its catalogue and `bitnami/openldap`
+  now publishes no tags at all — the same move CI already works around for MinIO — so the Docker
+  playground failed to pull and the OpenShift one sat in `ImagePullBackOff`. Both now name
+  `bitnamilegacy/openldap:2.6.10-debian-12-r4`: the archive keeps the images but not the floating
+  `2.6`, so the version is written out in full. Frozen, which for a directory that exists to be
+  seeded and thrown away is the whole requirement.
 - The seeding script died on `unbound variable` before it could load a directory. macOS ships bash
   3.2, which finds the end of a variable name one byte at a time: in `"$service…"` it takes the
   first byte of the ellipsis to be part of the name, looks up a variable nobody set, and `set -u`

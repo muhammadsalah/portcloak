@@ -61,7 +61,12 @@ x-keycloak: &keycloak
     start_period: 60s
 
 x-openldap: &openldap
-  image: bitnami/openldap:2.6
+  # bitnamilegacy, and a fully qualified tag. Bitnami moved its catalogue and
+  # `bitnami/openldap` now publishes no tags at all — the same move that took
+  # `bitnami/minio` out from under CI. The archive keeps the images but not the
+  # floating `2.6`, so the version is written out in full. Frozen, which for a
+  # directory that exists to be seeded and thrown away is the whole requirement.
+  image: bitnamilegacy/openldap:2.6.10-debian-12-r4
   environment: &openldap-env
     LDAP_ADMIN_USERNAME: admin
     LDAP_ADMIN_PASSWORD: adminpassword

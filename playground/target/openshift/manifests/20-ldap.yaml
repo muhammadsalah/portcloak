@@ -38,7 +38,7 @@ spec:
     spec:
       containers:
         - name: openldap
-          image: bitnami/openldap:2.6
+          image: bitnamilegacy/openldap:2.6.10-debian-12-r4
           envFrom:
             - secretRef:
                 name: ldap
@@ -91,7 +91,7 @@ spec:
     spec:
       containers:
         - name: openldap
-          image: bitnami/openldap:2.6
+          image: bitnamilegacy/openldap:2.6.10-debian-12-r4
           envFrom:
             - secretRef:
                 name: ldap
