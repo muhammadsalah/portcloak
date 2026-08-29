@@ -7,134 +7,222 @@
 
 # PortCloak
 
-A desktop tool for moving Keycloak realms between environments with full fidelity — users and
-their password hashes, OTP and passkey enrolments, unmasked client secrets, RSA/EC/HMAC/AES key
-providers including private material, LDAP and IdP federations, authentication flows and realm
-settings.
+**Move a Keycloak realm from one environment to another, and have it still work when it lands.**
 
-Named after the product it serves. Go + [Wails v3](https://wails.io), single binary, no server
-component, no account.
+Passwords, 2FA enrolments, passkeys, client secrets, LDAP bind credentials, identity-provider
+secrets and the keys that sign your tokens all travel with it. PortCloak is a desktop app for
+macOS, Windows and Linux. One binary, no server to run, no account to create, no sign-in.
 
-> **Status: 0.0.2.** The whole loop closes — capture a realm, put it somewhere,
-> read it back, and restore it — across all four target kinds and all four storage backends.
-> The [rollout plan](./spec/rollout/README.md) describes how it was built; the
-> [release notes](./spec/rollout/11-release-0.0.1.md#what-001-does-not-do) are honest about
-> what 0.0.1 does not do.
+> **Status: early (0.0.3).** The full loop works end to end: capture a realm, put it somewhere,
+> browse it, restore it. It has not yet been through a long life in production, and no release
+> carries an Apple or Windows platform signature yet ([see below](#installing)).
 
-## The problem it solves
+## The problem
 
-A realm export that loses a client secret, an OTP enrolment or a signing key produces a
-destination that imports cleanly and then fails at the first login. PortCloak treats that as the
-failure to design against: `kc.sh export` is the single authoritative capture mechanism, every
-carried category is enumerated in a per-snapshot manifest, and anything that could not be carried
-is reported rather than quietly dropped.
+A stock realm export is usually good enough for configuration and quietly wrong about everything
+else. It masks client secrets. It leaves signing keys behind. Depending on how you run it, users
+and their credentials come out incomplete or not at all.
 
-Two constraints shape most of the design:
+The realm imports cleanly at the destination, so the migration looks like it worked. Then:
 
-- **The instance serving real logins is never disturbed.** On Docker and Kubernetes the export
-  runs inside an *ephemeral clone* — a parked copy of the workload, started hung, exec'd into,
-  then destroyed. On local and SSH targets it binds automatically-allocated free ports so it
-  cannot collide with a running server.
-- **Bad connections must not cost the whole job.** Every remote operation retries with backoff
-  and jitter, transfers checkpoint to disk, and a job resumes across an application restart —
-  converging on one complete object, never a duplicate.
+- nobody can log in, because password hashes did not travel;
+- everyone with 2FA is locked out, because OTP seeds and passkeys did not travel;
+- every integration breaks, because the client secrets are `**********`;
+- every token issued before the move is rejected, because the realm signs with new keys.
 
-## Where to start
+You find this out in production, at the first login.
 
-| If you want | Read |
+PortCloak exists to make that failure impossible to have by accident. It captures through
+Keycloak's own `kc.sh export`, which is the authoritative mechanism, fills the gaps that leaves
+via the Admin API, and then **writes down exactly what it carried**. If something could not be
+carried, it is reported, not dropped in silence.
+
+## What it does
+
+Four things, in a loop:
+
+**Capture.** Pick a Keycloak, pick a realm, get a snapshot. PortCloak probes the target first and
+tells you what it found (Keycloak version, where `kc.sh` lives, free space, whether it can work
+there at all) before anything runs.
+
+**Store.** Snapshots go to a local folder, a remote SSH volume, an S3-compatible bucket, or Azure
+Blob. Optionally sealed with a key you control.
+
+**Inspect.** A snapshot is a browsable artifact, not an opaque blob. Search the users inside it,
+list its clients, see which keys carried private material, read its secret ledger, all without
+restoring anything and without touching a live server.
+
+**Restore.** Pick a snapshot, pick a destination, see a dry-run diff of what will change, choose
+how to handle collisions, then apply and watch the import log. Afterwards PortCloak re-reads the
+destination and reports any drift from what the snapshot said.
+
+## What travels with a realm
+
+| | Carried |
 |---|---|
-| Exactly what a snapshot carries, secret by secret | [`spec/07-realm-carryover-manifest.md`](./spec/07-realm-carryover-manifest.md) |
-| How secrets are handled, and the threat model | [`spec/08-security.md`](./spec/08-security.md) |
-| Why the scope boundaries are where they are | [`spec/12-decisions.md`](./spec/12-decisions.md) |
-| The mark, and the rules around it | [`assets/logo/`](./assets/logo/README.md) |
+| **Users** | Accounts, attributes, role mappings, group memberships, required actions, federated identity links, service accounts |
+| **Credentials** | Password hashes with their algorithm, iterations and salt, so existing passwords keep working |
+| **2FA** | OTP/TOTP seeds, WebAuthn and passkey credentials, recovery codes |
+| **Clients** | Definitions, redirect URIs, protocol mappers, scopes, service-account roles, full authorization-services model, and **unmasked client secrets**, verified through the Admin API to be real values rather than `**********` |
+| **Signing keys** | RSA, EC, HMAC and AES key providers *including private material*, with their KIDs, priorities and algorithms, so **tokens minted before the move still verify after it** |
+| **User federation** | LDAP and Kerberos providers, all their mappers, sync settings, and the LDAP bind credential |
+| **Identity providers** | OIDC, SAML and social IdPs, their mappers, and their client secrets |
+| **Authentication** | Flows, subflows, executions, bindings, authenticator configs (and the secrets inside them), required actions, client policies and profiles |
+| **Realm settings** | Token lifespans, session settings, password policy, brute-force settings, OTP and WebAuthn policy, roles, groups, client scopes, localization, SMTP config with its password |
 
-The design record the tool was built from — requirements, architecture, 60 use cases, the
-nine-phase rollout and its traceability matrix — is in [`spec/`](./spec/README.md). It says how
-PortCloak was constructed, not how to use it. Faults that reached working code, each with the
-test that keeps it from returning, are in [`spec/notes/`](./spec/notes/README.md).
+**Sessions do not travel, on purpose.** They live in Infinispan caches, depend on cluster topology,
+and do not survive being recreated elsewhere in any dependable way. After a restore, users
+re-authenticate. What people usually actually want from session portability is that tokens issued
+before the move are still accepted afterwards, and PortCloak delivers that properly instead, by
+carrying the realm's signing keys.
 
-## What it deliberately does not do
+**Theme files and provider JARs do not travel either.** They are deployment artifacts, not realm
+data. PortCloak detects them, lists them, and shows you that list *before* a restore, because a
+realm pointing at a theme or an authenticator that isn't deployed at the destination imports
+successfully and then fails at login.
 
-Sessions are out of scope — users re-authenticate after a move, and token continuity is delivered
-instead by carrying the realm's signing keys, so tokens issued before the move still verify after
-it. Themes and provider JARs are detected and reported, never migrated. Restore is whole-realm.
-One snapshot is one realm. It is not a replication tool, a version upgrader, a database backup
-tool, or a secrets manager.
+Every snapshot ships with a manifest saying which of these were found and carried, so a completeness
+verdict is something you read rather than something you assume. The full item-by-item table is in
+[`spec/07-realm-carryover-manifest.md`](./spec/07-realm-carryover-manifest.md).
 
-The full list, with reasoning, is in
-[`spec/rollout/11-release-0.0.1.md`](./spec/rollout/11-release-0.0.1.md#what-001-does-not-do).
+## Where it can read from
 
-## One thing to know before using it
+Four kinds of environment, one workflow:
 
-Snapshot encryption is **opt-in**. That is a deliberate decision, not an oversight — but it means
-an unencrypted bundle holds unmasked client secrets and private signing keys in the clear. It has
-to, because Keycloak accepts exactly those values on import, and that is what makes the migration
-work at all. PortCloak labels such a bundle unmistakably and never expires it. Where the file ends
-up afterwards is yours to decide.
+| | What you point it at |
+|---|---|
+| **Local** | A Keycloak install folder on this machine |
+| **SSH** | A host (optionally through a jump host) and the install folder on it |
+| **Docker** | A socket, `DOCKER_HOST`, or Docker-over-SSH, and the container or service running Keycloak |
+| **Kubernetes / OpenShift** | A kubeconfig context, namespace, and the Deployment or StatefulSet running Keycloak |
 
-## Building it
+**The instance serving real logins is never disturbed.** On Docker and Kubernetes the export runs
+inside an *ephemeral clone*: a parked copy of your workload, started idle, exec'd into, then
+destroyed. You watch it get created and torn down. On Local and SSH targets, PortCloak binds
+automatically-allocated free ports so it cannot collide with the running server.
 
-The frontend is embedded in the binary, so it is built first:
+No `kubectl`, `docker`, `ssh` or `aws` CLI is required. PortCloak speaks to all of them directly,
+and falls back to a CLI only where a socket or API isn't exposed.
 
-```bash
-npm --prefix frontend ci
-npm --prefix frontend run build
-go build -ldflags "-X main.version=0.0.2" -o portcloak ./cmd/portcloak
-```
+## Where it can write to
 
-The engine is testable without any of that — no network, no Docker, no Keycloak,
-no Node toolchain:
+| | |
+|---|---|
+| **Disk** | A folder on this machine |
+| **SSH** | A folder on a remote host |
+| **S3** | Any S3-compatible endpoint: AWS, MinIO, and friends |
+| **Azure Blob** | Azure, or Azurite for local work |
 
-```bash
-go test ./internal/... -race
-```
+Each is rooted at a folder or prefix, so one bucket or one host can hold several independent
+snapshot trees. One is marked default for new captures. Any of them can be marked
+*encryption required*, which removes the option to write an unsealed snapshot there.
 
-If a test in `internal/engine` needs a real target, a fake is missing rather than
-the test being justified. Tests that genuinely need a service container are
-behind `-tags=integration`, so a missing MinIO reads as "not run" and never as a
-silent pass.
+## Things that matter when the network is bad
 
-The frontend has its own suite, which needs the Node toolchain but still nothing
-running:
+Slow and flaky links are treated as the normal case, not the exception:
 
-```bash
-npm --prefix frontend test
-```
+- Every remote operation **retries with backoff and jitter**, and transfers **checkpoint to disk**.
+- An interrupted job shows up as **Interrupted**, with a **Resume** action, and resuming works
+  *across an application restart*. It converges on one complete snapshot, never a duplicate and
+  never a half-written file that looks whole.
+- While a job runs you see the phase, the item, the attempt count and the last error, including
+  Keycloak's own output, streamed live and kept afterwards, so a failure names itself instead of
+  arriving as an exit code.
+- Cancelling actually tears down the ephemeral clone rather than abandoning it.
 
-Either suite can report what it covered. Both floors are ratchets — they are set
-just under what the suites currently reach, so the number can only be argued
-upwards:
+## Snapshots and secrets
 
-```bash
-./build/ci/coverage.sh               # the engine, with a coverage profile
-npm --prefix frontend run test:coverage
-```
+An unencrypted snapshot holds unmasked client secrets and private signing keys **in the clear**. It
+has to, because those are exactly the values Keycloak accepts on import, and carrying them is what
+makes the migration work at all.
 
-## Releases and signatures
+So: **encryption is opt-in, and presented on.** Turning it off takes a deliberate action that spells
+out the consequence, an unencrypted bundle is labelled unmistakably everywhere it appears, and
+PortCloak never expires it. Where the file ends up afterwards is yours to decide.
 
-Releases are built only by [`.github/workflows/release.yml`](./.github/workflows/release.yml)
-from a signed tag, never on a laptop. For every artifact on every platform,
-`SHA256SUMS` is signed with Sigstore and each file carries a build-provenance
-attestation binding it to this repository at that commit. Each release publishes
-the exact commands to check both.
+Two ways to seal one:
 
-Platform signatures — an Apple Developer ID with notarisation, and Authenticode
-on Windows — are not in place yet, so **no release carries either**. Each release's
-notes state which signatures that particular build actually got, rather than
-describing what the pipeline is capable of.
+- **A passphrase**, with AES-256-GCM over a strong KDF.
+- **Recipients**, as `age`/X25519 public keys, so the people who capture and the people who restore
+  need not be the same people.
 
-Who may sign, what has to be true first, and how to verify a download are in
+Keys are managed in the app: generate or import one, give it a name, and its secret half goes to
+the **OS keychain** (macOS Keychain, Windows Credential Manager, libsecret), never to a config
+file. Captures seal to a key *by name*; restores and inspections open a snapshot with what is
+already stored instead of prompting you.
+
+Every connection credential PortCloak needs works the same way. `~/.portcloak/config.yaml` is
+readable, diffable and hand-editable, and holds no secrets, only handles into the keychain. That
+folder can be moved onto an encrypted volume or an external disk from Settings, without a restart.
+
+Every reveal of a secret is explicit, per-secret, and written to an audit log you can read and
+filter but never edit from inside the app. The threat model is in
+[`spec/08-security.md`](./spec/08-security.md).
+
+## Installing
+
+Download the build for your platform from the
+[Releases page](https://github.com/muhammadsalah/portcloak/releases):
+
+| Platform | Artifact |
+|---|---|
+| **macOS** (Apple silicon + Intel) | `PortCloak-<version>-macos-universal.zip`, a universal `.app` |
+| **Windows** (amd64, arm64) | `PortCloak-<version>-windows-<arch>.zip` |
+| **Linux** (amd64, arm64) | `portcloak-<version>-linux-<arch>.tar.gz` |
+
+**No release is signed by Apple or Microsoft yet.** macOS Gatekeeper and Windows SmartScreen will
+both object, and you will have to allow it through by hand. What *is* in place for every artifact
+on every platform: `SHA256SUMS` signed with Sigstore, and a build-provenance attestation binding
+each file to this repository at a specific commit. Every release publishes the exact commands to
+verify both, and given the above, it is worth running them. Details in
 [`CODE_SIGNING.md`](./CODE_SIGNING.md).
+
+On Linux the binary needs GTK 3 and WebKitGTK 4.1 present (`libgtk-3-0` and `libwebkit2gtk-4.1-0`
+on Debian/Ubuntu, or your distribution's equivalents).
+
+### What you need on the other end
+
+- **Keycloak** reachable through one of the four environment kinds above, with an install you can
+  run `kc.sh` in. Measured against **24.0, 25.0, 26.3 and 26.5**. PortCloak asks the binary what
+  it supports rather than consulting a version table, so nearby versions generally work.
+- **An Admin API account** is optional but recommended: it is what verifies that client secrets are
+  real values rather than masked ones, and what detects your custom themes and provider JARs.
+  Self-signed certificates behind a private CA are supported explicitly.
+
+## Getting started
+
+1. **Environments.** Add the Keycloak you want to capture from. Press **Test**: it runs the exact
+   same probe a capture does, and reports what it actually found. Test works before you save, so
+   you can check a definition while you're still typing it.
+2. **Storage.** Add somewhere for snapshots to live, and mark one default.
+3. **Keys** *(recommended)*. Generate one, so encryption is a name you pick rather than a
+   passphrase you retype on every machine.
+4. **Capture**, from Snapshots. Choose the realm, the options, the destination; watch it run.
+   Selecting several realms queues several jobs, because one snapshot is always exactly one realm.
+5. **Restore**, from a snapshot's row or from the button in its inspector. Pick the destination,
+   read the dry-run diff, choose overwrite / skip / merge, apply.
+
+The app opens straight into the workspace; there is nothing to sign into. It is a single-user local
+tool, and the only credentials involved are the ones your own environment and storage definitions
+carry.
+
+## What it deliberately is not
+
+Not a replication or HA-sync tool, since snapshots are point-in-time. Not a version upgrader. Not a
+database backup tool: it works at the realm level, not on raw dumps. Not a secrets manager. Restore
+is whole-realm, with no cherry-picking. The reasoning behind each of these is in
+[`spec/12-decisions.md`](./spec/12-decisions.md), and the full list of what a release does not do
+is in its release notes.
 
 ## Licence
 
-Apache License 2.0. See [`LICENSE`](./LICENSE) for the terms and
-[`NOTICE`](./NOTICE) for the attribution.
+Apache License 2.0. See [`LICENSE`](./LICENSE) and [`NOTICE`](./NOTICE).
 
     Copyright 2026 Muhammad Salah <muhammadsalahmasoud@icloud.com>
 
-`LICENSE` is the Apache Software Foundation's text unaltered, placeholder
-appendix and all, so it can be diffed against the canonical copy and shown to
-be unmodified. The copyright line lives in `NOTICE`, which is where the licence
-itself puts it. Both ship inside every release artifact, because section 4(d)
-requires anyone redistributing this to carry them along.
+## Building it, and contributing
+
+[`README.dev.md`](./README.dev.md) covers building from source, running the test suites, how
+releases are produced and signed, and the design record in [`spec/`](./spec/README.md): 60 use
+cases, the architecture, the nine-phase rollout, and a log of every fault that reached working code
+with the test that keeps it from coming back.
