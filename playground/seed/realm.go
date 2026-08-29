@@ -349,6 +349,45 @@ func ldapProvider(s shape, host string, port int) map[string]any {
 			"connectionTimeout": {"5000"},
 			"readTimeout":       {"10000"},
 		},
+		// The mappers have to be written out. Creating an LDAP provider through
+		// the admin API runs a factory hook that adds the default set; arriving
+		// inside a realm import, the component is created without it, and a
+		// provider with no mappers asks the directory for no attributes. What
+		// comes back is a DN and an empty attribute set, which Keycloak reports
+		// per user as "User returned from LDAP has null username!" — five
+		// thousand times, with the provider itself looking correctly configured.
+		"subComponents": map[string]any{
+			"org.keycloak.storage.ldap.mappers.LDAPStorageMapper": ldapMappers(),
+		},
+	}
+}
+
+// ldapMappers is the set the admin API would have created, with one deliberate
+// difference: first name reads givenName rather than cn. Keycloak's default for
+// an "other" vendor takes cn, which in this directory is the whole name — so a
+// federated user would arrive called "Mei Gupta Gupta".
+func ldapMappers() []any {
+	m := func(name, userAttr, ldapAttr, mandatory, alwaysRead string) map[string]any {
+		return map[string]any{
+			"id":         randomID(),
+			"name":       name,
+			"providerId": "user-attribute-ldap-mapper",
+			"config": map[string][]string{
+				"user.model.attribute":        {userAttr},
+				"ldap.attribute":              {ldapAttr},
+				"read.only":                   {"true"},
+				"is.mandatory.in.ldap":        {mandatory},
+				"always.read.value.from.ldap": {alwaysRead},
+			},
+		}
+	}
+	return []any{
+		m("username", "username", "uid", "true", "false"),
+		m("first name", "firstName", "givenName", "true", "true"),
+		m("last name", "lastName", "sn", "true", "true"),
+		m("email", "email", "mail", "false", "false"),
+		m("creation date", "createTimestamp", "createTimestamp", "false", "true"),
+		m("modify date", "modifyTimestamp", "modifyTimestamp", "false", "true"),
 	}
 }
 

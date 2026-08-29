@@ -14,6 +14,15 @@ record; unprefixed `v` tags mark shipped binaries.
 ## [Unreleased]
 
 ### Fixed
+- The seeded realms' LDAP federation resolved nobody. A provider created through the admin API gets
+  its default mappers from a factory hook; the same provider arriving inside a realm import is
+  created without it, and one with no mappers asks the directory for no attributes at all. What
+  came back was a DN and an empty attribute set, reported once per user as `User returned from LDAP
+  has null username!` — five thousand times, by a provider whose own configuration reads as
+  correct. The mappers are written into the realm now, as `subComponents` of the provider. First
+  name reads `givenName` rather than the `cn` Keycloak defaults to for an unknown vendor, because
+  `cn` in this directory is the whole name and a federated user would otherwise arrive called
+  "Mei Gupta Gupta".
 - The seeder generated a realm no Keycloak would accept, in three separate ways. Client roles rode
   inside each client object, where `ClientRepresentation` has no field for them — they belong at
   realm level under `roles.client`, keyed by clientId. The LDAP federation component repeated its
