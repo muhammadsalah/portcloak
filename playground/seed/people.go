@@ -218,12 +218,16 @@ func passkeyCredential(r *mathrand.Rand) credential {
 	}
 	secretData, _ := json.Marshal(map[string]string{})
 	credentialData, _ := json.Marshal(map[string]any{
-		"credentialId":               base64.RawURLEncoding.EncodeToString(id),
-		"credentialPublicKey":        base64.RawURLEncoding.EncodeToString(key),
-		"aaguid":                     fmt.Sprintf("%x-%x-%x-%x-%x", aaguid[0:4], aaguid[4:6], aaguid[6:8], aaguid[8:10], aaguid[10:16]),
-		"counter":                    0,
-		"attestationStatement":       "",
-		"credentialType":             "public-key",
+		"credentialId":         base64.RawURLEncoding.EncodeToString(id),
+		"credentialPublicKey":  base64.RawURLEncoding.EncodeToString(key),
+		"aaguid":               fmt.Sprintf("%x-%x-%x-%x-%x", aaguid[0:4], aaguid[4:6], aaguid[6:8], aaguid[8:10], aaguid[10:16]),
+		"counter":              0,
+		"attestationStatement": "",
+		// No credentialType. WebAuthnCredentialData accepts exactly seven
+		// properties and this is not one of them, and Jackson is configured to
+		// fail on an unknown field rather than skip it — so one extra key here
+		// takes down the whole realm import with a 500 and "Cannot parse the
+		// JSON", which says nothing about which JSON or which field.
 		"transports":                 []string{"internal", "hybrid"},
 		"attestationStatementFormat": "none",
 	})

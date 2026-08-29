@@ -26,7 +26,7 @@ func buildRealm(s shape, ldapHost string, ldapPort int) map[string]any {
 
 	groups, groupPaths := buildGroups(r, s.groups)
 	roles, roleNames := buildRealmRoles(r, s.roles)
-	clients, clientScopes := buildClients(r, s.clients)
+	clients, clientScopes, clientRoles := buildClients(r, s.clients)
 
 	realm := map[string]any{
 		"realm":                                  s.realm,
@@ -69,7 +69,8 @@ func buildRealm(s shape, ldapHost string, ldapPort int) map[string]any {
 		"requiredActions": requiredActions(),
 		"groups":          groups,
 		"roles": map[string]any{
-			"realm": roles,
+			"realm":  roles,
+			"client": clientRoles,
 		},
 		"clientScopes": clientScopes,
 		"clients":      clients,
@@ -178,7 +179,13 @@ func buildRealmRoles(r *mathrand.Rand, n int) ([]any, []string) {
 // buildClients covers the four client shapes that behave differently on a
 // restore: a confidential client with a secret, a public SPA, a bearer-only
 // service, and a service-account client with its own roles.
-func buildClients(r *mathrand.Rand, n int) ([]any, []any) {
+// The client roles come back separately rather than riding inside each client.
+// ClientRepresentation has no roles field: Keycloak carries client roles at the
+// realm level, under roles.client keyed by clientId. A roles array inside a
+// client is not ignored, it fails the whole import — the realm comes back as
+// 400 "unable to read contents from stream", which names the stream rather than
+// the field and sends you looking at the request instead of at what is in it.
+func buildClients(r *mathrand.Rand, n int) ([]any, []any, map[string]any) {
 	scopes := []any{
 		map[string]any{
 			"name":        "playground-profile",
@@ -197,6 +204,7 @@ func buildClients(r *mathrand.Rand, n int) ([]any, []any) {
 	}
 
 	var clients []any
+	clientRoles := map[string]any{}
 	for i := range n {
 		id := fmt.Sprintf("playground-client-%02d", i)
 		kind := i % 4
@@ -246,13 +254,13 @@ func buildClients(r *mathrand.Rand, n int) ([]any, []any) {
 		}
 
 		// Client roles, so role mappings have somewhere client-scoped to point.
-		c["roles"] = []any{
+		clientRoles[id] = []any{
 			map[string]any{"name": "viewer", "description": "read " + id},
 			map[string]any{"name": "editor", "description": "write " + id},
 		}
 		clients = append(clients, c)
 	}
-	return clients, scopes
+	return clients, scopes, clientRoles
 }
 
 // mapper is a user-attribute-to-claim protocol mapper, which is the kind that
@@ -302,10 +310,14 @@ func identityProvider() map[string]any {
 // directory during an export, inside the transaction that writes the page.
 func ldapProvider(s shape, host string, port int) map[string]any {
 	return map[string]any{
-		"id":           randomID(),
-		"name":         "ldap-" + s.realm,
-		"providerId":   "ldap",
-		"providerType": "org.keycloak.storage.UserStorageProvider",
+		"id":         randomID(),
+		"name":       "ldap-" + s.realm,
+		"providerId": "ldap",
+		// No providerType here. In a realm export `components` is a map keyed by
+		// provider type, and the component under it is a ComponentExportRepresentation,
+		// which has no such field — repeating it fails the whole import with the
+		// same "unable to read contents from stream" a client-level roles array
+		// gives, and for the same reason.
 		"config": map[string][]string{
 			"enabled":               {"true"},
 			"priority":              {"0"},

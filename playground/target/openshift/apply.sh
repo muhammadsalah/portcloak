@@ -130,6 +130,34 @@ apply)
 		  - kind: User
 		    name: kubeadmin
 		    apiGroup: rbac.authorization.k8s.io
+		---
+		# The directories run under anyuid. The OpenLDAP image starts as its own
+		# uid 1001 and writes into paths that uid owns, and restricted-v2 admits
+		# a pod as an arbitrary uid from the namespace's range instead — under
+		# which the image cannot run its own setup and the pod crash-loops.
+		#
+		# This is the same grant `oc adm policy add-scc-to-user anyuid -z default`
+		# makes, written as the RoleBinding it creates so that it applies with
+		# everything else, is idempotent, and is visible in the repository rather
+		# than being a change somebody made to a cluster once and remembered.
+		#
+		# It is a real exception and it is scoped to one namespace of a throwaway
+		# cluster. A production deployment of a directory would use an image built
+		# to run as any uid; this playground uses the image the Docker half uses,
+		# because a playground that differs from itself proves less.
+		apiVersion: rbac.authorization.k8s.io/v1
+		kind: RoleBinding
+		metadata:
+		  name: ldap-anyuid
+		  namespace: kc
+		roleRef:
+		  apiGroup: rbac.authorization.k8s.io
+		  kind: ClusterRole
+		  name: system:openshift:scc:anyuid
+		subjects:
+		  - kind: ServiceAccount
+		    name: default
+		    namespace: kc
 	YAML
 
 	echo

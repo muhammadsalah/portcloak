@@ -14,6 +14,21 @@ record; unprefixed `v` tags mark shipped binaries.
 ## [Unreleased]
 
 ### Fixed
+- The seeder generated a realm no Keycloak would accept, in three separate ways. Client roles rode
+  inside each client object, where `ClientRepresentation` has no field for them — they belong at
+  realm level under `roles.client`, keyed by clientId. The LDAP federation component repeated its
+  own `providerType`, which is the key the `components` map is already filed under and not a
+  property of the component. And every generated passkey carried a `credentialType` in its
+  credential data, one field more than `WebAuthnCredentialData`'s seven. Each failed the entire
+  import rather than the field: the first two as `400 unable to read contents from stream`, the
+  third as `500 Cannot parse the JSON` — messages that name the stream and not what was in it, so
+  the only way to the answer was the server's own stack trace.
+- The OpenShift playground grants the LDAP pods `anyuid`, from `apply.sh` rather than from
+  somebody's memory. The OpenLDAP image runs as its own uid and writes where that uid can;
+  `restricted-v2` admits a pod as an arbitrary uid from the namespace's range, under which the
+  image cannot complete its own setup and the pod crash-loops. The grant is written as the
+  RoleBinding `oc adm policy add-scc-to-user` creates, so it applies with everything else and is
+  visible in the repository.
 - The playground's LDAP image no longer exists. Bitnami moved its catalogue and `bitnami/openldap`
   now publishes no tags at all — the same move CI already works around for MinIO — so the Docker
   playground failed to pull and the OpenShift one sat in `ImagePullBackOff`. Both now name
