@@ -84,6 +84,23 @@ requirement is left without a behaviour that realises it.
 | UC-R7 | Restore to a fresh Keycloak | FR-R1, G1 | [01 §1.2](../01-vision-and-requirements.md) |
 | UC-R8 | Cancel a restore | FR-C11, NFR-5 | [03 §3.3](../03-capture-targets.md) |
 
+## Command line
+
+| UC | Name | Covers | Design |
+|----|------|--------|--------|
+| UC-L1 | Run PortCloak from a terminal | NFR-12, N8 | [13 §13.1](../13-command-line.md) |
+| UC-L2 | Point one run at a different folder | NFR-11, NFR-12 | [13 §13.1](../13-command-line.md) |
+| UC-L3 | Capture from the command line | FR-C1…C5, FR-C8, FR-S6, NFR-12 | [13 §13.2](../13-command-line.md) |
+| UC-L4 | Watch a run in a terminal | NFR-5, NFR-12 | [13 §13.4](../13-command-line.md) |
+| UC-L5 | Cancel with Ctrl-C | FR-C11, NFR-1, NFR-12 | [13 §13.5](../13-command-line.md) |
+| UC-L6 | Read the library and inside a snapshot | FR-V1…FR-V8, NFR-12 | [13 §13.2](../13-command-line.md) |
+| UC-L7 | Restore from the command line | FR-R1…FR-R4, NFR-12 | [13 §13.2](../13-command-line.md) |
+| UC-L8 | Manage age keys from a terminal | NFR-3, FR-N6, NFR-12 | [13 §13.6](../13-command-line.md) |
+| UC-L9 | Probe an environment or a storage | FR-C7, FR-N3, NFR-12 | [13 §13.3](../13-command-line.md) |
+| UC-L10 | Run while the desktop app is open | NFR-11, NFR-12 | [13 §13.3](../13-command-line.md) |
+| UC-L11 | Seal without a secret on the command line | NFR-3, FR-C6, NFR-12 | [13 §13.6](../13-command-line.md) |
+| UC-L12 | Script it | NFR-4, NFR-5, NFR-12 | [13 §13.7](../13-command-line.md) |
+
 ## Operations
 
 | UC | Name | Covers | Design |
@@ -113,15 +130,16 @@ requirement is left without a behaviour that realises it.
 | **FR-V1..V10** inspection | UC-I1 … UC-I13, UC-S8 (FR-V9 withdrawn) |
 | **NFR-1** resilience | UC-O2, UC-O3, UC-O5, UC-O6, UC-C12 |
 | **NFR-2** integrity | UC-I11, UC-O6 |
-| **NFR-3** security | UC-C10, UC-I9, UC-O10, UC-E2/E7 |
-| **NFR-5** observability | UC-O1, UC-O5, UC-O8 |
+| **NFR-3** security | UC-C10, UC-I9, UC-O10, UC-E2/E7, UC-L8, UC-L11 |
+| **NFR-5** observability | UC-O1, UC-O5, UC-O8, UC-L4, UC-L12 |
 | **NFR-8** idempotence | UC-O2 |
 | **NFR-9/NFR-10** inspection perf & residue | UC-I3, UC-I13, UC-O10 |
-| **NFR-11** file-based config | UC-O7, UC-O9, UC-I3 |
+| **NFR-11** file-based config | UC-O7, UC-O9, UC-I3, UC-L2, UC-L10 |
+| **NFR-12** drivable headlessly | UC-L1 … UC-L12 |
 | **N5** sessions out of scope | UC-R1 step 10, UC-R6 step 4 |
 | **N6** no selective restore | UC-R1, UC-R4 |
 | **N7** assets not migrated | UC-C9, UC-I10, UC-R2 (reported, not enforced) |
-| **N8** no user accounts | UC-O8, UC-O9, UC-I9 |
+| **N8** no user accounts | UC-O8, UC-O9, UC-I9, UC-L1 |
 
 Nothing in the requirement set is left without a behaviour, and no use case introduces
 capability the requirements do not ask for.

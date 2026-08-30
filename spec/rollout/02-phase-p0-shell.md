@@ -147,7 +147,7 @@ feat(ui): navigation rail, routed views and first-run empty states
 ## Risks
 
 **Wails v3 maturity.** v3 is newer than v2; an API may move under us. *Mitigation:* the Wails
-surface is confined to `cmd/portcloak` and `internal/app`. The engine never imports it, so a
+surface is confined to `cmd/portcloak` and `internal/desktop`. The engine never imports it, so a
 breaking change costs one adapter, not a rewrite. If v3 proves unworkable, falling back to v2 is
 a change to two packages.
 

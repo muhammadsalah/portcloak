@@ -99,7 +99,7 @@ it is never bound at all.
 `frontend/src/api.ts`. Do not reintroduce `ServiceName()`: a method that appears to set an
 address and does not is worse than no method.
 
-**Guard** — `TestBindings_EveryFrontendCallResolves` (`internal/app/bindings_test.go`) reads
+**Guard** — `TestBindings_EveryFrontendCallResolves` (`internal/desktop/bindings_test.go`) reads
 `api.ts`, extracts every `call<T>("Controller", "Method")`, and resolves each one against the
 real controllers by reflection — including that the address is built from the package path and
 not merely that the constant is declared. Renaming this Go package now fails the build instead

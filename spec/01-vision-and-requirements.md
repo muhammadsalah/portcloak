@@ -217,8 +217,9 @@ mid-transfer.
   is declined the bundle holds unmasked secrets in the clear and the UI says so unambiguously.
   Secrets are never written to logs; PortCloak's own connection credentials live in the OS
   keychain (see [08](./08-security.md)).
-- **NFR-4 Portability.** Single self-contained binary per OS (macOS/Linux/Windows) via Wails;
-  no server component.
+- **NFR-4 Portability.** Self-contained binaries per OS (macOS/Linux/Windows), with no server
+  component and nothing to install alongside them: the desktop application via Wails, and the
+  command line as a static binary that needs no toolkit at all (NFR-12).
 - **NFR-5 Observability.** Structured logs, live progress events to the UI, and an audit trail
   of what was captured or restored, where, and when. There is no user identity to record (N8).
 - **NFR-6 Performance.** Streaming (no full-file buffering in RAM); concurrency for
@@ -243,6 +244,15 @@ mid-transfer.
   (NFR-9/NFR-10), each in its own file, never for tool state. `~/.portcloak/` is the default
   rather than a constant: the folder can be moved from Settings, or pinned with `PORTCLOAK_HOME`
   ([09 §9.1c](./09-workflows-and-ui.md)).
+- **NFR-12 Drivable headlessly.** Everything the tool can do must be reachable **without a
+  display**: capture, the snapshot library, inspection and restore, from a terminal, over SSH,
+  from a CI job. The engine was always built this way — nothing under `internal/engine/` imports
+  the UI toolkit — and this states it as a requirement rather than an accident, because the
+  places a realm migration actually happens are frequently places a desktop application cannot
+  go. The second binary that satisfies it shares one `~/.portcloak` with the first, which is a
+  concurrency problem rather than a duplication one; both are specified in
+  [13 — the command line](./13-command-line.md) and realised in
+  [`usecases/08-cli.md`](./usecases/08-cli.md).
 
 ## 1.7 Key design tension: what `kc.sh export` does and does not give us
 

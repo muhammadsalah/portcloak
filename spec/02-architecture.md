@@ -51,6 +51,16 @@ storage backends directly.
 | **Observability** | `engine/obs` | Structured logging, redaction, progress events, audit log. |
 | **Snapshot Inspector** | `engine/inspect` | Tiered snapshot open, stream-parse, query API (list/search/facet/detail), diff. See [10](./10-snapshot-inspection.md). |
 | **Index Store** | `engine/inspect/index` | **Session-scoped SQLite** projection store backing user/entity browsing — one throwaway `.sqlite` file per open snapshot, deleted on close. Never holds tool state. |
+| **Home Lock** | `engine/config` | The advisory claim two front ends take on one `~/.portcloak`, so the startup sweep and a change to `config.yaml` cannot run concurrently with another PortCloak. See [13 §13.3](./13-command-line.md). |
+
+Above the engine sit the composition root and two front ends, which is the only
+place in the tree that knows a UI toolkit exists:
+
+| Module | Package | Responsibility |
+|--------|---------|----------------|
+| **Composition root + controllers** | `internal/app` | Owns `~/.portcloak`, wires the adapter registry, and exposes engine capabilities as controller methods. Imports no Wails. |
+| **Desktop shell** | `internal/desktop` | The window, the menu, the event bridge, and the service registry binding the controllers to the frontend. The only package allowed to import Wails. |
+| **Command line** | `internal/cli` | Cobra commands, terminal progress rendering, exit codes. A peer of the desktop shell, not a layer under it. See [13](./13-command-line.md). |
 
 ![Engine component detail — adapters, drivers, snapshot pipeline, storage backends](./diagrams/png/03-components.png)
 
@@ -195,7 +205,8 @@ storage:
 
 | Concern | Choice | Why |
 |---------|--------|-----|
-| Desktop shell | **Wails v3** | Go-native, single binary, web UI; v3 for its improved multi-window and application APIs. |
+| Desktop shell | **Wails v3** | Go-native, single binary, web UI; v3 for its improved multi-window and application APIs. Confined to `internal/desktop`, because on Linux it is cgo over GTK and the command line must build without a toolkit (NFR-12). |
+| Command line | **`spf13/cobra`** | The convention every Go operator already knows, and it brings one dependency that is not already in the graph (`inconshreveable/mousetrap`, Windows only). |
 | SSH/SFTP | `golang.org/x/crypto/ssh` + `pkg/sftp` | Mature, pure-Go, no external ssh binary needed. |
 | Docker | Docker Engine API (`github.com/docker/docker/client`) with CLI fallback | API avoids shelling out; CLI fallback for podman/nerdctl. |
 | Kubernetes | `client-go` + SPDY/remotecommand exec | Same mechanism `kubectl exec` uses; works for OpenShift (`oc`) too. |

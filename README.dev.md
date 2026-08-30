@@ -50,12 +50,21 @@ Two constraints shape most of the design:
 | Exactly what a snapshot carries, secret by secret | [`spec/07-realm-carryover-manifest.md`](./spec/07-realm-carryover-manifest.md) |
 | How secrets are handled, and the threat model | [`spec/08-security.md`](./spec/08-security.md) |
 | Why the scope boundaries are where they are | [`spec/12-decisions.md`](./spec/12-decisions.md) |
+| How two front ends share one engine and one folder | [`spec/13-command-line.md`](./spec/13-command-line.md) |
 | The mark, and the rules around it | [`assets/logo/`](./assets/logo/README.md) |
 
-The design record the tool was built from — requirements, architecture, 60 use cases, the
+The design record the tool was built from — requirements, architecture, 72 use cases, the
 nine-phase rollout and its traceability matrix — is in [`spec/`](./spec/README.md). It says how
 PortCloak was constructed, not how to use it. Faults that reached working code, each with the
-test that keeps it from returning, are in [`spec/notes/`](./spec/notes/README.md).
+test that keeps it from returning, are in [`spec/notes/`](./spec/notes/README.md); the decisions
+taken while adding the command line, and what surfaced doing it, are in
+[`spec/cli/`](./spec/cli/README.md).
+
+Four packages, and the rule between them: `internal/engine` decides everything,
+`internal/app` wires it up and exposes it as controllers, and two front ends sit on that —
+`internal/desktop` (the window) and `internal/cli` (the terminal). **Nothing below
+`internal/desktop` may import Wails**, because on Linux that is cgo over GTK and it would put a
+webview toolkit between a CI runner and a realm capture.
 
 ## What it deliberately does not do
 
@@ -85,6 +94,18 @@ npm --prefix frontend ci
 npm --prefix frontend run build
 go build -ldflags "-X main.version=0.0.3" -o portcloak ./cmd/portcloak
 ```
+
+The command line needs none of it — no frontend, no cgo, no toolkit — and so
+cross-compiles anywhere from anywhere:
+
+```bash
+CGO_ENABLED=0 go build -o pcloak ./cmd/pcloak
+CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o pcloak-linux-arm64 ./cmd/pcloak
+```
+
+That is the friendliest consequence of the `internal/desktop` split for anyone on
+Linux: working on the engine, the controllers or the CLI no longer needs GTK and
+WebKit headers installed. Only `internal/desktop` does.
 
 The engine is testable without any of that — no network, no Docker, no Keycloak,
 no Node toolchain:

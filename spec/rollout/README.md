@@ -35,6 +35,7 @@ storage, then all UI) would defer every one of those discoveries to the end.
 | **P8** | Verification & dependencies | Secrets are proven unmasked; themes and provider JARs are reported. | [P8](./10-phase-p8-verification.md) |
 | **R** | Release 0.0.1 | Signed binaries, a tagged commit, and an honest list of what 0.0.1 does not do. | [Release](./11-release-0.0.1.md) |
 | **R2** | Release 0.0.2 | What the first maintenance release changes, and the one option in it that carries a trade. | [Release](./13-release-0.0.2.md) |
+| **CLI** | Command line | The engine grows a second mouth: `pcloak` drives the same controllers on the same `~/.portcloak`. Not a numbered phase — P0–P8 built the engine and the window, and this puts a terminal on what they built. | [13](../13-command-line.md), [usecases/08](../usecases/08-cli.md), [cli/](../cli/README.md) |
 
 Supporting documents:
 

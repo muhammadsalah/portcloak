@@ -11,6 +11,69 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Tags prefixed `spec-` mark the design
 record; unprefixed `v` tags mark shipped binaries.
 
+## [Unreleased]
+
+### Added
+- **A command line.** `pcloak` is a second binary driving the same engine the app drives, reading
+  the same `~/.portcloak`. Environments, storage and keys configured in either are visible to
+  both, and a snapshot captured from a terminal appears in the app's library. It exists because
+  the places a realm migration actually happens are frequently places a desktop application
+  cannot go: a CI job seeding a test realm, a maintenance window run from a runbook, a jump box
+  with no display. Everything the loop needs is there — capture, the snapshot library and what is
+  inside a snapshot, restore with its dry run, job control, probes, and key management — and none
+  of it is a second implementation: each command calls the same controller the equivalent screen
+  calls, so the gate that refuses an unacknowledged unencrypted capture and the confirmation
+  before overwriting a live realm are the same code on both surfaces rather than two copies that
+  drift.
+- Results go to stdout and everything else to stderr, so a run can be piped while it is still
+  narrating its phases. `--json` prints the same structures the app's screens are built from.
+  Every prompt has a flag that satisfies it, and with no terminal an unmet prompt is a refusal
+  naming that flag rather than a wait that nothing will answer. The exit code distinguishes
+  *partial*, *precondition* and *busy*, because those are the three a script branches on: a
+  three-realm capture where one realm fails produced two real, restorable snapshots, and calling
+  that "failed" would send somebody looking for damage that is not there.
+- Nothing secret is ever a command-line argument, where `ps` would show it to every user on the
+  machine. `--key` names a key already on this machine — an age key contributes its recipient,
+  which is public; a passphrase key contributes its secret from the keychain — and otherwise a
+  passphrase comes from a file, from stdin, from `PORTCLOAK_PASSPHRASE`, or from a prompt with no
+  echo, typed twice and compared when sealing, because a snapshot sealed with a typo cannot be
+  opened by anybody afterwards.
+- `pcloak key` creates and manages age keys, which is the one piece of configuration the command
+  line writes. It is there because `--key` is how a secret stays off the command line and it is a
+  dead flag on a machine that cannot make a key: a CI runner has no window to generate one in.
+  Creating a key is refused under `--no-keychain`, where the secret would go nowhere and
+  `config.yaml` would be left naming a handle with nothing behind it — a key that lists as
+  present, seals a snapshot, and cannot open it.
+
+### Changed
+- **Two PortCloaks can now share one `~/.portcloak`, and the rules for it are explicit.** Both
+  the window and the command line take an advisory claim on the folder saying they are there.
+  Capturing, restoring, job control and every read run beside each other and beside the app: two
+  captures at once are safe, because each writes its own job record and its own staging directory
+  and one snapshot holds one realm. Two things need the folder to themselves and take it only for
+  as long as they last — the startup sweep, and a change to `config.yaml`, where both writers
+  would read the file before either wrote and the second would silently drop the first one's
+  change. A refusal names who is holding it, since when, and what still works.
+- The startup sweep no longer runs while another PortCloak is using the folder. It rewrites every
+  running job to interrupted and deletes the working directories of snapshots it cannot see are
+  open, so run beside a live capture it would have marked that capture interrupted and deleted
+  the staging directory it was still writing into. The guard is structural: the destructive part
+  is unreachable except through the claim.
+- A folder named with `--home` is reported as what it is rather than as the default, and cannot
+  be moved from Settings — there is nowhere to record a different choice that the flag would not
+  override on the next run. `--config` names a file to read and never one to create, so a typo is
+  reported instead of quietly starting an empty PortCloak.
+
+### Development
+- `internal/app` no longer imports Wails. The window, the menu, the event bridge and the service
+  registry moved to a new `internal/desktop`; the composition root and all nine controllers
+  stayed. Nothing had to be exported to do it — the seam was already exactly where the unexported
+  methods stop. On Linux this means working on the engine, the controllers or the CLI no longer
+  needs GTK and WebKit headers installed, and `CGO_ENABLED=0 GOOS=linux go build ./internal/app`
+  works for the first time. A test reads the source and fails on a Wails import below
+  `internal/desktop`, and a CI job builds the command line for three platforms on a runner with
+  no toolkit at all, so the rule is enforced twice and in two different ways.
+
 ## [0.0.3] — 2026-08-29
 
 ### Added
