@@ -12,7 +12,7 @@ Exec=portcloak %U
 Terminal=false
 Categories=Development;System;
 Keywords=keycloak;realm;migration;backup;restore;sso;
-# Must match LinuxOptions.ProgramName in internal/app/run.go, or the window
+# Must match LinuxOptions.ProgramName in internal/desktop/run.go, or the window
 # manager groups the window separately from this launcher and the taskbar shows
 # a generic icon beside the real one.
 StartupWMClass=portcloak

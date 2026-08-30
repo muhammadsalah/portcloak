@@ -93,5 +93,5 @@ echo "wrote build/linux/appicon-{16,32,48,64,128,256,512}.png"
 #
 # application.Options.Icon is what the About dialog and, on Linux, the window
 # manager display. 512 is the largest size any of them ask for.
-render "$square_svg" 512 "$root/internal/app/appicon.png"
-echo "wrote internal/app/appicon.png"
+render "$square_svg" 512 "$root/internal/desktop/appicon.png"
+echo "wrote internal/desktop/appicon.png"

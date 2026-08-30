@@ -1,7 +1,7 @@
 // Copyright 2026 Muhammad Salah
 // SPDX-License-Identifier: Apache-2.0
 
-package app
+package desktop
 
 import (
 	"os"
@@ -165,7 +165,7 @@ func readSource(t *testing.T, name string) string {
 }
 
 // readRepoFile reads a file relative to the repository root. Tests run in the
-// package directory, so the root is two levels up from internal/app.
+// package directory, so the root is two levels up from internal/desktop.
 func readRepoFile(t *testing.T, rel string) string {
 	t.Helper()
 	b, err := os.ReadFile(filepath.Join("..", "..", rel))

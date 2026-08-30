@@ -19,11 +19,17 @@
 # a commit that says why.
 set -euo pipefail
 
-# internal/app imports Wails, which is cgo over GTK on Linux, and `gtk3` is what
-# selects the webkit2gtk-4.1 backend the runners actually install. Same
+# internal/desktop imports Wails, which is cgo over GTK on Linux, and `gtk3` is
+# what selects the webkit2gtk-4.1 backend the runners actually install. Same
 # reasoning, and the same requirement to stay in step, as the matrix in
 # .github/workflows/ci.yml — see check-traceability.sh, which sets it the same
 # way and for the same reason.
+#
+# One package needs this, not the tree: internal/desktop is the window and the
+# menu, and everything the CLI reaches compiles with CGO_ENABLED=0. The scope is
+# still ./internal/... rather than a hand-written list of the packages that do
+# not need it, because such a list rots silently — a new top-level package would
+# drop out of the coverage denominator with nothing to say so.
 tags="gtk3"
 if [ "$(uname -s)" != "Linux" ]; then
 	tags=""

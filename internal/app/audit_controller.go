@@ -22,7 +22,9 @@ func NewAuditController(eng *Engine) *AuditController {
 	return &AuditController{eng: eng}
 }
 
-// ServiceName is what the Wails binding layer calls this.
+// ServiceName is the name internal/desktop logs this service under. It is
+// not the address a bound method is called by — see the comment on
+// controllers there, which is where reading it as one caused real damage.
 func (a *AuditController) ServiceName() string { return "AuditController" }
 
 // AuditView is the audit log.

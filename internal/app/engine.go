@@ -1,6 +1,21 @@
 // Copyright 2026 Muhammad Salah
 // SPDX-License-Identifier: Apache-2.0
 
+// Package app is PortCloak's composition root and its controller layer: it
+// wires the engine's adapters into a registry, owns the ~/.portcloak home, and
+// turns engine capabilities into methods a front end can call.
+//
+// No business logic lives here. Every controller method resolves configuration,
+// calls one engine entry point, and shapes the result. If something in here
+// starts making decisions, it belongs in the engine instead — which is the rule
+// that keeps the engine testable headlessly.
+//
+// This package imports no Wails, deliberately, so that more than one front end
+// can sit on it: internal/desktop is the window, and internal/cli is the
+// terminal. A controller that reached for a Wails type would take the terminal
+// out — on Linux, Wails is cgo over GTK, so pcloak would need a webview toolkit
+// installed in order to capture a realm over SSH.
+// TestHeadless_NoWailsImportBelowTheDesktopPackage enforces it.
 package app
 
 import (
@@ -31,9 +46,9 @@ import (
 
 // Engine holds everything the controllers share.
 //
-// It is a plain struct with no Wails types in it, so a test can build one
-// against a temporary directory and drive every controller without a desktop
-// runtime present.
+// It is a plain struct with no Wails types in it, so a test — or pcloak — can
+// build one against a temporary directory and drive every controller with no
+// desktop runtime present.
 type Engine struct {
 	Version string
 	// Build is the full identity of the running binary — version, commit
@@ -62,25 +77,63 @@ type Engine struct {
 	logs *logStore
 
 	mu sync.RWMutex
+	// lock is this process's claim on the home folder, or nil for a caller that
+	// only reads. It is what StartupSweep checks before touching anything, and
+	// what Close gives back.
+	lock *config.Lock
 	// home is guarded because it is the one thing about a running engine that
 	// can change: the operator can move the PortCloak folder from Settings.
-	home     config.Home
-	sink     obs.Sink
-	sessions map[string]*inspect.Session
+	home config.Home
+	// homeSource is how this engine's folder was decided.
+	//
+	// It is recorded at construction rather than re-derived, because
+	// config.Locate() answers for a caller with nothing to say about it — and a
+	// caller that passed --home has something to say. Without this, the Settings
+	// panel reported a folder named on the command line as "default", and then
+	// offered to move it.
+	homeSource config.HomeSource
+	sink       obs.Sink
+	sessions   map[string]*inspect.Session
 	// unlocked holds the keys that have opened a snapshot during this run of
 	// the application, in memory and nowhere else. See rememberKey.
 	unlocked []inspect.KeyCandidate
 	breakers *resil.Registry
 }
 
-// NewEngine bootstraps the PortCloak home, loads configuration and wires the
-// adapter registry.
+// NewEngine resolves the home folder the way the desktop does — PORTCLOAK_HOME,
+// then the pointer file, then ~/.portcloak — and builds an engine on it.
 func NewEngine(version string) (*Engine, error) {
-	home, err := config.DefaultHome()
+	loc, err := config.Locate()
 	if err != nil {
 		return nil, err
 	}
+	return NewEngineFor(loc, version)
+}
 
+// NewEngineAt bootstraps a PortCloak home the caller has already resolved,
+// loads configuration and wires the adapter registry.
+//
+// It is split from NewEngine for the command line's --home: a one-shot process
+// is pointed at a different tree by an argument, not by setting PORTCLOAK_HOME
+// for itself and for everything it in turn launches. Tests get the same
+// benefit — a home passed in is not process-global, so they can run in
+// parallel, which t.Setenv forbids.
+//
+// It deliberately does not run StartupSweep. That housekeeping adopts every
+// running job and deletes working directories this process does not know are
+// open, so it belongs to a caller that has established it is the only
+// PortCloak on this home — not to construction.
+func NewEngineAt(home config.Home, version string) (*Engine, error) {
+	return newEngineAt(home, config.HomeDefault, version)
+}
+
+// NewEngineFor builds an engine on a resolved location, keeping how the folder
+// was decided so the Settings panel can say so and Relocate can refuse.
+func NewEngineFor(loc config.Location, version string) (*Engine, error) {
+	return newEngineAt(loc.Home, loc.Source, version)
+}
+
+func newEngineAt(home config.Home, source config.HomeSource, version string) (*Engine, error) {
 	firstRun := false
 	if _, statErr := os.Stat(home.ConfigFile()); os.IsNotExist(statErr) {
 		firstRun = true
@@ -105,19 +158,20 @@ func NewEngine(version string) (*Engine, error) {
 	loadErr := store.Load()
 
 	eng := &Engine{
-		Version:   version,
-		Build:     NewBuild(version, "", ""),
-		home:      home,
-		Config:    store,
-		Jobs:      config.NewJobStore(home),
-		Creds:     config.NewKeychain(),
-		Log:       logger,
-		Audit:     audit,
-		FirstRun:  firstRun,
-		LoadError: loadErr,
-		sink:      obs.NopSink{},
-		sessions:  map[string]*inspect.Session{},
-		logs:      newLogStore(),
+		Version:    version,
+		Build:      NewBuild(version, "", ""),
+		home:       home,
+		homeSource: source,
+		Config:     store,
+		Jobs:       config.NewJobStore(home),
+		Creds:      config.NewKeychain(),
+		Log:        logger,
+		Audit:      audit,
+		FirstRun:   firstRun,
+		LoadError:  loadErr,
+		sink:       obs.NopSink{},
+		sessions:   map[string]*inspect.Session{},
+		logs:       newLogStore(),
 	}
 
 	prefs := store.Preferences()
@@ -154,6 +208,17 @@ func (e *Engine) Home() config.Home {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return e.home
+}
+
+// HomeSource is how this engine's folder was decided.
+//
+// It is what the engine was built with, not what config.Locate() would say now:
+// a folder named with --home is invisible to Locate, and reporting it as the
+// default would both mislabel it and offer to move something that cannot move.
+func (e *Engine) HomeSource() config.HomeSource {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.homeSource
 }
 
 // policy is the retry policy every adapter is wrapped with.
@@ -305,8 +370,10 @@ func (d *destination) PartialImport(ctx context.Context, realmName string, body 
 // AttachSink points engine progress events at a destination.
 //
 // Whatever is attached, the log store sees the events first: the output has to
-// be recorded whether the frontend is listening, replaced by a test recorder,
-// or not attached at all.
+// be recorded whether the sink is the window's event bridge, a terminal
+// renderer, a test recorder, or nothing at all. A job started by a headless
+// caller says just as much, and its output is just as gone once it has been
+// said.
 func (e *Engine) AttachSink(s obs.Sink) {
 	e.mu.Lock()
 	e.sink = s
@@ -390,7 +457,32 @@ func (e *Engine) OpenSessionIDs() map[string]bool {
 //
 // Orphaned ephemeral clones are found but never removed automatically — the
 // operator's cluster is not ours to garbage-collect without asking.
-func (e *Engine) StartupSweep() {
+//
+// Every one of those is destructive to a *concurrent* PortCloak, which is why
+// this refuses without the exclusive lock. AdoptRunning rewrites every running
+// job to interrupted, and the sweeps keep only the sessions this process knows
+// about — so run beside a live capture it would mark that capture interrupted
+// and delete the working directory it is still writing into. It is only ever
+// correct for a process that has established it is the only one here.
+// SweepIfSolelyHere is the only way in.
+//
+// The guard is structural rather than a check inside the sweep: config.Sweep
+// takes the exclusive claim, runs the housekeeping, and releases it, so there is
+// no arrangement of calls that performs the destructive part without having
+// first proved nobody else is here. A boolean somebody has to remember to test
+// would have been one refactor away from being forgotten.
+//
+// It must be called before this process takes its own shared claim. Advisory
+// locks conflict between open file descriptions and not between processes, so a
+// process already holding the folder shared cannot take it exclusively on a
+// second handle — it would find itself in the way.
+func (e *Engine) SweepIfSolelyHere() {
+	config.Sweep(e.Home(),
+		config.Holder{Program: "PortCloak", Command: "startup sweep"},
+		e.startupSweep)
+}
+
+func (e *Engine) startupSweep() {
 	adopted, err := e.Jobs.AdoptRunning()
 	if err != nil {
 		e.Log.Error("interrupted jobs could not be adopted", "err", err)
@@ -425,10 +517,44 @@ func (e *Engine) Close() error {
 			e.Log.Error("a snapshot could not be closed cleanly", "snapshot", s.ID, "err", err)
 		}
 	}
+	// The lock goes back before the log closes, so a second PortCloak waiting
+	// on this folder is unblocked at the earliest honest moment: everything it
+	// could collide with is already shut down.
+	if err := e.releaseLock(); err != nil {
+		e.Log.Error("the PortCloak folder could not be released", "err", err)
+	}
 	if e.Log != nil {
 		return e.Log.Close()
 	}
 	return nil
+}
+
+// Hold records this process's claim on the home folder.
+//
+// It is taken by the caller rather than by NewEngineAt, because what a caller
+// intends decides which claim is correct: the window and a capture need the
+// folder to themselves, while `pcloak jobs list` deliberately reads alongside
+// them. Passing it in also keeps construction free of a failure mode that has
+// nothing to do with whether the engine can be built.
+func (e *Engine) Hold(l *config.Lock) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.lock = l
+}
+
+// HoldsExclusive reports whether this process's own claim is the exclusive one.
+func (e *Engine) HoldsExclusive() bool {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.lock != nil && e.lock.Mode() == config.LockExclusive
+}
+
+func (e *Engine) releaseLock() error {
+	e.mu.Lock()
+	l := e.lock
+	e.lock = nil
+	e.mu.Unlock()
+	return l.Release()
 }
 
 // Failure is how an engine error reaches a screen: a sentence, what to do next,

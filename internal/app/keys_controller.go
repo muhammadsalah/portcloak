@@ -31,7 +31,9 @@ type KeysController struct{ eng *Engine }
 // NewKeysController binds the Keys screen.
 func NewKeysController(eng *Engine) *KeysController { return &KeysController{eng: eng} }
 
-// ServiceName is what the Wails binding layer calls this.
+// ServiceName is the name internal/desktop logs this service under. It is
+// not the address a bound method is called by — see the comment on
+// controllers there, which is where reading it as one caused real damage.
 func (k *KeysController) ServiceName() string { return "KeysController" }
 
 // KeyView is one row of the Keys screen.

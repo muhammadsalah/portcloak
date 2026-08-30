@@ -3,7 +3,7 @@
 
 //go:build !production
 
-package app
+package desktop
 
 // productionBuild reports whether this binary was compiled for release.
 //

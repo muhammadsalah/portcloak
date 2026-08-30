@@ -3,10 +3,11 @@
 
 // Command portcloak is the PortCloak desktop application.
 //
-// This package contains the Wails bootstrap and nothing else. Every decision
-// the tool makes lives in internal/engine, which never imports Wails — that is
-// what lets the whole capture and restore pipeline be driven from a test binary
-// with no desktop runtime present.
+// This package contains the bootstrap and nothing else. The window lives in
+// internal/desktop, everything it can reach lives in internal/app, and every
+// decision the tool makes lives in internal/engine — which never imports Wails,
+// and is what lets the whole capture and restore pipeline be driven from a test
+// binary, or from pcloak, with no desktop runtime present.
 package main
 
 import (
@@ -14,6 +15,7 @@ import (
 	"os"
 
 	"portcloak/internal/app"
+	"portcloak/internal/desktop"
 )
 
 // Stamped at build time by build/package.sh:
@@ -30,7 +32,7 @@ var (
 )
 
 func main() {
-	if err := app.Run(app.NewBuild(version, commit, date)); err != nil {
+	if err := desktop.Run(app.NewBuild(version, commit, date)); err != nil {
 		fmt.Fprintln(os.Stderr, "PortCloak could not start:", err)
 		os.Exit(1)
 	}
