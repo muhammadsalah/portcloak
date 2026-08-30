@@ -6,6 +6,10 @@
 # Builds distributable PortCloak artifacts for every platform this host can
 # produce, on both x86-64 and arm64.
 #
+# Two binaries come out of it: the desktop app, which needs a webview toolkit
+# and so is limited by what this host can build for, and pcloak, which needs
+# nothing and is therefore built for every platform wherever this runs.
+#
 #   ./build/package.sh                          # everything possible here
 #   ./build/package.sh --version 0.0.1
 #   ./build/package.sh --targets windows,linux
@@ -125,6 +129,80 @@ fi
 ldflags_common="-s -w -X main.version=$version -X main.commit=$commit -X main.date=$date"
 
 wants() { case ",$targets," in *",$1,"*) return 0 ;; *) return 1 ;; esac; }
+
+# =========================================================================
+# pcloak — the command line, for every platform, from wherever this runs
+# =========================================================================
+#
+# Unlike the desktop binary this needs no Wails, no webview and no cgo, so one
+# host builds all of it: a Mac produces the Linux and Windows binaries with no
+# Docker and no cross-toolchain. The `targets` default above is derived from what
+# the *app* can be built for on this host, so it deliberately does not constrain
+# this loop.
+#
+# Three flags the desktop build passes are absent, and each absence is the point:
+#
+#   -tags production   productionBuild lives in internal/desktop and means "the
+#                      inspector is compiled out". There is no inspector here.
+#   -H windowsgui      a console binary is the entire idea. Passing it would make
+#                      pcloak produce no visible output on Windows, which is a
+#                      bug that takes a week to find.
+#   an icon / .syso    nothing to put one on.
+#
+# The same ldflags, verbatim: cmd/pcloak declares the same three variables and
+# hands them to the same app.NewBuild, so both binaries report their build the
+# same way and a snapshot manifest names a version that means something.
+cli_targets="darwin/arm64 darwin/amd64 linux/amd64 linux/arm64 windows/amd64 windows/arm64"
+
+build_cli() {
+	echo "==> pcloak"
+	for pair in $cli_targets; do
+		os=${pair%/*}
+		arch=${pair#*/}
+		ext=""
+		[ "$os" = "windows" ] && ext=".exe"
+		out="$stage/pcloak-$os-$arch"
+		mkdir -p "$out"
+		if ! CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -trimpath \
+			-ldflags "$ldflags_common" -o "$out/pcloak$ext" ./cmd/pcloak; then
+			echo "!! pcloak $os/$arch failed to build" >&2
+			return 1
+		fi
+		cp LICENSE NOTICE "$out/"
+	done
+}
+
+# Its own archive per platform, rather than riding inside the app's.
+#
+# The machines that want the command line most — CI runners, headless servers —
+# have no use for a download carrying an embedded webview, and a standalone
+# linux/arm64 archive is the only way to get one at all on a host with no Docker.
+#
+# Putting it inside the .app as well is tempting, because it would inherit the
+# bundle's Developer ID signature and notarisation and so avoid the macOS
+# keychain prompt an unsigned binary gets for entries the signed app wrote. It is
+# not done yet because it cannot be done carelessly: a nested Mach-O inside a
+# bundle has to be signed *before* the bundle signature, or notarisation rejects
+# it and the failure appears only at Gatekeeper time on somebody else's machine.
+# That belongs in a change that can be tested against a real notarisation run.
+#
+# Nothing needs adding to the checksum step: it globs dist/, so these are covered
+# by SHA256SUMS and by whatever signs it, for free.
+archive_cli() {
+	for pair in $cli_targets; do
+		os=${pair%/*}
+		arch=${pair#*/}
+		src="$stage/pcloak-$os-$arch"
+		[ -d "$src" ] || continue
+		name="pcloak-$version-$os-$arch"
+		if [ "$os" = "windows" ]; then
+			(cd "$src" && zip -qr "$dist/$name.zip" .)
+		else
+			tar -czf "$dist/$name.tar.gz" -C "$src" .
+		fi
+		rm -rf "$src"
+	done
+}
 
 # =========================================================================
 # macOS — one universal .app
@@ -367,6 +445,9 @@ if [ "$do_build" -eq 1 ]; then
 	wants darwin && build_darwin
 	wants windows && build_windows
 	wants linux && build_linux
+	# Not behind `wants`: the command line has no host requirement to satisfy,
+	# so every platform is built wherever this runs.
+	build_cli
 fi
 
 if [ "$do_archive" -eq 0 ]; then
@@ -381,6 +462,7 @@ fi
 wants darwin && archive_darwin
 wants windows && archive_windows
 wants linux && archive_linux
+archive_cli
 rmdir "$stage" 2>/dev/null || true
 
 # ------------------------------------------------------------------- sums
