@@ -39,7 +39,7 @@ terminal. There is exactly one human actor, and the systems it talks to are seco
 | 05 | [Restore](./05-restore.md) | Importing snapshots | UC-R1 … UC-R8 |
 | 06 | [Operations](./06-operations.md) | Jobs, resilience, config, audit | UC-O1 … UC-O10 |
 | 07 | [Traceability](./07-usecase-traceability.md) | Use case → requirement → module | — |
-| 08 | [Command line](./08-cli.md) | Driving all of it from a terminal | UC-L1 … UC-L12 |
+| 08 | [Command line](./08-cli.md) | Driving all of it from a terminal | UC-L1 … UC-L13 |
 
 ## Diagrams
 

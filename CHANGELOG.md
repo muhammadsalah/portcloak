@@ -38,12 +38,23 @@ record; unprefixed `v` tags mark shipped binaries.
   passphrase comes from a file, from stdin, from `PORTCLOAK_PASSPHRASE`, or from a prompt with no
   echo, typed twice and compared when sealing, because a snapshot sealed with a typo cannot be
   opened by anybody afterwards.
-- `pcloak key` creates and manages age keys, which is the one piece of configuration the command
-  line writes. It is there because `--key` is how a secret stays off the command line and it is a
+- `pcloak env add` and `pcloak storage add` define what a capture needs, one subcommand per kind —
+  `local`, `ssh`, `docker`, `kubernetes`; `disk`, `ssh`, `s3`, `azure` — so `--help` lists only the
+  flags that apply rather than twenty-five of which twenty are wrong. Neither contacts anything;
+  `env probe` and `storage test` remain the separate, explicit act that finds out whether a
+  definition works. `--replace` makes a provisioning script re-runnable without either failing on
+  the second pass or silently overwriting on the first. `env remove` and `storage remove` forget a
+  definition and its keychain entries — removing a storage does **not** empty it, because a
+  definition is cheap to recreate and a snapshot is not.
+- `pcloak key` creates and manages age keys. It is there because `--key` is how a secret stays off the command line and it is a
   dead flag on a machine that cannot make a key: a CI runner has no window to generate one in.
   Creating a key is refused under `--no-keychain`, where the secret would go nowhere and
   `config.yaml` would be left naming a handle with nothing behind it — a key that lists as
   present, seals a snapshot, and cannot open it.
+
+  These three — environments, storage and keys — are all the configuration the command line
+  writes. Preferences are not, and the test is the one that let the others in: nothing is blocked
+  on a preference, because every one of them is a default that a flag already overrides.
 
 ### Changed
 - **Two PortCloaks can now share one `~/.portcloak`, and the rules for it are explicit.** Both

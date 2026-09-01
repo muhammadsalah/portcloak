@@ -86,6 +86,28 @@ func itoa(n int) string { return strconv.Itoa(n) }
 
 func joinNames(v []string) string { return strings.Join(v, "\n  ") }
 
+// howToAdd names the command that would create one, for the kinds that have one.
+//
+// A listing table, not an interpolation: pcloak has no `job add` and no
+// `snapshot add`, and telling somebody to run a command that does not exist is
+// worse than telling them nothing. The two key kinds differ because a key is
+// generated or imported rather than described.
+func howToAdd(kind string) string {
+	switch kind {
+	case "environment":
+		// The canonical command is `env`; "environment" is only an alias, and
+		// printing the alias sends somebody to a help page whose title does not
+		// match what they typed.
+		return " Add one with: pcloak env add --help"
+	case "storage":
+		return " Add one with: pcloak storage add --help"
+	case "key", "age key":
+		return " Create one with: pcloak key generate <name>"
+	default:
+		return ""
+	}
+}
+
 // notFound turns the engine's bare "not found" into a sentence naming what was
 // asked for and what exists, which is the difference between a typo taking five
 // seconds to spot and taking a `config show`.
@@ -94,7 +116,7 @@ func notFound(kind, name string, known []string) error {
 	b.WriteString("pcloak: there is no " + kind + " called \"" + name + "\".")
 	switch {
 	case len(known) == 0:
-		b.WriteString("\n  None is configured. Add one in the PortCloak app.")
+		b.WriteString("\n  None is configured." + howToAdd(kind))
 	default:
 		b.WriteString("\n  Configured: " + strings.Join(known, ", "))
 	}

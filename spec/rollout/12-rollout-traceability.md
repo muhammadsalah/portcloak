@@ -118,7 +118,7 @@ backend itself (SFTP in P3, S3 and Azure in P5).*
 | UC-O9 | Start the application | P0 | `TestHome_BootstrapIsIdempotentAndSelfHealing` |
 | UC-O10 | Purge local working data | P6 | `TestSweep_RemovesIndexesAndWorkDirsACrashLeftBehind`; `TestSession_CloseDestroysTheIndexAndWorkingFiles` |
 
-### Command line (12)
+### Command line (13)
 
 Delivered after the 0.0.3 release rather than in a numbered phase: P0–P8 built the
 engine and the window, and this puts a second mouth on what they built.
@@ -137,6 +137,7 @@ engine and the window, and this puts a second mouth on what they built.
 | UC-L10 | Run while the desktop app is open | CLI | `TestCLI_ReadOnlyCommandsWorkWhileAWriterHoldsTheHome`; `TestCLI_RefusesAConfigChangeWhileAnotherPortCloakHoldsTheHome`; `TestHomeLock_RefusesASecondWriter`; `TestHomeLock_AllowsSeveralReaders`; `TestHomeLock_IsReleasedWhenTheProcessDies`; `TestHomeLock_NamesTheHolder`; `TestSweepIfSolelyHere_LeavesAnotherPortCloaksJobsAlone` |
 | UC-L11 | Seal without a secret on the command line | CLI | `TestCLI_RefusesAnUnencryptedCaptureThatWasNotAcknowledged` |
 | UC-L12 | Script it | CLI | `TestCLI_HelpNeedsNoHome`; `TestCLI_UnknownEnvironmentNamesWhatExists` |
+| UC-L13 | Define an environment and a storage | CLI | `TestCLI_EnvAddWritesADefinitionAndNothingElse`; `TestCLI_AddRefusesADuplicateUnlessReplaceIsAsked`; `TestCLI_AddTakesNoSecretOnTheCommandLine`; `TestCLI_StorageRemoveSaysTheSnapshotsStay`; `TestCLI_NotFoundOnlySuggestsCommandsThatExist` |
 
 ## 12.2 Functional requirements → phase and evidence
 

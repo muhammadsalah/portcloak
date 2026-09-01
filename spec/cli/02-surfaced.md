@@ -287,3 +287,35 @@ to notice.
 
 **Reusable part.** A document that cites tests needs the check pointed at it on
 the day it is written, not the day it rots. The cost was one line of shell.
+
+---
+
+## S10 — The scope argument had a step missing, and nobody noticed until asked
+
+**Found.** Being asked "how to add env / storage using cli?" and having to answer
+that you cannot.
+
+**What.** The reasoning that excluded them held that a headless machine is not
+blocked by them. It is: provisioning a throwaway Keycloak in CI means pointing
+PortCloak at it before anything can be captured. The argument was applied one
+step too late in the sequence, and read fine at every review because the sentence
+is true of the *capture* and false of the workflow the capture is part of.
+
+The near-miss is the reusable part. The first answer drafted was an accurate
+description of how to hand-edit `config.yaml` and derive credential-handle names
+— a real, supported path presented as though it were the interface. A workaround
+described confidently enough stops looking like a gap.
+
+**Fixed.** [D12](./01-decisions.md) — `env add`/`remove`, `storage
+add`/`remove`/`default`. Also the three places that told an operator to go and
+use the app when the listing was empty, which had become bad advice the moment
+the commands existed.
+
+**Guard.** `TestCLI_NotFoundOnlySuggestsCommandsThatExist` pins the narrower
+version of that mistake — advice naming a command that does not exist — for the
+kinds that genuinely have no `add`.
+
+**Reusable part.** "X is not what stands between the user and the goal" is a
+claim about a *sequence*, and it is only checkable by walking the sequence. Asked
+of the capture alone it was true; asked of the job the capture belongs to it was
+false.

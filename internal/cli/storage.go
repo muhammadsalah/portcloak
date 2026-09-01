@@ -15,10 +15,11 @@ func newStorageCmd(s Streams, g *globals) *cobra.Command {
 		`A storage is where snapshots go: a folder on disk, a volume over SSH, an
 S3-compatible bucket, or an Azure container.
 
-Read-only here, apart from the round-trip probe, which writes a small object and
-removes it again.`, "storages")
+Removing one forgets how to reach it. It does not empty it — the snapshots stay
+where they are, and deleting those is `+"`snapshot delete`"+`, one at a time.`, "storages")
 	c.AddCommand(newStorageListCmd(s, g), newStorageShowCmd(s, g),
-		newStorageTestCmd(s, g), newStorageBrowseCmd(s, g))
+		newStorageTestCmd(s, g), newStorageBrowseCmd(s, g),
+		newStorageAddCmd(s, g), newStorageRemoveCmd(s, g), newStorageDefaultCmd(s, g))
 	return c
 }
 
@@ -40,7 +41,7 @@ func newStorageListCmd(s Streams, g *globals) *cobra.Command {
 				return r.out.JSON(sts)
 			}
 			if len(sts) == 0 {
-				r.out.Note("No storage is configured. Add one in the PortCloak app.")
+				r.out.Note("No storage is configured. Add one with: pcloak storage add --help")
 				return nil
 			}
 			rows := make([][]string, 0, len(sts))

@@ -224,3 +224,49 @@ UC-L7 row cited a test named "Restore refuses a degraded snapshot", which sounde
 exactly like a test this repository would have and does not. The check named it
 in one line. A matrix whose evidence column is written from memory is a matrix
 that becomes fiction, quietly.
+
+---
+
+## D12 — Environments and storage came into scope, and D1's exception did not survive
+
+**Decision.** `env add`, `env remove`, `storage add`, `storage remove` and
+`storage default`, one `add` subcommand per kind. Preferences stay out.
+
+**Why the reversal.** The original line — stated in D1's preamble and in
+[13 §13.8](../13-command-line.md) — was that these are forms with a dozen fields
+and a connection test behind them, and that unlike a key they are not what stands
+between a headless machine and a sealed snapshot.
+
+The second half of that is simply false, and it took somebody asking "how do I
+add an env from the CLI?" to see it. A CI job that provisions a throwaway
+Keycloak has to point PortCloak at it *before* it can capture anything. The
+definitions are exactly what stands between a headless machine and a sealed
+snapshot; the argument just looked at one step too late.
+
+The first half did not survive either. `env probe` and `storage test` were
+already commands, so "a connection test behind them" describes something the
+command line already had.
+
+**What was nearly shipped instead.** An answer describing how to hand-edit
+`config.yaml` plus how the `PORTCLOAK_CREDENTIAL_*` handle naming works. Both are
+true and both are supported — the file is plain YAML on purpose — but a
+convention you have to know by heart is a workaround, and presenting it as the
+interface is what made the gap invisible for as long as it was.
+
+**Shape.** One subcommand per kind rather than one command with every flag:
+`local`, `ssh`, `docker`, `kubernetes` share almost no fields, and a flat command
+would carry twenty-five flags of which twenty are wrong for any given use.
+`--replace` makes a provisioning script re-runnable without either failing on the
+second pass or silently overwriting on the first. Nothing contacts anything —
+probing stays a separate, explicit act, so `add` cannot fail for a reason that
+has nothing to do with what was typed.
+
+**Cost.** Two command files, five tests, and no new engine or app API — the
+`ConfigController` methods the app's forms use already did all of it, which is
+D6 holding up under a change it was not designed for.
+
+**Where the line is now, and the test for it.** Preferences are out, because
+nothing is blocked on one: every preference is a default that a flag on the
+relevant command already overrides. That is the same question asked of
+environments and storage, answered honestly this time — and it is the question to
+ask of anything else proposed for this surface.

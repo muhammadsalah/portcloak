@@ -181,12 +181,41 @@ them exist because a script genuinely branches on them: **partial** (some realms
 produced a snapshot and some did not), **precondition** (nothing was written to
 the target), and **busy** (another PortCloak holds the folder).
 
-## 13.8 What the command line does not do
+## 13.8 The scope line, and where it moved to
 
-It never defines or edits an environment or a storage — those are forms with a
-dozen fields and a connection test behind them, and unlike a key they are not what
-stands between a headless machine and a sealed snapshot. It never writes the
-pointer file, so a run against a scratch tree cannot redirect the next one. It
+The first version of this excluded defining environments and storage, on the
+reasoning that they are forms with a dozen fields and a connection test behind
+them, and that unlike a key they are not what stands between a headless machine
+and a sealed snapshot.
+
+That was wrong in one direction, and the direction matters. A CI job that
+provisions a throwaway Keycloak has to point PortCloak at it *before* it can
+capture anything — so those definitions are exactly what stands between a
+headless machine and a sealed snapshot, just one step earlier than the argument
+looked. Hand-editing `config.yaml` is a supported thing to do, deliberately, but
+"assemble a YAML fragment and know the credential-handle naming convention" is a
+workaround, and describing it as an interface was the mistake.
+
+The connection-test half of the argument did not survive either: `env probe` and
+`storage test` are already commands, so the check a form runs is a check a script
+can run.
+
+`env add` and `storage add` are one subcommand per kind, because the four kinds
+share almost no fields and a single command would carry twenty-five flags of
+which twenty are wrong for whatever you are doing. They contact nothing —
+probing is a separate, explicit act — and take `--replace` so a script can be
+re-run without either failing or silently overwriting.
+
+What is still out is **preferences**, and the test is the same one, applied
+honestly: nothing is blocked on them, because every preference is a default that
+a flag already overrides.
+
+## 13.9 What the command line does not do
+
+It does not edit preferences, because nothing is blocked on one: every preference
+is a default that a flag on the relevant command already overrides. It never
+writes the pointer file, so a run against a scratch tree cannot redirect the next
+one. It
 never prompts for a keychain password and never caches a credential to disk. And
 it is not a daemon: there is no `--detach`, because the engine's detach is an
 in-process goroutine and a command that returned early would take the export down

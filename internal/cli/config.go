@@ -39,9 +39,12 @@ the first question is which build produced it — and this is the answer.`,
 
 func newConfigCmd(s Streams, g *globals) *cobra.Command {
 	c := group("config", "Show where PortCloak keeps its files, and what is in them",
-		`Read-only. pcloak never defines an environment, a storage or a preference:
-those are forms with a dozen fields and a connection test behind them, and they
-belong in the app. Keys are the one exception — see `+"`pcloak key`"+`.`)
+		`Read-only, and narrower than it sounds: environments, storage and keys are
+written by their own commands — `+"`env add`, `storage add`, `key generate`"+`.
+
+What is left with no command is preferences, because nothing is blocked on them:
+every one is a default that a flag on the command already overrides. Change them
+in the app, or by hand — config.yaml is a plain readable file on purpose.`)
 	c.AddCommand(newConfigPathCmd(s, g), newConfigShowCmd(s, g))
 	return c
 }

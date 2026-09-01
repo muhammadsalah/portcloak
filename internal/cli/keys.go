@@ -21,9 +21,10 @@ import (
 // generate one in, and telling an operator to go and click on a laptop first
 // defeats the point of the binary.
 //
-// Environments and storage stay out: those are forms with a dozen fields and a
-// connection test behind them, and unlike a key they are not what stands between
-// a headless machine and a sealed snapshot.
+// Environments and storage followed, for the same reason arrived at the long way
+// round — see the note at the top of envadd.go. Preferences have not, because
+// nothing is blocked on them: every preference is a default that a flag on the
+// command already overrides.
 
 func newKeyCmd(s Streams, g *globals) *cobra.Command {
 	c := group("key", "Create and manage the keys snapshots are sealed with",

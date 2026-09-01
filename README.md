@@ -216,10 +216,13 @@ carry.
 
 ## From the command line
 
-`pcloak` is the same engine, on the same `~/.portcloak`. Environments, storage and keys configured
-in the app are visible to it, and snapshots it captures appear in the app's library.
+`pcloak` is the same engine, on the same `~/.portcloak`. Anything configured in the app is visible
+to it and the other way round, and snapshots it captures appear in the app's library. A machine
+with no display can go from nothing to a sealed snapshot without one:
 
 ```bash
+pcloak env add docker prod-docker --container keycloak   # point it at a Keycloak
+pcloak storage add disk out --folder ./snapshots --default
 pcloak key generate ci-2026                       # one key, kept in this machine's keychain
 pcloak env probe prod-docker                      # would a capture work here?
 pcloak capture -e prod-docker -r corp-a --key ci-2026
@@ -246,9 +249,11 @@ Some things worth knowing before you script it:
   cancelling destroys it rather than abandoning it. If you have to kill the process anyway, it
   tells you what was left behind first.
 
-Environments and storage are still defined in the app. Those are forms with a dozen fields and a
-connection test behind them, and unlike a key they are not what stands between a headless machine
-and a sealed snapshot.
+Environments, storage and keys are all definable from here — `pcloak env add --help` and
+`pcloak storage add --help` have one subcommand per kind, so you see only the flags that apply.
+Nothing they do contacts anything; `env probe` and `storage test` are what find out whether a
+definition works. Preferences are the one thing left to the app, and nothing is blocked on them:
+every preference is a default that a flag already overrides.
 
 ## What it deliberately is not
 

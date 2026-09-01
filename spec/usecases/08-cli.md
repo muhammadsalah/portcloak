@@ -252,10 +252,9 @@ before the process exits — including on the failure paths.
 the operator asked for a file.
 **Covers.** NFR-3, FR-N6, NFR-12.
 
-**Scope note.** This is the **only** configuration `pcloak` writes. Environments
-and storage stay in the app: they are forms with a dozen fields and a connection
-test behind them, and unlike a key they are not what stands between a headless
-machine and a sealed snapshot.
+**Scope note.** Keys were the first configuration `pcloak` wrote, and for a while
+the only one. Environments and storage followed — see UC-L13, and the reasoning
+in [13 §13.8](../13-command-line.md).
 
 ---
 
@@ -369,9 +368,57 @@ in use.
 
 ---
 
+---
+
+## UC-L13 — Define an environment and a storage from a script
+
+**Goal.** Point PortCloak at a Keycloak, and at somewhere to put snapshots,
+without a window.
+
+**Main success scenario**
+1. `pcloak env add <kind> <name> …` — one subcommand per kind, because the four
+   share almost no fields and a single command would carry twenty-five flags of
+   which twenty are wrong for whatever is being described.
+2. `pcloak storage add <kind> <name> …`, the same way.
+3. Nothing is contacted. The definition is written and the operator is told to
+   probe it.
+4. `pcloak env probe <name>` / `pcloak storage test <name>` say whether it works.
+
+**Alternate flows**
+- **A1 — `--replace`.** Overwrites a definition of that name, so re-running the
+  same provisioning script neither fails nor silently changes something.
+- **A2 — `--default` on a storage.** What a capture uses when none is named.
+- **A3 — `--encryption-required` on a storage.** Removes the opt-out entirely, so
+  a snapshot cannot be written there in the clear even by an operator who passes
+  `--i-understand-unencrypted`.
+- **A4 — Removal.** `env remove` and `storage remove` forget the definition and
+  delete its keychain entries. **Removing a storage does not empty it**: the
+  snapshots stay, and deleting those is `snapshot delete`, one at a time.
+
+**Exceptions**
+- **E1 — The name is already taken.** Refused, naming `--replace`. Overwriting a
+  definition by accident is how a capture ends up pointed somewhere else.
+- **E2 — A job is using it.** Refused rather than removed out from under the run.
+- **E3 — A secret was offered as an argument.** There is no flag that accepts
+  one: `--credential-file`, `--credential-stdin` and the `PORTCLOAK_CREDENTIAL_*`
+  variables are the ways in, because argv is visible in `ps` to every user on the
+  machine.
+
+**Postconditions.** A definition exists and nothing was contacted. Snapshots
+already captured from an environment survive its removal: a snapshot records
+where it came from as a fact about the past, not as a reference that has to
+resolve.
+**Covers.** FR-N1, FR-N2, FR-N4, FR-N6, NFR-12.
+
+---
+
 ## Non-goals
 
-`pcloak` never defines or edits an **environment** or a **storage**; never writes
-the **pointer file**; never prompts for a keychain password; never caches a
-credential to disk; and is **not a daemon**. The one configuration it writes is
-keys, and UC-L8 states why.
+`pcloak` never writes the **pointer file**; never prompts for a keychain
+password; never caches a credential to disk; and is **not a daemon**.
+
+It does not edit **preferences**, and the test that keeps them out is the one
+that let environments and storage in: nothing is blocked on a preference, because
+every one of them is a default that a flag on the relevant command already
+overrides. [13 §13.8](../13-command-line.md) records where that line moved and
+why it moved.

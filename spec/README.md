@@ -71,7 +71,7 @@ for throwaway snapshot indexes.
 | 11 | [`11-traceability.md`](./11-traceability.md) | Requirement → module traceability matrix |
 | 12 | [`12-decisions.md`](./12-decisions.md) | **Decision record** — the nine confirmed design decisions, with rationale and cost |
 | 13 | [`13-command-line.md`](./13-command-line.md) | **The command line** — two front ends over one engine, and the one folder they share |
-| — | [`usecases/`](./usecases/README.md) | **Use cases** — the complete behavioural model (72 use cases across 7 packages) with its own traceability matrix |
+| — | [`usecases/`](./usecases/README.md) | **Use cases** — the complete behavioural model (73 use cases across 7 packages) with its own traceability matrix |
 | — | [`rollout/`](./rollout/README.md) | **Rollout plan** — the nine phases that build this, with coding tasks, tests, verification evidence and the 0.0.1 release gate |
 | — | [`lunacy/`](./lunacy/README.md) | **Screen designs** — the Lunacy document index, design tokens, and which screen covers which use case |
 | — | [`notes/`](./notes/README.md) | **Development notes** — the gotchas that reached working code, with the guard test that keeps each one from returning |

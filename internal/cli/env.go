@@ -16,9 +16,11 @@ func newEnvCmd(s Streams, g *globals) *cobra.Command {
 		`An environment is where a Keycloak runs: a folder on this machine, a host over
 SSH, a Docker service, or a namespace and workload in Kubernetes.
 
-Read-only here. Defining one means a form and a connection test, and that lives
-in the app.`, "envs", "environment", "environments")
-	c.AddCommand(newEnvListCmd(s, g), newEnvShowCmd(s, g), newEnvProbeCmd(s, g))
+Defining one writes to config.yaml, so it needs the folder to itself for as long
+as the write takes — the app being open will refuse it. Nothing here contacts
+anything; `+"`env probe`"+` is what finds out whether a definition works.`, "envs", "environment", "environments")
+	c.AddCommand(newEnvListCmd(s, g), newEnvShowCmd(s, g), newEnvProbeCmd(s, g),
+		newEnvAddCmd(s, g), newEnvRemoveCmd(s, g))
 	return c
 }
 
@@ -40,7 +42,7 @@ func newEnvListCmd(s Streams, g *globals) *cobra.Command {
 				return r.out.JSON(envs)
 			}
 			if len(envs) == 0 {
-				r.out.Note("No environments are configured. Add one in the PortCloak app.")
+				r.out.Note("No environments are configured. Add one with: pcloak env add --help")
 				return nil
 			}
 			rows := make([][]string, 0, len(envs))

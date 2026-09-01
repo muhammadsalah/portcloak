@@ -100,6 +100,7 @@ requirement is left without a behaviour that realises it.
 | UC-L10 | Run while the desktop app is open | NFR-11, NFR-12 | [13 §13.3](../13-command-line.md) |
 | UC-L11 | Seal without a secret on the command line | NFR-3, FR-C6, NFR-12 | [13 §13.6](../13-command-line.md) |
 | UC-L12 | Script it | NFR-4, NFR-5, NFR-12 | [13 §13.7](../13-command-line.md) |
+| UC-L13 | Define an environment and a storage | FR-N1, FR-N2, FR-N4, FR-N6, NFR-12 | [13 §13.8](../13-command-line.md) |
 
 ## Operations
 
@@ -123,7 +124,7 @@ requirement is left without a behaviour that realises it.
 | **FR-C1..C11** capture | UC-C1 … UC-C12, UC-E1 … UC-E5 |
 | **FR-F1..F9** fidelity | UC-C1 (export), UC-C8 (verify), UC-I2/I6/I7 (evidence) |
 | **FR-D1..D2** dependencies | UC-C9, UC-I10, UC-R2 |
-| **FR-N1..N6** configuration | UC-E1 … UC-E9, UC-S1 … UC-S7, UC-O7 |
+| **FR-N1..N6** configuration | UC-E1 … UC-E9, UC-S1 … UC-S7, UC-O7, UC-L13 |
 | **FR-S1..S6** storage | UC-S1 … UC-S8, UC-C1 (one realm per snapshot) |
 | **FR-R1..R4** restore | UC-R1 … UC-R8 |
 | **FR-M1..M3** manifest | UC-I2, UC-I8, UC-R6 |
@@ -135,7 +136,7 @@ requirement is left without a behaviour that realises it.
 | **NFR-8** idempotence | UC-O2 |
 | **NFR-9/NFR-10** inspection perf & residue | UC-I3, UC-I13, UC-O10 |
 | **NFR-11** file-based config | UC-O7, UC-O9, UC-I3, UC-L2, UC-L10 |
-| **NFR-12** drivable headlessly | UC-L1 … UC-L12 |
+| **NFR-12** drivable headlessly | UC-L1 … UC-L13 |
 | **N5** sessions out of scope | UC-R1 step 10, UC-R6 step 4 |
 | **N6** no selective restore | UC-R1, UC-R4 |
 | **N7** assets not migrated | UC-C9, UC-I10, UC-R2 (reported, not enforced) |
