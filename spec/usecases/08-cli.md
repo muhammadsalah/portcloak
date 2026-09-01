@@ -322,6 +322,10 @@ in use.
 3. On a terminal with none of these, the passphrase is prompted without echo, and
    **twice with a comparison**: a snapshot sealed with a typo cannot be opened by
    anybody, ever.
+4. `--passphrase` takes the value directly. It is offered because refusing it
+   sends people writing secrets to temporary files to get past a flag that will
+   not take one, which is worse — but it warns, once, that argv is visible in
+   `ps` to every user on the machine and that shells record it.
 
 **Alternate flows**
 - **A1 — Encryption declined.** `--no-encrypt` alone prints the full notice — the
@@ -334,7 +338,13 @@ in use.
 
 **Exceptions**
 - **E1 — No source and no terminal.** Refused, naming the flags that would
-  satisfy it, rather than blocking on a prompt nothing will answer.
+  satisfy it, rather than blocking on a prompt nothing will answer. Asking for a
+  prompt where there is no terminal is refused the same way: the message names
+  the alternatives rather than reporting the absence of a terminal, which is true
+  and useless.
+- **E2 — Two sources at once.** A usage error rather than a precedence rule.
+  Four ways to supply one secret are alternatives; picking between two that were
+  both given is a guess.
 
 **Covers.** NFR-3, FR-C6, NFR-12.
 
@@ -379,6 +389,9 @@ without a window.
 1. `pcloak env add <kind> <name> …` — one subcommand per kind, because the four
    share almost no fields and a single command would carry twenty-five flags of
    which twenty are wrong for whatever is being described.
+   A secret comes from `--credential-prompt` (typed on the terminal, no echo),
+   `--credential-file`, `--credential-stdin`, or `--credential` — the last of
+   which warns. A definition with none is ordinary and stores nothing.
 2. `pcloak storage add <kind> <name> …`, the same way.
 3. Nothing is contacted. The definition is written and the operator is told to
    probe it.
@@ -399,10 +412,8 @@ without a window.
 - **E1 — The name is already taken.** Refused, naming `--replace`. Overwriting a
   definition by accident is how a capture ends up pointed somewhere else.
 - **E2 — A job is using it.** Refused rather than removed out from under the run.
-- **E3 — A secret was offered as an argument.** There is no flag that accepts
-  one: `--credential-file`, `--credential-stdin` and the `PORTCLOAK_CREDENTIAL_*`
-  variables are the ways in, because argv is visible in `ps` to every user on the
-  machine.
+- **E3 — A prompt was asked for with no terminal.** Refused, naming the other
+  three ways in.
 
 **Postconditions.** A definition exists and nothing was contacted. Snapshots
 already captured from an environment survive its removal: a snapshot records

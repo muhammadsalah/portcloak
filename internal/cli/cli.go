@@ -23,6 +23,8 @@ import (
 	"io"
 	"os"
 
+	"github.com/spf13/cobra"
+
 	"portcloak/internal/app"
 )
 
@@ -81,10 +83,41 @@ func Main(build app.Build, args []string, s Streams) int {
 	root.SetOut(s.Out)
 	root.SetErr(s.Err)
 
+	// Everything cobra does before RunE is parsing and validation: unknown
+	// flags, the wrong number of arguments, a missing required flag, two
+	// mutually exclusive ones. All of those are usage errors and none of them
+	// means the tool tried and failed, so they get their own code.
+	//
+	// Marked by reaching RunE rather than by inspecting the error, because the
+	// alternative is matching cobra's message text — which is not an interface
+	// and changes between releases. ValidateFlagGroups is the last thing to run
+	// before RunE, so "did not reach it" is exactly "did not get past
+	// validation".
+	ran := false
+	markReached(root, &ran)
+
 	if err := root.Execute(); err != nil {
+		if !ran {
+			fmt.Fprintln(s.Err, "pcloak:", err)
+			return ExitUsage
+		}
 		return report(s.Err, err)
 	}
 	return ExitOK
+}
+
+// markReached wraps every RunE in the tree so the caller can tell whether
+// execution got past cobra's own validation.
+func markReached(c *cobra.Command, ran *bool) {
+	if inner := c.RunE; inner != nil {
+		c.RunE = func(cmd *cobra.Command, args []string) error {
+			*ran = true
+			return inner(cmd, args)
+		}
+	}
+	for _, sub := range c.Commands() {
+		markReached(sub, ran)
+	}
 }
 
 // report prints a failure the way an operator reads one and returns its code.

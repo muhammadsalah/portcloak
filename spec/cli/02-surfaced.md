@@ -319,3 +319,32 @@ kinds that genuinely have no `add`.
 claim about a *sequence*, and it is only checkable by walking the sequence. Asked
 of the capture alone it was true; asked of the job the capture belongs to it was
 false.
+
+---
+
+## S11 — `ExitUsage` was defined, documented, and never returned
+
+**Found.** Adding mutually-exclusive flag groups and checking what a violation
+exits with. It was 1.
+
+**What.** `ExitUsage = 2` had existed since the CLI was written, was in the table
+in UC-L12, and nothing returned it. Every cobra rejection — unknown flag, wrong
+argument count, missing required flag — reached `report()`, which classifies with
+`codeFor` and falls through to `ExitFailed`.
+
+So a script that retried on failure would have retried a typo, for ever, and the
+documented contract said it would not.
+
+**Fixed.** Every `RunE` in the tree is wrapped once at construction with a marker;
+if `Execute` returns an error and the marker was never set, nothing got past
+cobra's validation and the code is 2. Structural rather than string-matching
+cobra's messages, which are not an interface — see
+[D14](./01-decisions.md).
+
+**Guard.** `TestCLI_UsageErrorsExitTwo`, over four different kinds of usage error.
+
+**Reusable part.** A constant that is exported, documented in a table and never
+returned looks exactly like one that works. The exit codes were tested — but only
+the ones something returned, so the test suite agreed with the bug. What would
+have caught it is a test per row of the documented table, written from the table
+rather than from the code.

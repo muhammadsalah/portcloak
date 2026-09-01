@@ -32,6 +32,7 @@ type captureFlags struct {
 	key        string
 	recipients []string
 	recipFile  string
+	passphrase string
 	passFile   string
 	passStdin  bool
 	// acknowledge is the unencrypted acknowledgement. It is long, first-person
@@ -86,8 +87,10 @@ with the shell and follow it with ` + "`pcloak job logs -f`" + `.`,
 	fl.StringVar(&f.key, "key", "", "seal with a key already stored on this machine")
 	fl.StringArrayVar(&f.recipients, "recipient", nil, "an age recipient to seal to; repeat for several")
 	fl.StringVar(&f.recipFile, "recipients-file", "", "read age recipients from this file, one per line")
+	fl.StringVar(&f.passphrase, "passphrase", "", "the passphrase itself; visible in ps, so prefer the two below")
 	fl.StringVar(&f.passFile, "passphrase-file", "", "read the passphrase from this file (- for stdin)")
 	fl.BoolVar(&f.passStdin, "passphrase-stdin", false, "read the passphrase from stdin")
+	c.MarkFlagsMutuallyExclusive("passphrase", "passphrase-file", "passphrase-stdin")
 	fl.BoolVar(&f.acknowledge, "i-understand-unencrypted", false,
 		"confirm that an unencrypted snapshot holds unmasked secrets and private signing keys in the clear")
 
@@ -239,7 +242,8 @@ func resolveEncryption(r *run, f *captureFlags, opts *app.CaptureOptions) error 
 	}
 
 	pass, err := (secretSource{
-		file: f.passFile, stdin: f.passStdin, env: "PORTCLOAK_PASSPHRASE",
+		value: f.passphrase, file: f.passFile, stdin: f.passStdin,
+		env: "PORTCLOAK_PASSPHRASE", required: true,
 	}).read(r, "Passphrase to seal the snapshot", true)
 	if err != nil {
 		if err == errNotATerminal {

@@ -66,17 +66,57 @@ func confirmPhrase(r *run, phrase, format string, a ...any) bool {
 	return strings.TrimSpace(line) == phrase
 }
 
-// secretSource is where a passphrase may come from, in order.
+// secretSource is where a secret may come from, in order.
+//
+// The order is deliberate and is the same everywhere a secret is read, so that
+// one rule covers a capture passphrase, an SSH password and an Admin API
+// password rather than three that drift.
 type secretSource struct {
+	// value is the secret given directly on the command line.
+	//
+	// It is first because a caller who typed it meant it, and it is documented
+	// everywhere as the least good of these: argv is visible in `ps` to every
+	// user on the machine, and it lands in shell history. Using it warns, once,
+	// on stderr — see warnArgvSecret. It exists because the alternative was
+	// people writing secrets to temporary files to get past a flag that would
+	// not take one, which is worse.
+	value string
 	file  string
 	stdin bool
 	// env names the variable checked before prompting. It is the CI path: the
-	// value reaches the process without appearing in argv, where `ps` shows it
-	// to every user on the machine.
+	// value reaches the process without appearing in argv.
 	env string
+	// prompt asks on the terminal even when the caller gave no other source.
+	//
+	// It is opt-in for the definition commands, because most definitions have no
+	// secret at all — a local install, a disk folder, an S3 bucket reached
+	// through an instance role — and prompting for one would ask a question with
+	// no right answer.
+	prompt bool
+	// required marks a secret the command cannot proceed without, which is what
+	// makes a prompt the correct last resort rather than an intrusion. Sealing a
+	// snapshot needs a passphrase; describing a Keycloak may not need anything.
+	required bool
 }
 
-// read resolves a passphrase without it ever being a command-line argument.
+// warnArgvSecret says once what a secret on the command line costs.
+//
+// Said rather than refused: it is the operator's machine and their call, and a
+// tool that refuses a thing people need finds them working around it in ways it
+// cannot see. But it is not said quietly either — the failure mode is somebody
+// pasting a production password into a shared shell's history without ever
+// having been told.
+func warnArgvSecret(r *run, what string) {
+	if r == nil || r.g.quiet {
+		return
+	}
+	fmt.Fprintf(r.s.Err,
+		"pcloak: %s was given on the command line, where `ps` shows it to every user on this\n"+
+			"  machine and your shell records it in history. Prefer a file, stdin, or the\n"+
+			"  interactive prompt instead.\n", what)
+}
+
+// read resolves a secret from the first source that has one.
 //
 // confirm decides whether a mistyped value is recoverable. Sealing gets two
 // prompts and a comparison, because a snapshot sealed with a typo cannot be
@@ -84,6 +124,9 @@ type secretSource struct {
 // simply fails and can be tried again.
 func (src secretSource) read(r *run, prompt string, confirmTwice bool) (string, error) {
 	switch {
+	case src.value != "":
+		return src.value, nil
+
 	case src.file != "" && src.file != "-":
 		b, err := os.ReadFile(src.file)
 		if err != nil {
@@ -103,6 +146,12 @@ func (src secretSource) read(r *run, prompt string, confirmTwice bool) (string, 
 		if v := os.Getenv(src.env); v != "" {
 			return v, nil
 		}
+	}
+	if !src.prompt && !src.required {
+		// Nothing was offered and nothing was asked for. An empty secret is a
+		// real answer here: most definitions have none, and prompting for one
+		// would ask a question with no right answer.
+		return "", nil
 	}
 
 	f, ok := r.s.Err.(*os.File)

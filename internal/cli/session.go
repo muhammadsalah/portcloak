@@ -21,6 +21,7 @@ import (
 
 // keySource is how a command may be told which key opens a bundle.
 type keySource struct {
+	passphrase      string
 	passphraseFile  string
 	passphraseStdin bool
 	identityFiles   []string
@@ -28,8 +29,10 @@ type keySource struct {
 
 func (k *keySource) register(c *cobra.Command) {
 	f := c.Flags()
+	f.StringVar(&k.passphrase, "passphrase", "", "the passphrase itself; visible in ps, so prefer the two below")
 	f.StringVar(&k.passphraseFile, "passphrase-file", "", "read the passphrase from this file (- for stdin)")
 	f.BoolVar(&k.passphraseStdin, "passphrase-stdin", false, "read the passphrase from stdin")
+	c.MarkFlagsMutuallyExclusive("passphrase", "passphrase-file", "passphrase-stdin")
 	f.StringArrayVar(&k.identityFiles, "identity-file", nil, "an age identity file that can open this snapshot (repeatable)")
 }
 
@@ -62,11 +65,13 @@ func openSnapshot(r *run, id string, k keySource) (*app.Overview, func(), error)
 		// sealed to recipients opens from the keychain or from --identity-file,
 		// and prompting for a passphrase it has no use for would be asking a
 		// question with no right answer.
-		if k.passphraseFile != "" || k.passphraseStdin {
+		if k.passphrase != "" || k.passphraseFile != "" || k.passphraseStdin {
 			pass, err := (secretSource{
-				file:  k.passphraseFile,
-				stdin: k.passphraseStdin,
-				env:   "PORTCLOAK_PASSPHRASE",
+				value:    k.passphrase,
+				file:     k.passphraseFile,
+				stdin:    k.passphraseStdin,
+				env:      "PORTCLOAK_PASSPHRASE",
+				required: true,
 			}).read(r, "Passphrase", false)
 			if err != nil {
 				return nil, nil, err

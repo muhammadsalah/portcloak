@@ -45,6 +45,20 @@ func precondition(message string) error {
 	return &exitError{code: ExitPrecondition, message: message}
 }
 
+// asPrecondition wraps an error as a precondition, unless it already carries its
+// own code and message.
+//
+// Without the check a helper that has already written a good sentence gets it
+// prefixed a second time — "pcloak: pcloak: ..." — which is how a careful
+// message ends up looking careless.
+func asPrecondition(err error) error {
+	var coded *exitError
+	if errors.As(err, &coded) {
+		return err
+	}
+	return exitWith(ExitPrecondition, "pcloak: "+err.Error())
+}
+
 // failure wraps an engine error at a chosen code, keeping the engine's own
 // sentence and advice.
 func failure(code int, err error) error {

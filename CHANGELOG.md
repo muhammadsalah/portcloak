@@ -32,12 +32,19 @@ record; unprefixed `v` tags mark shipped binaries.
   *partial*, *precondition* and *busy*, because those are the three a script branches on: a
   three-realm capture where one realm fails produced two real, restorable snapshots, and calling
   that "failed" would send somebody looking for damage that is not there.
-- Nothing secret is ever a command-line argument, where `ps` would show it to every user on the
-  machine. `--key` names a key already on this machine — an age key contributes its recipient,
-  which is public; a passphrase key contributes its secret from the keychain — and otherwise a
-  passphrase comes from a file, from stdin, from `PORTCLOAK_PASSPHRASE`, or from a prompt with no
-  echo, typed twice and compared when sealing, because a snapshot sealed with a typo cannot be
-  opened by anybody afterwards.
+- Four ways to give a secret, everywhere one is taken: a prompt on the terminal with no echo, a
+  file, stdin, or the value itself. Sealing asks twice and compares, because a snapshot sealed with
+  a typo cannot be opened by anybody afterwards. `--key` names a key already on this machine and
+  needs none of them — an age key contributes its recipient, which is public; a passphrase key
+  contributes its secret from the keychain. `PORTCLOAK_PASSPHRASE` is the CI path and reaches the
+  process without appearing in argv.
+
+  The value form warns, once, on stderr: `ps` shows argv to every user on the machine and shells
+  record it. It is offered rather than refused because a tool that refuses what people need finds
+  them writing passwords to temporary files to get past a flag that will not take one, which
+  leaves the secret somewhere worse for longer. `--quiet` silences the warning for somebody who
+  has decided. Two sources at once is a usage error rather than a precedence rule: four
+  alternatives are alternatives, and choosing between two that were both given is a guess.
 - `pcloak env add` and `pcloak storage add` define what a capture needs, one subcommand per kind —
   `local`, `ssh`, `docker`, `kubernetes`; `disk`, `ssh`, `s3`, `azure` — so `--help` lists only the
   flags that apply rather than twenty-five of which twenty are wrong. Neither contacts anything;
@@ -55,6 +62,13 @@ record; unprefixed `v` tags mark shipped binaries.
   These three — environments, storage and keys — are all the configuration the command line
   writes. Preferences are not, and the test is the one that let the others in: nothing is blocked
   on a preference, because every one of them is a default that a flag already overrides.
+
+### Fixed
+- Usage errors exit 2. `ExitUsage` was defined and documented from the start and nothing ever
+  returned it, so an unknown flag, a missing argument and a missing required flag all exited 1 —
+  the code for "it tried and failed". A script that retried on failure would have retried a typo.
+  The distinction is now drawn structurally, by whether the command was ever reached, rather than
+  by matching the parser's error text, which is not an interface and changes between releases.
 
 ### Changed
 - **Two PortCloaks can now share one `~/.portcloak`, and the rules for it are explicit.** Both

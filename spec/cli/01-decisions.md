@@ -270,3 +270,55 @@ nothing is blocked on one: every preference is a default that a flag on the
 relevant command already overrides. That is the same question asked of
 environments and storage, answered honestly this time — and it is the question to
 ask of anything else proposed for this surface.
+
+---
+
+## D13 — Four ways to give a secret, one of which warns
+
+**Decision.** Every command that takes a secret offers a no-echo terminal prompt,
+a file, stdin, and the value itself. The value form prints a warning; `--quiet`
+silences it. Two at once is a usage error.
+
+**Why the value form at all.** The original surface refused it outright, on the
+reasoning that argv is visible in `ps` to every user on the machine and lands in
+shell history. Both facts are true and neither is the whole argument. A tool that
+refuses what people need does not stop them needing it — it finds them writing
+passwords to temporary files to get past a flag that will not take one, which
+leaves the secret on disk rather than in a process listing for a few seconds.
+
+So it is offered, and it says what it costs. Once, on stderr, where it cannot
+corrupt a pipe; silenced by `--quiet`, because somebody who has decided does not
+need telling on every run of a loop.
+
+**Why the prompt was missing.** `env add` and `storage add` never prompted, and
+the gap was structural rather than an oversight: their credential is *optional* —
+a local install, a disk folder, an S3 bucket reached through an instance role all
+have none — so the read short-circuited when no source was given. Prompting by
+default would ask a question with no right answer. `--credential-prompt` makes it
+explicit, and `secretSource` grew a `required` flag to keep the distinction: a
+capture passphrase is required and prompts as a last resort, a definition's
+secret is not.
+
+**Rejected.** Making the prompt the default for definition commands, and
+resolving two given sources by precedence. The first asks most callers a question
+they have no answer to; the second turns a mistake into a silent choice.
+
+---
+
+## D14 — Usage errors are told apart structurally, not by message text
+
+**Decision.** Anything cobra rejects before `RunE` exits 2.
+
+**Found by** adding the flag groups above and noticing that a mutually-exclusive
+violation exited 1 — the code for "it tried and failed". `ExitUsage` had been
+defined and documented since the CLI was written and was never once returned:
+unknown flags, missing arguments and missing required flags all exited 1 too.
+
+**Why structural.** The obvious implementation matches cobra's error strings.
+Those are not an interface and change between releases, and a matcher that silently
+stops matching leaves every usage error reported as a failure again. Instead every
+`RunE` in the tree is wrapped once, at construction, with a marker; if `Execute`
+returns an error and the marker was never set, nothing got past validation.
+`ValidateFlagGroups` is the last step before `RunE`, so the boundary is exact.
+
+**Why it matters.** A script that retries on failure must not retry a typo.

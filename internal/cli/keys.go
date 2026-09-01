@@ -170,7 +170,7 @@ whatever archives that log.`,
 }
 
 func newKeyImportCmd(s Streams, g *globals) *cobra.Command {
-	var note, keyFile string
+	var note, keyValue, keyFile string
 	var keyStdin bool
 	c := &cobra.Command{
 		Use:   "import <name>",
@@ -185,7 +185,7 @@ the command line is visible in ` + "`ps`" + ` to every user on the machine.`,
 			if err := requireKeychain(g); err != nil {
 				return err
 			}
-			if keyFile == "" && !keyStdin {
+			if keyValue == "" && keyFile == "" && !keyStdin && !isTerminal(s.Err) {
 				return precondition(
 					"pcloak: the private half has to come from somewhere.\n" +
 						"  Use --private-key-file <path>, or --private-key-stdin.")
@@ -196,7 +196,7 @@ the command line is visible in ` + "`ps`" + ` to every user on the machine.`,
 			}
 			defer r.close()
 
-			secret, err := (secretSource{file: keyFile, stdin: keyStdin}).read(r, "Private key", false)
+			secret, err := (secretSource{value: keyValue, file: keyFile, stdin: keyStdin, required: true}).read(r, "Private key", false)
 			if err != nil {
 				return exitWith(ExitPrecondition, "pcloak: "+err.Error())
 			}
@@ -208,13 +208,15 @@ the command line is visible in ` + "`ps`" + ` to every user on the machine.`,
 		},
 	}
 	c.Flags().StringVar(&note, "note", "", "what this key is for")
+	c.Flags().StringVar(&keyValue, "private-key", "", "the private half itself; visible in ps, so prefer the two below")
 	c.Flags().StringVar(&keyFile, "private-key-file", "", "read the private half from this file (- for stdin)")
 	c.Flags().BoolVar(&keyStdin, "private-key-stdin", false, "read the private half from stdin")
+	c.MarkFlagsMutuallyExclusive("private-key", "private-key-file", "private-key-stdin")
 	return c
 }
 
 func newKeyRememberCmd(s Streams, g *globals) *cobra.Command {
-	var note, passFile string
+	var note, passphrase, passFile string
 	var passStdin bool
 	c := &cobra.Command{
 		Use:   "remember <name>",
@@ -236,7 +238,8 @@ cannot be recovered from anywhere, and neither can the snapshot.`,
 			defer r.close()
 
 			pass, err := (secretSource{
-				file: passFile, stdin: passStdin, env: "PORTCLOAK_PASSPHRASE",
+				value: passphrase, file: passFile, stdin: passStdin,
+				env: "PORTCLOAK_PASSPHRASE", required: true,
 			}).read(r, "Passphrase", true)
 			if err != nil {
 				return exitWith(ExitPrecondition, "pcloak: "+err.Error())
@@ -249,8 +252,10 @@ cannot be recovered from anywhere, and neither can the snapshot.`,
 		},
 	}
 	c.Flags().StringVar(&note, "note", "", "what this key is for")
+	c.Flags().StringVar(&passphrase, "passphrase", "", "the passphrase itself; visible in ps, so prefer the two below")
 	c.Flags().StringVar(&passFile, "passphrase-file", "", "read it from this file (- for stdin)")
 	c.Flags().BoolVar(&passStdin, "passphrase-stdin", false, "read it from stdin")
+	c.MarkFlagsMutuallyExclusive("passphrase", "passphrase-file", "passphrase-stdin")
 	return c
 }
 

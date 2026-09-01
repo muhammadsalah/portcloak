@@ -136,8 +136,8 @@ engine and the window, and this puts a second mouth on what they built.
 | UC-L9 | Probe an environment or a storage | CLI | `TestCLI_UnknownEnvironmentNamesWhatExists` |
 | UC-L10 | Run while the desktop app is open | CLI | `TestCLI_ReadOnlyCommandsWorkWhileAWriterHoldsTheHome`; `TestCLI_RefusesAConfigChangeWhileAnotherPortCloakHoldsTheHome`; `TestHomeLock_RefusesASecondWriter`; `TestHomeLock_AllowsSeveralReaders`; `TestHomeLock_IsReleasedWhenTheProcessDies`; `TestHomeLock_NamesTheHolder`; `TestSweepIfSolelyHere_LeavesAnotherPortCloaksJobsAlone` |
 | UC-L11 | Seal without a secret on the command line | CLI | `TestCLI_RefusesAnUnencryptedCaptureThatWasNotAcknowledged` |
-| UC-L12 | Script it | CLI | `TestCLI_HelpNeedsNoHome`; `TestCLI_UnknownEnvironmentNamesWhatExists` |
-| UC-L13 | Define an environment and a storage | CLI | `TestCLI_EnvAddWritesADefinitionAndNothingElse`; `TestCLI_AddRefusesADuplicateUnlessReplaceIsAsked`; `TestCLI_AddTakesNoSecretOnTheCommandLine`; `TestCLI_StorageRemoveSaysTheSnapshotsStay`; `TestCLI_NotFoundOnlySuggestsCommandsThatExist` |
+| UC-L12 | Script it | CLI | `TestCLI_HelpNeedsNoHome`; `TestCLI_UnknownEnvironmentNamesWhatExists`; `TestCLI_UsageErrorsExitTwo`; `TestCLI_SecretSourcesAreMutuallyExclusive` |
+| UC-L13 | Define an environment and a storage | CLI | `TestCLI_EnvAddWritesADefinitionAndNothingElse`; `TestCLI_AddRefusesADuplicateUnlessReplaceIsAsked`; `TestCLI_EverySecretHasAllFourWaysIn`; `TestCLI_ASecretOnTheCommandLineIsAcceptedAndWarnedAbout`; `TestCLI_PromptWithNoTerminalNamesTheFlagsInstead`; `TestCLI_StorageRemoveSaysTheSnapshotsStay`; `TestCLI_NotFoundOnlySuggestsCommandsThatExist` |
 
 ## 12.2 Functional requirements → phase and evidence
 

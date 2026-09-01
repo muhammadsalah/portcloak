@@ -152,10 +152,24 @@ thing that must not be silent.
 
 ## 13.6 Secrets, and the machines with no keychain
 
-Nothing secret is ever a command-line argument, because `ps` shows argv to every
-user on the machine. A passphrase comes from a file, from stdin, from
-`PORTCLOAK_PASSPHRASE`, or from a no-echo prompt — twice with a comparison when
-sealing, because a snapshot sealed with a typo cannot be opened by anybody, ever.
+There are four ways to supply a secret, and every command that takes one offers
+all four: a no-echo prompt on the terminal, a file, stdin, and the value itself.
+When sealing, a prompt asks twice and compares, because a snapshot sealed with a
+typo cannot be opened by anybody, ever. `PORTCLOAK_PASSPHRASE` is the fifth, for
+CI, and reaches the process without appearing in argv.
+
+The value form warns. `ps` shows argv to every user on the machine and shells
+record it, so using it prints a line saying so — once, on stderr, silenced by
+`--quiet` for somebody who has decided. It is offered rather than refused because
+a tool that refuses what people need finds them working around it in ways it
+cannot see: writing a password to a temporary file to get past a flag that will
+not take one is strictly worse than typing it.
+
+Two sources at once is a usage error rather than a precedence rule. Four
+alternatives are alternatives; choosing between two that were both given is a
+guess. And asking for a prompt where there is no terminal is refused by naming
+the other three, not by reporting the absence of a terminal — which is true and
+useless.
 
 `--key <name>` is the best of these and the reason key management is in scope at
 all (UC-L8): an identity key contributes its recipient, which is public, and a
@@ -180,6 +194,15 @@ The exit codes are in [UC-L12](./usecases/08-cli.md#uc-l12--script-it). Three of
 them exist because a script genuinely branches on them: **partial** (some realms
 produced a snapshot and some did not), **precondition** (nothing was written to
 the target), and **busy** (another PortCloak holds the folder).
+
+**Usage** is separated from failure, and the separation is drawn structurally
+rather than by matching cobra's message text — which is not an interface and
+changes between releases. Everything cobra does before `RunE` is parsing and
+validation: an unknown flag, the wrong number of arguments, a missing required
+flag, two mutually exclusive ones. `ValidateFlagGroups` is the last thing to run
+before `RunE`, so "did not reach `RunE`" is exactly "did not get past
+validation", and that is what the code is derived from. It matters because a
+script that retries on failure must not retry a typo.
 
 ## 13.8 The scope line, and where it moved to
 

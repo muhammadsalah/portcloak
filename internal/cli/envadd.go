@@ -64,8 +64,10 @@ type adminFlags struct {
 	realm      string
 	clientID   string
 	insecure   bool
+	secret     string
 	secretFile string
 	secretIn   bool
+	secretAsk  bool
 }
 
 func (a *adminFlags) register(c *cobra.Command) {
@@ -75,8 +77,17 @@ func (a *adminFlags) register(c *cobra.Command) {
 	f.StringVar(&a.realm, "admin-realm", "", "realm the admin account lives in (default master)")
 	f.StringVar(&a.clientID, "admin-client-id", "", "client id to authenticate with (default admin-cli)")
 	f.BoolVar(&a.insecure, "admin-insecure-tls", false, "do not verify the Admin API's TLS certificate")
+	f.StringVar(&a.secret, "admin-password", "", "the Admin API password; visible in ps, so prefer one of the three below")
 	f.StringVar(&a.secretFile, "admin-password-file", "", "read the Admin API password from this file (- for stdin)")
 	f.BoolVar(&a.secretIn, "admin-password-stdin", false, "read the Admin API password from stdin")
+	f.BoolVar(&a.secretAsk, "admin-password-prompt", false, "ask for the Admin API password on the terminal, without echo")
+	c.MarkFlagsMutuallyExclusive("admin-password", "admin-password-file", "admin-password-stdin", "admin-password-prompt")
+}
+
+// given reports whether any source for the Admin password was offered, which is
+// what decides whether to store one at all.
+func (a *adminFlags) given() bool {
+	return a.secret != "" || a.secretFile != "" || a.secretIn || a.secretAsk
 }
 
 func (a *adminFlags) apply(e *config.Environment) {
@@ -90,8 +101,10 @@ func (a *adminFlags) apply(e *config.Environment) {
 // credFlags is the definition's own secret: an SSH password, or the passphrase
 // on an SSH key.
 type credFlags struct {
-	file  string
-	stdin bool
+	value  string
+	file   string
+	stdin  bool
+	prompt bool
 }
 
 // register attaches the credential flags with a generic description.
@@ -106,15 +119,31 @@ func (cf *credFlags) register(c *cobra.Command) {
 
 func (cf *credFlags) registerAs(c *cobra.Command, what string) {
 	f := c.Flags()
+	f.StringVar(&cf.value, "credential", "", what+"; visible in ps, so prefer one of the three below")
 	f.StringVar(&cf.file, "credential-file", "", "read "+what+" from this file (- for stdin)")
 	f.BoolVar(&cf.stdin, "credential-stdin", false, "read "+what+" from stdin")
+	f.BoolVar(&cf.prompt, "credential-prompt", false, "ask for "+what+" on the terminal, without echo")
+	c.MarkFlagsMutuallyExclusive("credential", "credential-file", "credential-stdin", "credential-prompt")
 }
 
-func (cf *credFlags) read(r *run) (string, error) {
-	if cf.file == "" && !cf.stdin {
-		return "", nil
+func (cf *credFlags) read(r *run, what string) (string, error) {
+	if cf.value != "" {
+		warnArgvSecret(r, what)
 	}
-	return (secretSource{file: cf.file, stdin: cf.stdin}).read(r, "Secret", false)
+	if cf.prompt && !isTerminal(r.s.Err) {
+		// The rule for the whole surface: every prompt has a flag, and where
+		// there is nobody to ask, the refusal names the flag rather than the
+		// absence. "There is no terminal to ask on" is true and useless.
+		return "", precondition(
+			"pcloak: --credential-prompt was given and there is no terminal to ask on.\n" +
+				"  Use --credential-file <path>, --credential-stdin, or --credential <value>.")
+	}
+	// A definition with no secret is ordinary — a local install, a disk folder,
+	// an S3 bucket reached through an instance role — so nothing offered and
+	// nothing asked for means nothing stored, rather than a prompt.
+	return (secretSource{
+		value: cf.value, file: cf.file, stdin: cf.stdin, prompt: cf.prompt,
+	}).read(r, "Enter "+what, false)
 }
 
 // saveEnv is the one write path, shared by all four kinds.
@@ -140,9 +169,9 @@ func saveEnv(cmd *cobra.Command, s Streams, g *globals, e config.Environment,
 				"  Pass --replace to overwrite it, which is what a re-run of the same script wants.", e.Name))
 	}
 
-	secret, err := cf.read(r)
+	secret, err := cf.read(r, "the secret for "+e.Name)
 	if err != nil {
-		return exitWith(ExitPrecondition, "pcloak: "+err.Error())
+		return asPrecondition(err)
 	}
 
 	original := ""
@@ -156,10 +185,21 @@ func saveEnv(cmd *cobra.Command, s Streams, g *globals, e config.Environment,
 	// The Admin password is stored under its own handle, and only after the
 	// environment exists — SaveAdminCredential resolves the environment by name
 	// to work out where to file it.
-	if a.secretFile != "" || a.secretIn {
-		pass, err := (secretSource{file: a.secretFile, stdin: a.secretIn}).read(r, "Admin API password", false)
+	if a.given() {
+		if a.secret != "" {
+			warnArgvSecret(r, "the Admin API password")
+		}
+		if a.secretAsk && !isTerminal(r.s.Err) {
+			return precondition(
+				"pcloak: --admin-password-prompt was given and there is no terminal to ask on.\n" +
+					"  Use --admin-password-file <path>, --admin-password-stdin, or --admin-password <value>.")
+		}
+		pass, err := (secretSource{
+			value: a.secret, file: a.secretFile, stdin: a.secretIn,
+			prompt: a.secretAsk, required: true,
+		}).read(r, "Admin API password", false)
 		if err != nil {
-			return exitWith(ExitPrecondition, "pcloak: "+err.Error())
+			return asPrecondition(err)
 		}
 		if f := cfg.SaveAdminCredential(e.Name, pass); f != nil {
 			return exitWith(ExitFailed, "pcloak: "+f.Message)

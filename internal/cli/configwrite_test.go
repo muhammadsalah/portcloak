@@ -67,22 +67,35 @@ func TestCLI_AddRefusesADuplicateUnlessReplaceIsAsked(t *testing.T) {
 	}
 }
 
-// A secret is read from a file or stdin, never from an argument, because argv is
-// visible in ps to every user on the machine.
-func TestCLI_AddTakesNoSecretOnTheCommandLine(t *testing.T) {
+// A secret can be supplied four ways, and every command that takes one offers
+// all four. The direct flag exists because refusing it sends people writing
+// passwords to temporary files to get past a flag that will not take one — but
+// the safer three have to be there beside it, or the warning on the direct one
+// is telling somebody off for the only option they had.
+func TestCLI_EverySecretHasAllFourWaysIn(t *testing.T) {
 	home := scratchHome(t)
-	for _, args := range [][]string{
-		{"env", "add", "ssh", "e", "--host", "h", "--user", "u", "--server-folder", "/opt/keycloak"},
-		{"storage", "add", "s3", "s", "--bucket", "b", "--region", "us-east-1"},
+	for _, tc := range []struct {
+		args   []string
+		prefix string
+	}{
+		{[]string{"env", "add", "ssh", "e"}, "--credential"},
+		{[]string{"storage", "add", "s3", "s"}, "--credential"},
+		{[]string{"env", "add", "ssh", "e"}, "--admin-password"},
 	} {
-		res := runCLI(t, home, append(args, "--help")...)
+		res := runCLI(t, home, append(tc.args, "--help")...)
 		out := res.all()
-		if strings.Contains(out, "--credential ") || strings.Contains(out, "--password ") {
-			t.Errorf("`pcloak %s` offers a secret as a flag value:\n%s", strings.Join(args[:3], " "), out)
+		for _, suffix := range []string{"", "-file", "-stdin", "-prompt"} {
+			if !strings.Contains(out, tc.prefix+suffix) {
+				t.Errorf("`pcloak %s` does not offer %s:\n%s",
+					strings.Join(tc.args[:3], " "), tc.prefix+suffix, out)
+			}
 		}
-		if !strings.Contains(out, "--credential-file") || !strings.Contains(out, "--credential-stdin") {
-			t.Errorf("`pcloak %s` offers no way to supply a secret off the command line:\n%s",
-				strings.Join(args[:3], " "), out)
+		// The direct one has to say what it costs, in the help and not only in
+		// the warning: somebody reading --help is choosing between them.
+		if !strings.Contains(out, tc.prefix+" string            ") &&
+			!strings.Contains(out, "visible in ps") {
+			t.Errorf("`pcloak %s` does not say %s is visible in ps:\n%s",
+				strings.Join(tc.args[:3], " "), tc.prefix, out)
 		}
 	}
 }
@@ -132,6 +145,95 @@ func TestCLI_NotFoundOnlySuggestsCommandsThatExist(t *testing.T) {
 		}
 		if !strings.Contains(out, want) {
 			t.Errorf("`%s show` does not point at %q:\n%s", kind, want, out)
+		}
+	}
+}
+
+// A secret may be given directly, because refusing one sends people writing
+// passwords to temporary files to get past a flag that will not take one, which
+// is worse. What it must not do is happen silently: argv is visible in ps to
+// every user on the machine, and shells record it.
+func TestCLI_ASecretOnTheCommandLineIsAcceptedAndWarnedAbout(t *testing.T) {
+	home := scratchHome(t)
+
+	res := runCLI(t, home, "storage", "add", "s3", "ci",
+		"--bucket", "b", "--region", "us-east-1", "--credential", "AKIA:secret")
+	if res.Code != ExitOK {
+		t.Fatalf("exit %d\n%s", res.Code, res.all())
+	}
+	warning := res.stderr()
+	for _, want := range []string{"ps", "history"} {
+		if !strings.Contains(warning, want) {
+			t.Errorf("the warning does not say %q costs anything:\n%s", want, warning)
+		}
+	}
+	// On stderr, so it cannot corrupt a pipe reading the result.
+	if strings.Contains(res.stdout(), "history") {
+		t.Errorf("the warning reached stdout:\n%s", res.stdout())
+	}
+	// And --quiet silences it, for somebody who has decided and does not need
+	// telling on every run.
+	res = runCLI(t, home, "-q", "storage", "add", "s3", "ci2",
+		"--bucket", "b", "--region", "us-east-1", "--credential", "AKIA:secret")
+	if strings.Contains(res.stderr(), "history") {
+		t.Errorf("--quiet did not silence the warning:\n%s", res.stderr())
+	}
+}
+
+// The four ways to supply one secret are alternatives, not a precedence puzzle.
+// Two at once is a mistake worth catching rather than resolving.
+func TestCLI_SecretSourcesAreMutuallyExclusive(t *testing.T) {
+	home := scratchHome(t)
+	res := runCLI(t, home, "storage", "add", "s3", "x",
+		"--bucket", "b", "--region", "r", "--credential", "a", "--credential-stdin")
+	if res.Code != ExitUsage {
+		t.Fatalf("two secret sources at once should be a usage error; got exit %d\n%s", res.Code, res.all())
+	}
+}
+
+// Every prompt has a flag, and where there is nobody to ask the refusal names
+// the flag rather than the absence. "There is no terminal to ask on" is true and
+// useless.
+func TestCLI_PromptWithNoTerminalNamesTheFlagsInstead(t *testing.T) {
+	home := scratchHome(t)
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"storage", "add", "ssh", "r", "--host", "h", "--user", "u",
+			"--folder", "/s", "--credential-prompt"}, "--credential-file"},
+		{[]string{"env", "add", "ssh", "e", "--host", "h", "--user", "u",
+			"--server-folder", "/o", "--admin-url", "http://x", "--admin-password-prompt"}, "--admin-password-file"},
+	} {
+		res := runCLI(t, home, tc.args...)
+		if res.Code != ExitPrecondition {
+			t.Errorf("%v: expected a precondition refusal, got exit %d\n%s", tc.args[:3], res.Code, res.all())
+		}
+		if !strings.Contains(res.all(), tc.want) {
+			t.Errorf("%v: the refusal does not name %s:\n%s", tc.args[:3], tc.want, res.all())
+		}
+		// Prefixed once, not twice: the helper already wrote a whole sentence.
+		if strings.Contains(res.all(), "pcloak: pcloak:") {
+			t.Errorf("%v: the message is double-prefixed:\n%s", tc.args[:3], res.all())
+		}
+	}
+}
+
+// Anything cobra rejects before RunE — an unknown flag, the wrong number of
+// arguments, a missing required flag, two mutually exclusive ones — is a usage
+// error and not a failed attempt. A script that retries on failure must not
+// retry a typo.
+func TestCLI_UsageErrorsExitTwo(t *testing.T) {
+	home := scratchHome(t)
+	for _, args := range [][]string{
+		{"storage", "add", "s3", "x", "--bogus-flag"},
+		{"storage", "add", "s3"},
+		{"env", "add", "ssh", "e"},
+		{"snapshot", "show"},
+	} {
+		if res := runCLI(t, home, args...); res.Code != ExitUsage {
+			t.Errorf("`pcloak %s` exited %d, not %d\n%s",
+				strings.Join(args, " "), res.Code, ExitUsage, res.all())
 		}
 	}
 }

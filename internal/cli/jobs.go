@@ -249,7 +249,7 @@ through the job file.`,
 }
 
 func newJobResumeCmd(s Streams, g *globals) *cobra.Command {
-	var passFile string
+	var passphrase, passFile string
 	var passStdin bool
 	c := &cobra.Command{
 		Use:   "resume <job>",
@@ -283,7 +283,8 @@ is not always safe; review what was applied and start again deliberately.`,
 				// A job record never holds a passphrase, deliberately, so a
 				// resume of an encrypted capture has to be given one again.
 				pass, err = (secretSource{
-					file: passFile, stdin: passStdin, env: "PORTCLOAK_PASSPHRASE",
+					value: passphrase, file: passFile, stdin: passStdin,
+					env: "PORTCLOAK_PASSPHRASE", required: true,
 				}).read(r, "Passphrase the snapshot was sealed with", false)
 				if err != nil {
 					if err == errNotATerminal {
@@ -314,8 +315,10 @@ is not always safe; review what was applied and start again deliberately.`,
 			return verdict(out)
 		},
 	}
+	c.Flags().StringVar(&passphrase, "passphrase", "", "the passphrase itself; visible in ps, so prefer the two below")
 	c.Flags().StringVar(&passFile, "passphrase-file", "", "read the passphrase from this file (- for stdin)")
 	c.Flags().BoolVar(&passStdin, "passphrase-stdin", false, "read the passphrase from stdin")
+	c.MarkFlagsMutuallyExclusive("passphrase", "passphrase-file", "passphrase-stdin")
 	return c
 }
 

@@ -80,9 +80,9 @@ func saveStorage(cmd *cobra.Command, s Streams, g *globals, st config.Storage, s
 				"  Pass --replace to overwrite it, which is what a re-run of the same script wants.", st.Name))
 	}
 
-	secret, err := sc.cred.read(r)
+	secret, err := sc.cred.read(r, "the secret for "+st.Name)
 	if err != nil {
-		return exitWith(ExitPrecondition, "pcloak: "+err.Error())
+		return asPrecondition(err)
 	}
 
 	original := ""
