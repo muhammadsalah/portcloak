@@ -177,3 +177,117 @@ func TestLocate_EnvironmentBeatsTheChosenFolderBeatsTheDefault(t *testing.T) {
 		t.Fatalf("a pointer to a folder that is gone should fall back to the default; got %s", loc.Source)
 	}
 }
+
+// A folder named on the command line outranks everything, including
+// PORTCLOAK_HOME. The order matters because the two are set by different
+// people at different times: the variable is usually in a shell profile or a CI
+// image, the flag is typed for one run, and the more specific of the two has to
+// win or --home is unusable on exactly the machines it exists for.
+func TestLocateWith_AFlagOutranksTheEnvironment(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "config"))
+
+	pinned := filepath.Join(home, "pinned")
+	t.Setenv("PORTCLOAK_HOME", pinned)
+
+	flagged := filepath.Join(home, "flagged")
+	loc, err := LocateWith(flagged)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loc.Home.Root != flagged {
+		t.Fatalf("--home should win over PORTCLOAK_HOME; got %s", loc.Home.Root)
+	}
+	if loc.Source != HomeFlag {
+		t.Fatalf("the source should say the folder was named on the command line; got %s", loc.Source)
+	}
+	// Both are fixed from outside the app, so neither may be moved from the
+	// Settings screen — there is nowhere to record a different choice that the
+	// outside setting would not immediately override.
+	if !loc.Source.Pinned() {
+		t.Error("a folder named on the command line must not be reported as movable")
+	}
+
+	// An empty override is not an override. LocateWith("") has to behave
+	// exactly as Locate does, because that is how Locate is implemented.
+	if loc, err = LocateWith(""); err != nil {
+		t.Fatal(err)
+	} else if loc.Source != HomePinned || loc.Home.Root != pinned {
+		t.Fatalf("an empty override should defer to PORTCLOAK_HOME; got %s at %s", loc.Source, loc.Home.Root)
+	}
+}
+
+// --home points one run somewhere else. It must not redirect the next one.
+//
+// The pointer file is how a folder chosen in the app survives a restart, so
+// writing it here would turn a throwaway run against a scratch tree — a CI job,
+// a test, an experiment — into a permanent move of the operator's real
+// PortCloak, discovered the next time they opened the window.
+func TestLocateWith_LeavesThePointerFileAlone(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "config"))
+	t.Setenv("PORTCLOAK_HOME", "")
+
+	chosen := filepath.Join(home, "chosen")
+	if err := os.MkdirAll(chosen, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := WritePointer(chosen); err != nil {
+		t.Fatal(err)
+	}
+
+	scratch := filepath.Join(home, "scratch")
+	if _, err := LocateWith(scratch); err != nil {
+		t.Fatal(err)
+	}
+
+	loc, err := Locate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loc.Source != HomeChosen || loc.Home.Root != chosen {
+		t.Fatalf("the chosen folder should be untouched by an override; got %s at %s", loc.Source, loc.Home.Root)
+	}
+}
+
+// --config moves one file, not the tree. Everything with state in it — jobs,
+// logs, indexes, working files — stays where it was, because the case this
+// exists for is a checkout that carries the definitions while the machine keeps
+// the state.
+func TestHome_ConfigPathOverridesOnlyTheConfigFile(t *testing.T) {
+	root := t.TempDir()
+	elsewhere := filepath.Join(t.TempDir(), "definitions.yaml")
+
+	h := Home{Root: root, ConfigPath: elsewhere}
+	if got := h.ConfigFile(); got != elsewhere {
+		t.Errorf("config.yaml should come from %s; got %s", elsewhere, got)
+	}
+	for name, got := range map[string]string{
+		"jobs":  h.JobsDir(),
+		"logs":  h.LogsDir(),
+		"index": h.IndexDir(),
+		"work":  h.WorkDir(),
+		"audit": h.AuditFile(),
+	} {
+		if !strings.HasPrefix(got, root) {
+			t.Errorf("%s should stay under %s; got %s", name, root, got)
+		}
+	}
+
+	// Bootstrap writes the empty-config template on a first run. Against a path
+	// the operator typed it must not: a mistyped --config would then start an
+	// empty PortCloak that looks like it worked, instead of saying the file is
+	// not there.
+	if err := h.Bootstrap(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(elsewhere); !os.IsNotExist(err) {
+		t.Fatalf("--config named a file that does not exist; Bootstrap created it (%v)", err)
+	}
+	// The directories it does own are still made, so the rest of the tree works.
+	if _, err := os.Stat(h.JobsDir()); err != nil {
+		t.Errorf("the jobs directory should still be created: %v", err)
+	}
+}

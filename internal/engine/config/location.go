@@ -16,10 +16,12 @@ import (
 
 // Where the home folder's location came from.
 //
-// It matters to the operator because the three are not equally changeable: an
-// environment variable is set outside the app and wins over anything the app
-// could write, so a Settings screen that offered to move the folder anyway
-// would be offering something it cannot deliver.
+// It matters to the operator because the four are not equally changeable. Two
+// of them — PORTCLOAK_HOME and --home — are set outside the application and win
+// over anything it could write, so a Settings screen that offered to move the
+// folder anyway would be offering something it cannot deliver. Pinned is the
+// test for that; prefer it to comparing the constants, so that a fifth source
+// cannot arrive later and be treated as movable by default.
 type HomeSource string
 
 const (
@@ -29,7 +31,23 @@ const (
 	HomeChosen HomeSource = "chosen"
 	// HomePinned is PORTCLOAK_HOME, set in the environment.
 	HomePinned HomeSource = "environment"
+	// HomeFlag is a folder named on the command line. It outranks
+	// PORTCLOAK_HOME because an argument typed for one invocation is more
+	// specific than an environment inherited from a shell — and, like
+	// PORTCLOAK_HOME, it is not a choice the app may offer to move, because it
+	// was never recorded anywhere to move away from.
+	HomeFlag HomeSource = "flag"
 )
+
+// Pinned reports whether the folder was fixed from outside the application.
+//
+// Both PORTCLOAK_HOME and --home name a folder the app has no record of and
+// did not choose, so neither can be moved from the Settings screen: the app
+// would have nowhere to write the new choice that the outside setting would not
+// immediately override. Grouping them here rather than testing the two
+// constants at each call site is what stops a third source arriving later and
+// being treated as movable by default.
+func (s HomeSource) Pinned() bool { return s == HomePinned || s == HomeFlag }
 
 // Location is where PortCloak keeps everything, and how that was decided.
 type Location struct {
@@ -44,7 +62,8 @@ type Location struct {
 	Pointer string
 }
 
-// Locate resolves the home folder, in the order the app trusts:
+// Locate resolves the home folder for a caller with nothing to say about it,
+// in the order the app trusts:
 //
 //	PORTCLOAK_HOME  →  the pointer file  →  ~/.portcloak
 //
@@ -52,7 +71,27 @@ type Location struct {
 // deleted, falls back to the default rather than refusing to start. Losing the
 // way back to a working PortCloak because a folder was moved in Finder would be
 // a poor trade for strictness.
-func Locate() (Location, error) {
+func Locate() (Location, error) { return LocateWith("") }
+
+// LocateWith resolves the home folder with an explicit override — the command
+// line's --home — ahead of everything Locate consults:
+//
+//	--home  →  PORTCLOAK_HOME  →  the pointer file  →  ~/.portcloak
+//
+// An empty override is not an override, which is what lets Locate be this
+// function with nothing passed rather than a second copy of the same order.
+//
+// The override is threaded through as an argument rather than written into
+// PORTCLOAK_HOME by the caller, for two reasons. An environment variable is
+// process-global, so it would be inherited by anything the process launches;
+// and it would report the folder's source as something the operator's shell
+// decided, when in fact they typed it for this one run — a distinction the
+// Settings screen shows and Relocate acts on.
+//
+// It never writes the pointer file. A run pointed at a scratch tree must not
+// redirect the next one, or a CI job would silently move somebody's real
+// PortCloak — see TestLocateWith_LeavesThePointerFileAlone.
+func LocateWith(override string) (Location, error) {
 	dir, err := os.UserHomeDir()
 	if err != nil {
 		return Location{}, fmt.Errorf("finding your home folder: %w", err)
@@ -62,6 +101,11 @@ func Locate() (Location, error) {
 		Pointer: pointerFile(),
 	}
 
+	if flag := strings.TrimSpace(override); flag != "" {
+		loc.Home = Home{Root: flag}
+		loc.Source = HomeFlag
+		return loc, nil
+	}
 	if override := strings.TrimSpace(os.Getenv("PORTCLOAK_HOME")); override != "" {
 		loc.Home = Home{Root: override}
 		loc.Source = HomePinned
@@ -81,6 +125,9 @@ func Locate() (Location, error) {
 
 // DefaultHome resolves the home folder, honouring PORTCLOAK_HOME and a folder
 // chosen in the app so a test or a portable install can point somewhere else.
+//
+// Callers that already hold a folder — the command line, with --home — build a
+// Home directly and skip this.
 func DefaultHome() (Home, error) {
 	loc, err := Locate()
 	if err != nil {

@@ -22,7 +22,9 @@ type JobsController struct{ eng *Engine }
 // NewJobsController binds the Activity screen.
 func NewJobsController(eng *Engine) *JobsController { return &JobsController{eng: eng} }
 
-// ServiceName is what the Wails binding layer calls this.
+// ServiceName is the name internal/desktop logs this service under. It is
+// not the address a bound method is called by — see the comment on
+// controllers there, which is where reading it as one caused real damage.
 func (j *JobsController) ServiceName() string { return "JobsController" }
 
 // capturePhases is the pipeline the Activity screen ticks off.

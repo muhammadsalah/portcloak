@@ -118,6 +118,27 @@ backend itself (SFTP in P3, S3 and Azure in P5).*
 | UC-O9 | Start the application | P0 | `TestHome_BootstrapIsIdempotentAndSelfHealing` |
 | UC-O10 | Purge local working data | P6 | `TestSweep_RemovesIndexesAndWorkDirsACrashLeftBehind`; `TestSession_CloseDestroysTheIndexAndWorkingFiles` |
 
+### Command line (13)
+
+Delivered after the 0.0.3 release rather than in a numbered phase: P0–P8 built the
+engine and the window, and this puts a second mouth on what they built.
+
+| UC | Title | Phase | Evidence |
+|----|-------|:-----:|----------|
+| UC-L1 | Run PortCloak from a terminal | CLI | `TestCLI_SnapshotsListOnAnEmptyLibrary`; `TestCLI_ResultsGoToStdoutAndProgressToStderr` |
+| UC-L2 | Point one run at a different folder | CLI | `TestCLI_HomeFlagIsReportedAsAFlagNotAsTheDefault`; `TestLocateWith_AFlagOutranksTheEnvironment`; `TestLocateWith_LeavesThePointerFileAlone`; `TestHome_ConfigPathOverridesOnlyTheConfigFile`; `TestCLI_ConfigFileThatIsNotThereIsRefusedRatherThanCreated` |
+| UC-L3 | Capture from the command line | CLI | `TestCLI_RefusesAnUnencryptedCaptureThatWasNotAcknowledged`; `TestCLI_CaptureRunsAlongsideAnotherPortCloak` |
+| UC-L4 | Watch a run in a terminal | CLI | `TestCLI_ResultsGoToStdoutAndProgressToStderr` |
+| UC-L5 | Cancel with Ctrl-C | CLI | `TestCapture_CancelRunsTeardown`; `TestCapture_CancelDestroysTheClone` |
+| UC-L6 | Read the library and inside a snapshot | CLI | `TestCLI_SnapshotsListOnAnEmptyLibrary` |
+| UC-L7 | Restore from the command line | CLI | `TestRestore_RefusesTamperedBundleBeforeContactingTarget`; `TestRestore_OverwriteRequiresConfirmingTheRealmName` |
+| UC-L8 | Manage age keys from a terminal | CLI | `TestCLI_KeyGenerateRefusesWithoutAKeychain`; `TestCLI_KeyDeleteNeedsTheNameTyped` |
+| UC-L9 | Probe an environment or a storage | CLI | `TestCLI_UnknownEnvironmentNamesWhatExists` |
+| UC-L10 | Run while the desktop app is open | CLI | `TestCLI_ReadOnlyCommandsWorkWhileAWriterHoldsTheHome`; `TestCLI_RefusesAConfigChangeWhileAnotherPortCloakHoldsTheHome`; `TestHomeLock_RefusesASecondWriter`; `TestHomeLock_AllowsSeveralReaders`; `TestHomeLock_IsReleasedWhenTheProcessDies`; `TestHomeLock_NamesTheHolder`; `TestSweepIfSolelyHere_LeavesAnotherPortCloaksJobsAlone` |
+| UC-L11 | Seal without a secret on the command line | CLI | `TestCLI_RefusesAnUnencryptedCaptureThatWasNotAcknowledged` |
+| UC-L12 | Script it | CLI | `TestCLI_HelpNeedsNoHome`; `TestCLI_UnknownEnvironmentNamesWhatExists`; `TestCLI_UsageErrorsExitTwo`; `TestCLI_SecretSourcesAreMutuallyExclusive` |
+| UC-L13 | Define an environment and a storage | CLI | `TestCLI_EnvAddWritesADefinitionAndNothingElse`; `TestCLI_AddRefusesADuplicateUnlessReplaceIsAsked`; `TestCLI_EverySecretHasAllFourWaysIn`; `TestCLI_ASecretOnTheCommandLineIsAcceptedAndWarnedAbout`; `TestCLI_PromptWithNoTerminalNamesTheFlagsInstead`; `TestCLI_StorageRemoveSaysTheSnapshotsStay`; `TestCLI_NotFoundOnlySuggestsCommandsThatExist` |
+
 ## 12.2 Functional requirements → phase and evidence
 
 Evidence is the test that would fail if the requirement stopped being met. Where

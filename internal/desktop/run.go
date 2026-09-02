@@ -1,15 +1,18 @@
 // Copyright 2026 Muhammad Salah
 // SPDX-License-Identifier: Apache-2.0
 
-// Package app is the Wails binding layer: it turns engine capabilities into
-// methods the frontend can call, and engine events into messages the frontend
-// can subscribe to.
+// Package desktop is the Wails shell: the window, the menu, the event bridge,
+// and the service registry that exposes internal/app's controllers to the
+// frontend.
 //
-// No business logic lives here. Every method in this package resolves
-// configuration, calls one engine entry point, and shapes the result for a
-// screen. If something in here starts making decisions, it belongs in the
-// engine instead — which is the rule that keeps the engine testable headlessly.
-package app
+// It is a package of its own so that internal/app — the composition root and
+// every controller — imports no Wails. Wails on Linux is cgo over GTK, and a
+// command-line binary that reached the controllers through this package would
+// need a webview toolkit installed in order to capture a realm in a terminal.
+//
+// Nothing below this package may import github.com/wailsapp/wails.
+// TestHeadless_NoWailsImportBelowTheDesktopPackage is what enforces it.
+package desktop
 
 import (
 	_ "embed"
@@ -19,6 +22,8 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 
 	"portcloak/frontend"
+	"portcloak/internal/app"
+	"portcloak/internal/engine/config"
 )
 
 // appIcon is the 512px rendering of the mark, generated from
@@ -33,11 +38,38 @@ import (
 var appIcon []byte
 
 // Run starts the desktop application.
-func Run(build Build) error {
-	eng, err := NewEngine(build.Version)
+func Run(build app.Build) error {
+	eng, err := app.NewEngine(build.Version)
 	if err != nil {
 		return err
 	}
+
+	// Housekeeping first, and only if nothing else is here: adopt jobs that were
+	// running when the process last died, and sweep index files and decrypted
+	// working directories a crash left behind.
+	//
+	// Before the shared claim below, not after. A process holding the folder
+	// shared cannot then take it exclusively — advisory locks conflict between
+	// open file descriptions, so it would be waiting for itself.
+	eng.SweepIfSolelyHere()
+
+	// The window says it is here, and keeps saying so until shutdown.
+	//
+	// Shared, not exclusive: a window open all afternoon that held the folder to
+	// itself would refuse every terminal command for the whole afternoon, and
+	// watching a capture from a terminal while the window runs it is the point
+	// of having both. What needs the folder to itself is narrower — see
+	// config.LockMode — and is taken for as long as it takes and no longer.
+	//
+	// SingleInstance below stops a second *window*; it knows nothing about a
+	// second binary, which is why the guarantee lives in the lock and not there.
+	held, err := config.Acquire(eng.Home(), config.LockShared,
+		config.Holder{Program: "PortCloak"})
+	if err != nil {
+		_ = eng.Close()
+		return err
+	}
+	eng.Hold(held)
 	// NewEngine derives a build from the version alone, which is all a test
 	// binary can know. Replace it with the one main was linked with, so the
 	// About panel reports the stamped commit rather than a recovered one.
@@ -83,11 +115,16 @@ func Run(build Build) error {
 			WndClass: "PortCloakWindow",
 		},
 
-		// One PortCloak per machine. Two instances would hold the same
-		// ~/.portcloak: the same job store, the same inspection index, the same
-		// snapshot staging area. The second process would not report a
-		// conflict, it would interleave with the first — so a second launch
-		// raises the window that already exists instead of opening a rival.
+		// A second launch raises the window that already exists instead of
+		// opening a rival.
+		//
+		// This is the courtesy, not the guarantee. What actually stops two
+		// PortCloaks sharing one ~/.portcloak — the same job store, the same
+		// inspection index, the same staging area — is the advisory lock taken
+		// above, because SingleInstance only sees other copies of this binary
+		// and pcloak is a different one. Raising the window is still worth
+		// doing: it is what somebody double-clicking the icon actually wants,
+		// and a lock refusal is not.
 		SingleInstance: &application.SingleInstanceOptions{
 			UniqueID: "io.portcloak.app",
 			OnSecondInstanceLaunch: func(application.SecondInstanceData) {
@@ -166,11 +203,6 @@ func Run(build Build) error {
 		},
 		BackgroundColour: application.NewRGB(240, 240, 240),
 	})
-
-	// Startup housekeeping an operator should never have to ask for: adopt
-	// jobs that were running when the process last died, sweep index files a
-	// crash left behind, and look for orphaned ephemeral clones.
-	go eng.StartupSweep()
 
 	if err := wapp.Run(); err != nil {
 		return fmt.Errorf("running the application: %w", err)

@@ -143,10 +143,17 @@ a Keycloak that has never seen these users is the case worth rehearsing.
 
 ```bash
 playground/target/openshift/crc.sh setup     # 8 CPU, 32 GiB, 100 GiB disk
-eval $(crc oc-env) && oc login -u kubeadmin ...
+eval $(crc oc-env)
 playground/target/openshift/apply.sh
 playground/seed/seed.sh openshift
 ```
+
+`setup` does not return until the cluster actually works. `crc start` finishes
+while the operators are still rolling out behind it, and running `apply.sh` into
+that gap fails in ways that look like a problem with the manifests — a webhook
+that is not listening yet, an imagestream that resolves to nothing. It waits for
+the API server, then for every cluster operator to report Available, then for
+the metrics API to answer, and says which one it gave up on if it does.
 
 Same three servers, same two directories, one namespace: `kc`. `apply.sh` also
 creates the Role PortCloak's Kubernetes adapter needs — get, list, create and
@@ -167,7 +174,26 @@ The VM is sized in `crc.sh` and it is not a guess. Three Keycloaks each want a
 JVM heap, and during a capture a fourth appears: the ephemeral clone, with the
 same image and the same database connection. Eight cores and 32 GiB is what
 leaves headroom for the clone rather than making the clone the thing that gets
-evicted. Cluster monitoring is turned off, which is roughly 4 GiB back.
+evicted.
+
+Cluster monitoring is **on**, which costs about 4 GiB of exactly that headroom.
+It is on because working out whether a capture is being starved, or what a
+160,000-user export really costs the clone, needs numbers rather than a guess,
+and metrics-server rides in with it:
+
+```bash
+playground/target/openshift/crc.sh status
+```
+
+That prints three things, because they answer different questions — what the VM
+thinks it is using, what the cluster thinks it is using, and which pod is
+responsible. During a capture the interesting row is the ephemeral clone, which
+appears in `kc` for as long as the export runs and is gone afterwards.
+
+The trade is real: on a 32 GiB VM the clone is now closer to being the thing
+that gets evicted. If a capture dies with a pod OOMKilled or Evicted, suspect
+that first — raise `CRC_MEMORY_MIB`, or set `enable-cluster-monitoring` back to
+false in `crc.sh` and lose `top`.
 
 ## Seeding
 

@@ -82,14 +82,15 @@ orphaned, and no module exists without a requirement.
 | NFR-1 | Bad-connection tolerance + resume | Resilience Layer | [05](./05-resilience.md) |
 | NFR-2 | Integrity everywhere | Integrity Service, Crypto | [06](./06-snapshot-and-manifest.md), [08](./08-security.md) |
 | NFR-3 | Security / **opt-in** encryption / no secret logs | Crypto Vault, Redaction, Keychain | [08 §8.2](./08-security.md), [12 D8](./12-decisions.md) |
-| NFR-4 | Single-binary desktop | Wails shell | [02 §2.8](./02-architecture.md) |
+| NFR-4 | Self-contained binaries, no server | Wails shell (`internal/desktop`), CLI (`internal/cli`) | [02 §2.8](./02-architecture.md), [13 §13.1](./13-command-line.md) |
 | NFR-5 | Observability + audit | Observability | [05 §5.5](./05-resilience.md), [09 §9.4](./09-workflows-and-ui.md) |
 | NFR-6 | Streaming + concurrency | Packager, Store, Orchestrator | [02 §2.7](./02-architecture.md), [06](./06-snapshot-and-manifest.md) |
 | NFR-7 | Least privilege / separation of duties | Config Store | [08 §8.7](./08-security.md) |
 | NFR-8 | Idempotence / convergent resume | Orchestrator, Resilience | [02 §2.7](./02-architecture.md), [05](./05-resilience.md) |
 | NFR-9 | Inspection responsiveness (bounded memory, fast paging) | Index Store (SQLite), Snapshot Inspector | [10 §10.3](./10-snapshot-inspection.md) |
 | NFR-10 | No inspection residue (index destroyed on close) | Index Store | [10 §10.3](./10-snapshot-inspection.md), [12 D9](./12-decisions.md) |
-| NFR-11 | Transparent, file-based configuration (SQLite only for throwaway indexes) | Config Store, Index Store | [02 §2.6](./02-architecture.md), [12 D7](./12-decisions.md) |
+| NFR-11 | Transparent, file-based configuration (SQLite only for throwaway indexes) | Config Store, Index Store, Home Lock | [02 §2.6](./02-architecture.md), [12 D7](./12-decisions.md), [13 §13.3](./13-command-line.md) |
+| NFR-12 | Drivable headlessly from a command line | CLI (`internal/cli`), composition root (`internal/app`) | [13](./13-command-line.md), [usecases/08](./usecases/08-cli.md) |
 
 ## 11.6 Decisions
 

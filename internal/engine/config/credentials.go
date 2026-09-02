@@ -230,3 +230,51 @@ func (o *Overlay) Get(handle string) (string, error) {
 // credential store rather than a partial one that fails in surprising places.
 func (o *Overlay) Set(handle, value string) error { return o.Base.Set(handle, value) }
 func (o *Overlay) Delete(handle string) error     { return o.Base.Delete(handle) }
+
+// Fallback answers from Primary, and from Secondary only where Primary has
+// nothing.
+//
+// It is how the command line lets an operator supply a value this machine's
+// keychain will not give up, without that value ever being written. The two
+// cases are ordinary rather than exotic: a CI runner has no secret service at
+// all, and on macOS a keychain entry's ACL names the application that wrote it,
+// so a differently-signed binary is a different application.
+//
+// Only Get falls back. Writing through a fallback would put a secret somewhere
+// the operator did not choose — into the keychain when they supplied a file, or
+// into a file that is only there for one run.
+type Fallback struct {
+	Primary   CredentialStore
+	Secondary CredentialStore
+}
+
+// NewFallback wraps primary so a handle it cannot answer is tried against
+// secondary. A nil secondary returns primary unchanged.
+func NewFallback(primary, secondary CredentialStore) CredentialStore {
+	if secondary == nil {
+		return primary
+	}
+	return &Fallback{Primary: primary, Secondary: secondary}
+}
+
+func (f *Fallback) Get(handle string) (string, error) {
+	v, err := f.Primary.Get(handle)
+	if err == nil && v != "" {
+		return v, nil
+	}
+	// Any failure from the primary is worth trying the secondary against, not
+	// just a missing value: a keychain that is locked, denied or absent reports
+	// something other than ErrCredentialMissing, and those are exactly the
+	// situations the secondary exists for.
+	v2, err2 := f.Secondary.Get(handle)
+	if err2 == nil && v2 != "" {
+		return v2, nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return v, nil
+}
+
+func (f *Fallback) Set(handle, value string) error { return f.Primary.Set(handle, value) }
+func (f *Fallback) Delete(handle string) error     { return f.Primary.Delete(handle) }

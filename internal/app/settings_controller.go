@@ -33,7 +33,9 @@ func NewSettingsController(eng *Engine) *SettingsController {
 	return &SettingsController{eng: eng}
 }
 
-// ServiceName is what the Wails binding layer calls this.
+// ServiceName is the name internal/desktop logs this service under. It is
+// not the address a bound method is called by — see the comment on
+// controllers there, which is where reading it as one caused real damage.
 func (s *SettingsController) ServiceName() string { return "SettingsController" }
 
 // LocationView is the "where PortCloak keeps its files" panel.
@@ -90,15 +92,29 @@ func (s *SettingsController) location(failure *Failure) LocationView {
 		out.SourceNote = "PortCloak could not work out where your home folder is."
 		return out
 	}
-	out.Source = string(loc.Source)
+	// The source comes off the engine, not off Locate: Locate answers for a
+	// caller with nothing to say about the folder, and a caller that passed
+	// --home has something to say. Reading it from Locate reported a folder
+	// named on the command line as the default, and then offered to move it.
+	// The default and the pointer path are Locate's to know either way.
+	source := s.eng.HomeSource()
+	out.Source = string(source)
 	out.Default = loc.Default
 	out.Pointer = loc.Pointer
-	out.AtDefault = loc.Source == config.HomeDefault
+	out.AtDefault = source == config.HomeDefault
 
-	switch loc.Source {
+	switch source {
 	case config.HomePinned:
 		out.SourceNote = "PORTCLOAK_HOME is set in this application's environment, and it wins over anything chosen here."
 		out.Blocked = "Unset PORTCLOAK_HOME and restart PortCloak to choose a folder from this screen."
+	case config.HomeFlag:
+		// The window never passes an override, so this arm is unreachable from
+		// the desktop app today. It is here because the alternative is falling
+		// through to the default, which reports the folder as movable — and a
+		// folder named on a command line is the one thing that certainly is
+		// not, because there is nowhere to record a different choice.
+		out.SourceNote = "This folder was named on the command line for this run."
+		out.Blocked = "Run PortCloak without --home to choose a folder from this screen."
 	case config.HomeChosen:
 		out.Movable = true
 		out.SourceNote = "You chose this folder. The choice is recorded in the file below, which is why it survives an update."

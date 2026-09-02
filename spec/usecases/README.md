@@ -13,8 +13,8 @@ exceptions. These are the bridge between the requirements in
 
 ## Actors
 
-PortCloak is a **single-user local desktop tool with no login** (N8). There is exactly one human
-actor, and the systems it talks to are secondary actors.
+PortCloak is a **single-user local tool with no login** (N8), reached through a window or a
+terminal. There is exactly one human actor, and the systems it talks to are secondary actors.
 
 | Actor | Type | Description |
 |-------|------|-------------|
@@ -39,6 +39,7 @@ actor, and the systems it talks to are secondary actors.
 | 05 | [Restore](./05-restore.md) | Importing snapshots | UC-R1 … UC-R8 |
 | 06 | [Operations](./06-operations.md) | Jobs, resilience, config, audit | UC-O1 … UC-O10 |
 | 07 | [Traceability](./07-usecase-traceability.md) | Use case → requirement → module | — |
+| 08 | [Command line](./08-cli.md) | Driving all of it from a terminal | UC-L1 … UC-L13 |
 
 ## Diagrams
 
@@ -83,3 +84,7 @@ paths, and they are specified here rather than left to implementation.
   an ephemeral clone (FR-C9).
 - Sessions are **out of scope** (N5); themes and provider JARs are **detected and reported**,
   never migrated (N7).
+- There are two front ends over one engine: the window and `pcloak`. They share one
+  `~/.portcloak` and each holds an advisory claim on it saying so. Only the startup sweep and a
+  change to `config.yaml` need the folder to themselves; everything else runs concurrently
+  (UC-L10).

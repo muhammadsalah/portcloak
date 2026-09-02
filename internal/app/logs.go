@@ -154,8 +154,9 @@ func (s *logStore) forget(jobID string) {
 // recordingSink records every event into the store on its way to wherever
 // events were already going.
 //
-// It wraps rather than replaces, so the bridge to the frontend and the
-// recorder a headless test installs are both unaffected by the store existing.
+// It wraps rather than replaces, so every sink — the window's event bridge,
+// pcloak's terminal renderer, the recorder a headless test installs — is
+// unaffected by the store existing.
 type recordingSink struct {
 	store *logStore
 	next  obs.Sink

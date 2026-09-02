@@ -1,7 +1,7 @@
 // Copyright 2026 Muhammad Salah
 // SPDX-License-Identifier: Apache-2.0
 
-package app
+package desktop
 
 import (
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -16,8 +16,9 @@ const EventProgress = "portcloak:progress"
 // eventBridge carries engine events onto the Wails event bus.
 //
 // It is the only place the two worlds meet. The engine emits into an obs.Sink
-// and knows nothing about Wails; this adapter is what a headless test replaces
-// with a recorder.
+// and knows nothing about Wails; this adapter is one implementation of that
+// sink, and the reason there can be others — a headless test uses a recorder,
+// and pcloak renders the same events to a terminal.
 type eventBridge struct {
 	app *application.App
 }

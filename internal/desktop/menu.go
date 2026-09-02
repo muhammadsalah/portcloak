@@ -1,7 +1,7 @@
 // Copyright 2026 Muhammad Salah
 // SPDX-License-Identifier: Apache-2.0
 
-package app
+package desktop
 
 import (
 	"github.com/wailsapp/wails/v3/pkg/application"

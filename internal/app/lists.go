@@ -19,6 +19,10 @@ import "reflect"
 //
 //	an empty list crosses the bridge as [], and an empty map as {}.
 //
+// It matters on the way out to a terminal too: these same structs are what
+// `pcloak --json` prints, and a consumer piping them into jq has the same
+// trouble with a null where a list was promised as a screen does.
+//
 // TestControllers_NeverHandTheFrontendNull drives every screen-load method
 // against an empty home and fails on the first null it finds.
 func lists[T any](v T) T {

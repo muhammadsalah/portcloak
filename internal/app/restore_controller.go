@@ -18,7 +18,9 @@ type RestoreController struct{ eng *Engine }
 // NewRestoreController binds the restore wizard.
 func NewRestoreController(eng *Engine) *RestoreController { return &RestoreController{eng: eng} }
 
-// ServiceName is what the Wails binding layer calls this.
+// ServiceName is the name internal/desktop logs this service under. It is
+// not the address a bound method is called by — see the comment on
+// controllers there, which is where reading it as one caused real damage.
 func (r *RestoreController) ServiceName() string { return "RestoreController" }
 
 // Strategy describes one import strategy in terms of what happens to an

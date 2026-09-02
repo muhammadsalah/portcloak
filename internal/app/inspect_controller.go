@@ -22,7 +22,9 @@ type InspectController struct{ eng *Engine }
 // NewInspectController binds the inspector.
 func NewInspectController(eng *Engine) *InspectController { return &InspectController{eng: eng} }
 
-// ServiceName is what the Wails binding layer calls this.
+// ServiceName is the name internal/desktop logs this service under. It is
+// not the address a bound method is called by — see the comment on
+// controllers there, which is where reading it as one caused real damage.
 func (i *InspectController) ServiceName() string { return "InspectController" }
 
 // OpenRequest is what the operator supplied to open a snapshot.

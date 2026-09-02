@@ -5,7 +5,8 @@
 
 # PortCloak — Design Specification
 
-> **PortCloak** is a cross-platform desktop tool (Go + [Wails v3](https://wails.io)) that
+> **PortCloak** is a cross-platform tool (Go + [Wails v3](https://wails.io)) — a desktop
+> application and a command line over one engine — that
 > captures **portable, high-fidelity snapshots of Keycloak realms** — users, credentials,
 > clients, secrets, federations and signing keys — from a variety of source environments, and
 > restores them into a target Keycloak. **One snapshot holds one realm.**
@@ -69,10 +70,12 @@ for throwaway snapshot indexes.
 | 10 | [`10-snapshot-inspection.md`](./10-snapshot-inspection.md) | **Viewing inside a snapshot**: details, users, entities, search, diff |
 | 11 | [`11-traceability.md`](./11-traceability.md) | Requirement → module traceability matrix |
 | 12 | [`12-decisions.md`](./12-decisions.md) | **Decision record** — the nine confirmed design decisions, with rationale and cost |
-| — | [`usecases/`](./usecases/README.md) | **Use cases** — the complete behavioural model (60 use cases across 6 packages) with its own traceability matrix |
+| 13 | [`13-command-line.md`](./13-command-line.md) | **The command line** — two front ends over one engine, and the one folder they share |
+| — | [`usecases/`](./usecases/README.md) | **Use cases** — the complete behavioural model (73 use cases across 7 packages) with its own traceability matrix |
 | — | [`rollout/`](./rollout/README.md) | **Rollout plan** — the nine phases that build this, with coding tasks, tests, verification evidence and the 0.0.1 release gate |
 | — | [`lunacy/`](./lunacy/README.md) | **Screen designs** — the Lunacy document index, design tokens, and which screen covers which use case |
 | — | [`notes/`](./notes/README.md) | **Development notes** — the gotchas that reached working code, with the guard test that keeps each one from returning |
+| — | [`cli/`](./cli/README.md) | **Building the command line** — the decisions taken while adding the second front end, and what surfaced |
 
 ## Diagrams
 

@@ -26,14 +26,28 @@ import (
 // paths under the old root for its whole life, and an open snapshot has a
 // decrypted working directory and an index file under it.
 func (e *Engine) Relocate(dst string) error {
-	loc, err := config.Locate()
-	if err != nil {
-		return err
-	}
-	if loc.Source == config.HomePinned {
-		return resil.Fatal("move the PortCloak folder",
-			"PORTCLOAK_HOME is set in the environment, and it wins over anything chosen here. Unset it and restart PortCloak to choose a folder from this screen.",
-			errors.New("PORTCLOAK_HOME is set"))
+	// A folder fixed from outside the application cannot be moved from inside
+	// it: the move would be recorded in the pointer file, and the outside
+	// setting would override that on the next launch. Offering it anyway would
+	// be offering something this screen cannot deliver.
+	//
+	// The source comes off the engine rather than from config.Locate(), which
+	// answers for a caller with nothing to say about the folder and so can never
+	// report HomeFlag. Asking Locate here made the --home branch below dead
+	// code: a folder named on the command line was moved anyway, and the pointer
+	// file was written for it.
+	//
+	// The two outside sources are named separately because the operator has to
+	// change different things to be rid of them, and "unset PORTCLOAK_HOME" is
+	// no help at all to somebody who passed --home.
+	source := e.HomeSource()
+	if source.Pinned() {
+		reason := "PORTCLOAK_HOME is set in the environment, and it wins over anything chosen here. Unset it and restart PortCloak to choose a folder from this screen."
+		if source == config.HomeFlag {
+			reason = "This folder was named on the command line with --home, and it wins over anything chosen here. Start PortCloak without it to choose a folder from this screen."
+		}
+		return resil.Fatal("move the PortCloak folder", reason,
+			fmt.Errorf("the home folder is fixed by %s", source))
 	}
 	if err := e.idleForRelocation(); err != nil {
 		return err
@@ -132,13 +146,23 @@ func (e *Engine) rebind(home config.Home) error {
 
 	// The pointer is written last, so a folder PortCloak could not actually
 	// bind to is not the folder it will look for on the next launch.
+	// The source moves with the folder, and it follows the pointer rather than
+	// the act: moving back to ~/.portcloak clears the pointer, so the folder is
+	// the default again and not a choice that happens to match it. Leaving it
+	// stale would have the Settings panel go on describing the folder that was
+	// moved away from.
+	source := config.HomeChosen
 	if home.Root == defaultRoot() {
+		source = config.HomeDefault
 		if err := config.ClearPointer(); err != nil {
 			problems = append(problems, err)
 		}
 	} else if err := config.WritePointer(home.Root); err != nil {
 		problems = append(problems, err)
 	}
+	e.mu.Lock()
+	e.homeSource = source
+	e.mu.Unlock()
 	return errors.Join(problems...)
 }
 

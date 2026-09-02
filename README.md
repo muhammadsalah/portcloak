@@ -11,7 +11,8 @@
 
 Passwords, 2FA enrolments, passkeys, client secrets, LDAP bind credentials, identity-provider
 secrets and the keys that sign your tokens all travel with it. PortCloak is a desktop app for
-macOS, Windows and Linux. One binary, no server to run, no account to create, no sign-in.
+macOS, Windows and Linux, and a command line for everywhere a desktop app cannot go. No server to
+run, no account to create, no sign-in.
 
 > **Status: early (0.0.3).** The full loop works end to end: capture a realm, put it somewhere,
 > browse it, restore it. It has not yet been through a long life in production, and no release
@@ -169,6 +170,11 @@ Download the build for your platform from the
 | **macOS** (Apple silicon + Intel) | `PortCloak-<version>-macos-universal.zip`, a universal `.app` |
 | **Windows** (amd64, arm64) | `PortCloak-<version>-windows-<arch>.zip` |
 | **Linux** (amd64, arm64) | `portcloak-<version>-linux-<arch>.tar.gz` |
+| **Command line**, any platform | `pcloak-<version>-<os>-<arch>.tar.gz` (`.zip` on Windows) |
+
+The command line is its own download: a CI runner or a headless server has no use for an archive
+carrying an embedded webview, and on macOS it is not yet inside the signed `.app`, so expect the
+keychain to ask once per entry the first time `pcloak` reads a credential the app stored.
 
 **No release is signed by Apple or Microsoft yet.** macOS Gatekeeper and Windows SmartScreen will
 both object, and you will have to allow it through by hand. What *is* in place for every artifact
@@ -177,8 +183,10 @@ each file to this repository at a specific commit. Every release publishes the e
 verify both, and given the above, it is worth running them. Details in
 [`CODE_SIGNING.md`](./CODE_SIGNING.md).
 
-On Linux the binary needs GTK 3 and WebKitGTK 4.1 present (`libgtk-3-0` and `libwebkit2gtk-4.1-0`
-on Debian/Ubuntu, or your distribution's equivalents).
+On Linux the desktop binary needs GTK 3 and WebKitGTK 4.1 present (`libgtk-3-0` and
+`libwebkit2gtk-4.1-0` on Debian/Ubuntu, or your distribution's equivalents). `pcloak` needs
+nothing at all — it is a static binary with no toolkit and no C library behind it, which is the
+point of it.
 
 ### What you need on the other end
 
@@ -206,11 +214,54 @@ The app opens straight into the workspace; there is nothing to sign into. It is 
 tool, and the only credentials involved are the ones your own environment and storage definitions
 carry.
 
+## From the command line
+
+`pcloak` is the same engine, on the same `~/.portcloak`. Anything configured in the app is visible
+to it and the other way round, and snapshots it captures appear in the app's library. A machine
+with no display can go from nothing to a sealed snapshot without one:
+
+```bash
+pcloak env add docker prod-docker --container keycloak   # point it at a Keycloak
+pcloak storage add disk out --folder ./snapshots --default
+pcloak key generate ci-2026                       # one key, kept in this machine's keychain
+pcloak env probe prod-docker                      # would a capture work here?
+pcloak capture -e prod-docker -r corp-a --key ci-2026
+pcloak snapshot list                              # no key needed; the library is keyless
+pcloak restore 01J8F2 --env staging --dry-run     # see the diff before writing anything
+```
+
+It exists because the places a realm migration actually happens are frequently places a desktop
+application cannot go: a CI job seeding a test realm, a maintenance window run from a runbook, a
+jump box with no display.
+
+Some things worth knowing before you script it:
+
+- **Results go to stdout, everything else to stderr**, so a run can be piped while it narrates.
+  `--json` prints the same structures the app's own screens are built from.
+- **Every prompt has a flag.** With no terminal, an unmet prompt is a refusal naming that flag
+  rather than a wait. Exit codes distinguish *partial*, *precondition* and *busy*, because those
+  are the three a script actually branches on.
+- **Nothing secret is ever an argument.** `--key` names a key already on the machine; passphrases
+  come from a file, stdin, `PORTCLOAK_PASSPHRASE`, or a prompt with no echo.
+- **It runs beside the app.** Both hold a claim on the folder saying so; only the startup sweep
+  and a change to `config.yaml` need it to themselves.
+- **Ctrl-C tears down.** A capture may be holding an ephemeral clone in your cluster, and
+  cancelling destroys it rather than abandoning it. If you have to kill the process anyway, it
+  tells you what was left behind first.
+
+Environments, storage and keys are all definable from here — `pcloak env add --help` and
+`pcloak storage add --help` have one subcommand per kind, so you see only the flags that apply.
+Nothing they do contacts anything; `env probe` and `storage test` are what find out whether a
+definition works. Preferences are the one thing left to the app, and nothing is blocked on them:
+every preference is a default that a flag already overrides.
+
 ## What it deliberately is not
 
 Not a replication or HA-sync tool, since snapshots are point-in-time. Not a version upgrader. Not a
 database backup tool: it works at the realm level, not on raw dumps. Not a secrets manager. Restore
-is whole-realm, with no cherry-picking. The reasoning behind each of these is in
+is whole-realm, with no cherry-picking. `pcloak` is not a daemon and does not run anything in the
+background: a capture blocks until it finishes, because the alternative would leave a clone running
+in your cluster. The reasoning behind each of these is in
 [`spec/12-decisions.md`](./spec/12-decisions.md), and the full list of what a release does not do
 is in its release notes.
 

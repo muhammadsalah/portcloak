@@ -16,9 +16,12 @@ knows the architecture document can find any component without searching.
 
 ```
 portcloak/
-  cmd/portcloak/           # main package — Wails v3 app bootstrap, nothing else
+  cmd/portcloak/           # main package — desktop bootstrap, nothing else
+  cmd/pcloak/              # main package — command-line bootstrap, nothing else
   internal/
-    app/                   # Wails bindings: Capture/Restore/Config/Snapshot/Inspect controllers
+    desktop/               # the Wails shell: window, menu, event bridge, service registry
+    cli/                   # the terminal: cobra commands, progress rendering, exit codes
+    app/                   # composition root + controllers: Capture/Restore/Config/Snapshot/Inspect
     engine/
       orchestrator/        # per-job state machine, progress emission
       target/              # Executor implementations
@@ -54,11 +57,12 @@ that explicit stops accidental API-shaped design.
 Dependencies point **inward and downward only**:
 
 ```
-cmd  →  internal/app  →  internal/engine/orchestrator  →  engine/{target,store,kc,...}
-                                                       →  engine/{obs,resil,config}
+cmd/portcloak  →  internal/desktop  ─┐
+                                     ├→  internal/app  →  internal/engine/orchestrator  →  engine/{target,store,kc,...}
+cmd/pcloak     →  internal/cli     ──┘                                                  →  engine/{obs,resil,config}
 ```
 
-Three rules with teeth:
+Four rules with teeth:
 
 1. **No engine package imports `internal/app`.** The engine must be drivable from a test binary
    with no Wails runtime present. This is what lets the whole capture pipeline be tested headlessly.
@@ -67,6 +71,14 @@ Three rules with teeth:
    target later" additive rather than surgical.
 3. **`obs` imports nothing from the engine.** Logging must be usable from the lowest layers
    without an import cycle.
+4. **No package below `internal/desktop` imports Wails.** On Linux Wails is cgo over GTK, so a
+   single import reaching `internal/app`, `internal/cli` or `internal/engine` would mean the
+   command line could not be built on a machine without a webview toolkit — which is most of the
+   machines a realm is actually captured from.
+   `TestHeadless_NoWailsImportBelowTheDesktopPackage` reads the source and fails on one, and the
+   `headless` CI job builds `./cmd/pcloak` with `CGO_ENABLED=0` on a runner with nothing
+   installed. The test reads files regardless of build constraints, which is stricter than asking
+   the toolchain: an import behind `//go:build linux` compiles fine on a developer's Mac.
 
 A `go test ./internal/engine/...` run must pass with no network, no Docker, and no Keycloak
 present. If it does not, a fake is missing.

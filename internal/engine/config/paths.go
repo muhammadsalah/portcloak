@@ -6,7 +6,8 @@
 // per-job checkpoints that let an interrupted transfer resume.
 //
 // All of it lives in plain files under ~/.portcloak/ (NFR-11) — or wherever
-// the operator has moved that folder to; see location.go. There is no database
+// the operator has moved that folder to, or pointed one run at with --home; see
+// location.go. There is no database
 // for tool state — a readable file can be diffed, committed, hand-edited and
 // copied between machines, none of which is pleasant against an opaque store.
 // SQLite appears elsewhere in the engine, and only ever for throwaway
@@ -26,10 +27,22 @@ import (
 // anything lives.
 type Home struct {
 	Root string
+	// ConfigPath overrides where config.yaml is read from, leaving the rest of
+	// the tree — jobs, logs, indexes, working files — where it was.
+	//
+	// It exists for the command line's --config, whose use is a checkout that
+	// carries the environment and storage definitions while the state stays on
+	// the machine. Empty is the ordinary case: config.yaml inside Root.
+	ConfigPath string
 }
 
 // ConfigFile is the environments, storage definitions and preferences.
-func (h Home) ConfigFile() string { return filepath.Join(h.Root, "config.yaml") }
+func (h Home) ConfigFile() string {
+	if h.ConfigPath != "" {
+		return h.ConfigPath
+	}
+	return filepath.Join(h.Root, "config.yaml")
+}
 
 // JobsDir holds one JSON file per job, carrying its state and checkpoints.
 func (h Home) JobsDir() string { return filepath.Join(h.Root, "jobs") }
@@ -58,15 +71,26 @@ func (h Home) IndexFile(snapshotID string) string {
 // WorkDir holds decrypted working files while a snapshot is open or a job runs.
 func (h Home) WorkDir() string { return filepath.Join(h.Root, "work") }
 
+// LockFile is the advisory lock that makes "one PortCloak per home" true for the
+// command line as well as for the window. See lock.go.
+//
+// It sits inside the tree rather than beside it, unlike the pointer file: a
+// claim on this folder is meaningless anywhere else, and a folder that has been
+// moved takes its lock with it.
+func (h Home) LockFile() string { return filepath.Join(h.Root, "portcloak.lock") }
+
 // Dirs is every directory the tree contains.
 func (h Home) Dirs() []string {
 	return []string{h.Root, h.JobsDir(), h.LogsDir(), h.IndexDir(), h.WorkDir()}
 }
 
-// Bootstrap creates the tree, with 0700 on every directory.
+// Bootstrap creates the tree, with 0700 on every directory, and writes an empty
+// config.yaml if there is not one yet.
 //
 // It runs on every start rather than only the first, so deleting a directory by
-// hand cannot brick the app; an existing tree is left exactly as it is.
+// hand cannot brick the app; an existing tree is left exactly as it is. The one
+// thing it will not create is a config file named from outside the tree — see
+// below.
 func (h Home) Bootstrap() error {
 	for _, d := range h.Dirs() {
 		if err := os.MkdirAll(d, 0o700); err != nil {
@@ -77,6 +101,14 @@ func (h Home) Bootstrap() error {
 		if err := os.Chmod(d, 0o700); err != nil {
 			return fmt.Errorf("restricting permissions on %s: %w", d, err)
 		}
+	}
+	// A config file named from outside the tree is never created here. The
+	// template is a courtesy for a first run against ~/.portcloak; writing it
+	// to a path the operator typed would turn "read this file" into "create
+	// this file", which is how a mistyped --config silently starts an empty
+	// PortCloak instead of reporting that the file is not there.
+	if h.ConfigPath != "" {
+		return nil
 	}
 	if _, err := os.Stat(h.ConfigFile()); os.IsNotExist(err) {
 		if err := writeFileAtomic(h.ConfigFile(), []byte(emptyConfigYAML), 0o600); err != nil {

@@ -1,7 +1,7 @@
 // Copyright 2026 Muhammad Salah
 // SPDX-License-Identifier: Apache-2.0
 
-package app
+package desktop
 
 import (
 	"fmt"
@@ -12,6 +12,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"portcloak/internal/app"
 )
 
 // The frontend addresses a bound method by the string Wails registers it
@@ -59,7 +61,7 @@ func boundFQNs(t *testing.T) map[string]bool {
 	// methods, which is the exact failure it exists to catch and the exact
 	// wrong place to look for the cause.
 	out := map[string]bool{}
-	for _, svc := range controllers(&Engine{}) {
+	for _, svc := range controllers(&app.Engine{}) {
 		ptr := reflect.TypeOf(svc.Instance())
 		named := ptr.Elem()
 		for i := range ptr.NumMethod() {
@@ -91,9 +93,11 @@ func TestBindings_EveryFrontendCallResolves(t *testing.T) {
 	if pkg == nil {
 		t.Fatal("api.ts does not define goPackage, so calls cannot carry the package path Wails registers methods under")
 	}
-	// The prefix has to be this package's real import path. A rename here
-	// without a matching edit there is the failure this test exists to catch.
-	if want := reflect.TypeOf(&ConfigController{}).Elem().PkgPath(); pkg[1] != want {
+	// The prefix has to be the controllers' real import path — internal/app,
+	// not this package. A rename there, or a controller moved up here into the
+	// Wails shell, without a matching edit in api.ts is the failure this test
+	// exists to catch.
+	if want := reflect.TypeOf(&app.ConfigController{}).Elem().PkgPath(); pkg[1] != want {
 		t.Fatalf("api.ts addresses %q, but the controllers live in %q", pkg[1], want)
 	}
 

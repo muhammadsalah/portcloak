@@ -121,7 +121,7 @@ compiles in their place.
 Leaving the Wails menu unset does not mean "no menu": it installs
 `DefaultApplicationMenu()`, which carries a View menu with Reload and Toggle
 DevTools, and a Help menu whose only entry navigates the **main window** to
-`https://wails.io` with no way back. `internal/app/menu.go` replaces it with the
+`https://wails.io` with no way back. `internal/desktop/menu.go` replaces it with the
 App, Edit and Window menus macOS genuinely needs. Windows and Linux show no menu
 bar at all, because the window leaves `UseApplicationMenu` false.
 
@@ -141,7 +141,7 @@ Sources are the two SVGs in `icons/`, both built from the same geometry as
 
 `./build/icons/generate.sh` renders every raster from those two and writes
 `darwin/PortCloak.icns`, `windows/appicon.ico`, `linux/appicon-*.png` and
-`internal/app/appicon.png`. The outputs are committed, so no build machine needs
+`internal/desktop/appicon.png`. The outputs are committed, so no build machine needs
 librsvg or ImageMagick; run the script only when the mark changes, then commit
 what it produces.
 

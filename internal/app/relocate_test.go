@@ -185,3 +185,34 @@ func TestRelocate_RefusesWhenTheEnvironmentDecides(t *testing.T) {
 		t.Error("the engine moved anyway")
 	}
 }
+
+// A folder named with --home is fixed from outside the application in exactly
+// the way PORTCLOAK_HOME is, and is refused for the same reason. What it must
+// not do is borrow the environment variable's advice: telling somebody who
+// passed --home to unset a variable they never set sends them looking in the
+// wrong place.
+func TestRelocate_RefusesAFlaggedFolderInItsOwnWords(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("PORTCLOAK_HOME", "")
+
+	flagged := t.TempDir()
+	eng, err := NewEngineFor(config.Location{Home: config.Home{Root: flagged}, Source: config.HomeFlag}, "test")
+	if err != nil {
+		t.Fatalf("an engine could not be built: %v", err)
+	}
+	defer eng.Close() //nolint:errcheck
+
+	err = eng.Relocate(filepath.Join(t.TempDir(), "elsewhere"))
+	if err == nil {
+		t.Fatal("the folder was moved out from under --home")
+	}
+	if !strings.Contains(err.Error(), "--home") {
+		t.Errorf("the refusal does not name the flag that is in charge: %v", err)
+	}
+	if strings.Contains(err.Error(), "PORTCLOAK_HOME") {
+		t.Errorf("the refusal blames an environment variable nobody set: %v", err)
+	}
+	if eng.Home().Root != flagged {
+		t.Error("the engine moved anyway")
+	}
+}

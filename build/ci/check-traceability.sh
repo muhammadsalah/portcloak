@@ -9,7 +9,16 @@
 # degrades into a list of things that were once true.
 set -euo pipefail
 
-doc="spec/rollout/12-rollout-traceability.md"
+# Every document that names a test as evidence, not only the rollout matrix.
+#
+# spec/cli/ was added later and was not read here, and within a day it carried
+# two dead names: one a rename nobody chased, one an invented name quoted as part
+# of a story about this very check. Both are exactly what this exists to stop, so
+# the fix is to point it at the document rather than to remember harder.
+docs="spec/rollout/12-rollout-traceability.md"
+for extra in spec/cli/*.md; do
+	[ -f "$extra" ] && docs="$docs $extra"
+done
 
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
@@ -21,8 +30,8 @@ cited="$work/cited"
 # `go test -list` has to compile every package to answer, so a package that
 # does not build produces no names — and this check would then report every
 # citation as missing, or, under `set -e`, exit 1 having printed nothing at
-# all. That is exactly what it did on CI: internal/app imports Wails, which is
-# cgo over GTK on Linux, and the job had no headers installed. A check whose
+# all. That is exactly what it did on CI: internal/desktop imports Wails, which
+# is cgo over GTK on Linux, and the job had no headers installed. A check whose
 # failure is indistinguishable from a crash is worse than no check, so the
 # build error is captured and shown rather than sent to /dev/null.
 # On Linux the listing also needs the tag every other job passes. Wails
@@ -67,7 +76,12 @@ sort -u -o "$known" "$known"
 
 # Citations are in backticks and may name a subtest after a slash; the top-level
 # name is what `-list` reports, so that is what gets compared.
-grep -o '`Test[A-Za-z0-9_]*' "$doc" \
+#
+# A name written as prose rather than as code is not a citation. That distinction
+# is load-bearing in spec/cli/, where the story of this check catching an invented
+# name has to be able to say the name.
+# shellcheck disable=SC2086
+grep -ho '`Test[A-Za-z0-9_]*' $docs \
   | tr -d '`' \
   | sed 's#/.*##' \
   | grep -vE '^Test$' \
@@ -78,11 +92,14 @@ grep -o '`Test[A-Za-z0-9_]*' "$doc" \
 # where an underscore sorts and invent missing tests.
 missing=$(LC_ALL=C comm -23 <(LC_ALL=C sort -u "$cited") <(LC_ALL=C sort -u "$known"))
 if [ -n "$missing" ]; then
-  echo "$doc cites tests that do not exist:"
+  echo "the design record cites tests that do not exist:"
   echo "$missing" | sed 's/^/  /'
   echo
-  echo "Either the test was renamed and the matrix needs updating, or the evidence was never there."
+  echo "Either the test was renamed and the citing document needs updating, or the"
+  echo "evidence was never there. The documents checked are:"
+  # shellcheck disable=SC2086
+  for d in $docs; do echo "  $d"; done
   exit 1
 fi
 
-echo "traceability matrix: $(wc -l < "$cited" | tr -d " ") cited tests, all present"
+echo "traceability: $(wc -l < "$cited" | tr -d " ") cited tests across $(echo $docs | wc -w | tr -d " ") documents, all present"
