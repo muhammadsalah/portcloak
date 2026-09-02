@@ -14,9 +14,10 @@ secrets and the keys that sign your tokens all travel with it. PortCloak is a de
 macOS, Windows and Linux, and a command line for everywhere a desktop app cannot go. No server to
 run, no account to create, no sign-in.
 
-> **Status: early (0.0.3).** The full loop works end to end: capture a realm, put it somewhere,
-> browse it, restore it. It has not yet been through a long life in production, and no release
-> carries an Apple or Windows platform signature yet ([see below](#installing)).
+> **Status: early (0.0.4).** The full loop works end to end from either the app or the command
+> line: capture a realm, put it somewhere, browse it, restore it. It has not yet been through a
+> long life in production, and no release carries an Apple or Windows platform signature yet
+> ([see below](#installing)).
 
 ## The problem
 

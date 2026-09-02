@@ -192,7 +192,13 @@ checksums and by the Sigstore signature over them with no change at all.
 
 ---
 
-## D10 — No release document was written
+## D10 — No release document was written *(superseded at release time)*
+
+> **Since 0.0.4 was cut, [`14-release-0.0.4.md`](../rollout/14-release-0.0.4.md)
+> exists.** The decision below is left as it stood, because the reasoning is
+> still the rule — a release document describes a release that happened — and
+> what it says to do at release time is what was done.
+
 
 **Decision.** The work is recorded under `## [Unreleased]` in the changelog, in
 `spec/13-command-line.md`, in `spec/usecases/08-cli.md` and here. No

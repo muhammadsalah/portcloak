@@ -28,7 +28,7 @@ import (
 // Left unstamped, a plain `go build` still reports a real commit and date, which
 // app.NewBuild recovers from the VCS information the Go toolchain embeds.
 var (
-	version = "0.0.3-dev"
+	version = "0.0.4-dev"
 	commit  = ""
 	date    = ""
 )

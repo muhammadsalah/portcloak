@@ -19,11 +19,11 @@ settings.
 Named after the product it serves. Go + [Wails v3](https://wails.io), single binary, no server
 component, no account.
 
-> **Status: 0.0.3.** The whole loop closes — capture a realm, put it somewhere,
-> read it back, and restore it — across all four target kinds and all four storage backends.
-> The [rollout plan](./spec/rollout/README.md) describes how it was built; the
-> [release notes](./spec/rollout/11-release-0.0.1.md#what-001-does-not-do) are honest about
-> what 0.0.1 does not do.
+> **Status: 0.0.4.** The whole loop closes — capture a realm, put it somewhere,
+> read it back, and restore it — across all four target kinds and all four storage backends,
+> from the desktop app or from `pcloak`. The [rollout plan](./spec/rollout/README.md) describes
+> how it was built; the [release notes](./spec/rollout/14-release-0.0.4.md#what-004-does-not-do)
+> are honest about what 0.0.4 does not do.
 
 ## The problem it solves
 
@@ -92,7 +92,7 @@ The frontend is embedded in the binary, so it is built first:
 ```bash
 npm --prefix frontend ci
 npm --prefix frontend run build
-go build -ldflags "-X main.version=0.0.3" -o portcloak ./cmd/portcloak
+go build -ldflags "-X main.version=0.0.4" -o portcloak ./cmd/portcloak
 ```
 
 The command line needs none of it — no frontend, no cgo, no toolkit — and so

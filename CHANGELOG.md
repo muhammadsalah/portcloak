@@ -11,7 +11,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Tags prefixed `spec-` mark the design
 record; unprefixed `v` tags mark shipped binaries.
 
-## [Unreleased]
+## [0.0.4] — 2026-09-02
 
 ### Added
 - **A command line.** `pcloak` is a second binary driving the same engine the app drives, reading
